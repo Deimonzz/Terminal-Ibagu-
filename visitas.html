@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Listado de Visitas</title>
+  <!-- Font Awesome CDN -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+  <link rel="stylesheet" href="css/visitas.css">
+
+</head>
+
+  <nav class="navbar"> 
+    <div>
+      <a href="index.php" class="btn">
+      <i class="fa-solid fa-house"></i> Inicio
+      </a>
+      <a href="historial.html" class="btn">
+       <i class="fa-solid fa-magnifying-glass"></i> Inspecciones
+      </a>
+    </div>
+    <h2>Sistema de visitas</h2>
+  </nav>
+  
+<body>
+  <div class="historial-tabs">
+  <button id="btnPendientes" class="tab-btn active">Pendientes</button>
+  <button id="btnCumplidas" class="tab-btn">Cumplidas</button>
+</div>
+
+
+
+<div class="container">
+  <h3 class="titulo-seccion">Historial de visitas</h3>
+<div id="historial" class="tab-content visible"></div>
+<div id="historialCumplidas" class="tab-content" style="display:none"></div>
+  <div id="contenedor"></div>
+</div>
+<script src="js/visitas.js"></script>
+</body>
+</html>

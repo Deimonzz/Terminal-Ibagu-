@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Registrar Visita</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/registro.css">
+</head>
+<!-- SweetAlert2 -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+<body>
+  <a href="index.php" class="btn">
+      <i class="fa-solid fa-house"></i> Inicio
+      </a>
+<div class="container">
+  <div class="page-header">
+    <i class="fas fa-clipboard-list"></i>
+    <h3>Registrar Visita</h3>
+  </div>
+  
+  <form id="visitaForm">
+    <div class="card-style">
+      <div class="section-title">
+        <i class="fas fa-info-circle"></i>
+        <span>Información General</span>
+      </div>
+      
+      <div class="row">
+        <div class="col-md-12 mb-3">
+          <label class="form-label required-field">Seleccionar visita existente</label>
+          <select id="sel_visita" class="form-select">
+            <option value="">-- Seleccionar visita --</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="row">
+        <div class="col-md-12 mb-3">
+          <label class="form-label required-field">O crear nueva visita</label>
+          <input type="text" id="nombre_visita" class="form-control" placeholder="Nombre de la nueva visita" required>
+        </div>
+      </div>
+      
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label required-field">Fecha inicio</label>
+          <input type="date" id="fecha_inicio" class="form-control" required>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label required-field">Fecha fin</label>
+          <input type="date" id="fecha_fin" class="form-control" required>
+        </div>
+      </div>
+    </div>
+    
+    <div class="card-style">
+      <div class="section-title">
+        <i class="fas fa-search"></i>
+        <span>Aspecto Evaluado</span>
+      </div>
+      
+      <div class="mb-3">
+        <label class="form-label">Seleccionar aspecto existente</label>
+        <select id="sel_aspecto" class="form-select">
+          <option value="">-- Seleccionar aspecto --</option>
+        </select>
+      </div>
+      
+      <div class="mb-3">
+        <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalNuevoAspecto">
+          <i class="fas fa-plus-circle me-2"></i>Crear Nuevo Aspecto
+        </button>
+      </div>
+      
+      <div class="mb-3">
+        <label class="form-label">Observación</label>
+        <textarea id="observacion" class="form-control" rows="2" placeholder="Observación"></textarea>
+      </div>
+      
+      <div class="row">
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Estado</label>
+          <input type="text" id="estado" class="form-control" value="NO CUMPLE" readonly>
+        </div>
+        <div class="col-md-6 mb-3">
+          <label class="form-label">Plazo</label>
+          <input type="date" id="plazo" class="form-control">
+        </div>
+      </div>
+
+      <div class="mb-3 form-check">
+        <input type="checkbox" id="recurrente" class="form-check-input">
+        <label class="form-check-label" for="recurrente">¿Recurrente?</label>
+      </div>
+      
+      <div class="mb-3">
+        <label class="form-label">Actividad a realizar</label>
+        <input type="text" id="actividad" class="form-control" placeholder="Actividad a realizar">
+      </div>
+
+      <div class="mb-3">
+        <label for="responsable" class="form-label">Responsable</label>
+        <select id="responsable" class="form-select">
+          <option value="">-- Seleccionar responsable --</option>
+        </select>
+      </div>
+
+      <div class="mb-3">
+        <label class="form-label">Evidencia</label>
+        <input type="file" name="evidencia" id="evidencia" class="form-control">
+      </div>
+      
+      <button type="button" class="btn btn-primary btn-add-aspecto" onclick="agregarAspecto()">
+        <i class="fas fa-plus-circle me-2"></i>+ Agregar aspecto
+      </button>
+    </div>
+    
+    <div class="card-style">
+      <div class="section-title">
+        <i class="fas fa-list-ul"></i>
+        <span>Aspectos Agregados (temporal)</span>
+      </div>
+      <div class="table-responsive">
+        <table id="tablaAspectos" class="table table-striped">
+          <thead>
+            <tr>
+              <th>Aspecto</th>
+              <th>Estado</th>
+              <th>Observación</th>
+              <th>Responsable</th>
+              <th>Evidencia</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+    
+    <div class="card-style">
+      <div class="section-title">
+        <i class="fas fa-comment-dots"></i>
+        <span>Observaciones Adicionales</span>
+      </div>
+      <div class="mb-3">
+        <textarea id="obs_adicionales" class="form-control" rows="3" placeholder="Observaciones generales"></textarea>
+      </div>
+    </div>
+
+    <button type="button" class="btn btn-success btn-save-visita" onclick="guardarTodo()">
+      <i class="fas fa-save me-2"></i>Guardar visita + evaluaciones
+    </button>
+    
+    <div class="text-center mt-3">
+      <a href="historial.html" class="btn btn-link">
+        <i class="fas fa-history me-2"></i>➡ Ver Historial de Aspectos
+      </a>
+    </div>
+  </form>
+</div>
+
+<!-- Modal para crear nuevo aspecto -->
+<div class="modal fade" id="modalNuevoAspecto" tabindex="-1" aria-labelledby="modalNuevoAspectoLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="modalNuevoAspectoLabel">
+          <i class="fas fa-plus-circle me-2"></i>Crear Nuevo Aspecto
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label required-field">Nombre del aspecto</label>
+          <input type="text" id="nuevo_aspecto_nombre" class="form-control" placeholder="Nombre del nuevo aspecto" required>
+        </div>
+        
+        <div class="mb-3">
+          <label class="form-label">Descripción del aspecto</label>
+          <textarea id="nuevo_aspecto_desc" class="form-control" rows="3" placeholder="Descripción (opcional)"></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="crearNuevoAspecto()">Crear Aspecto</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="js/registro.js"></script>
+</body>
+</html>

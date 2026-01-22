@@ -1,0 +1,74 @@
+<!-- Modal Evidencia -->
+<div class="modal fade" id="modalEvidencia" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Subir Evidencia</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+
+        <!-- Filtros -->
+        <div class="row mb-3">
+          <div class="col-md-6">
+            <label>Filtrar por visita:</label>
+            <select id="filtroVisita" class="form-select">
+              <option value="">-- Todas --</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label>Filtrar por estado:</label>
+            <select id="filtroEstado" class="form-select">
+              <option value="">-- Todos --</option>
+              <option value="NO CUMPLE">No cumple</option>
+              <option value="CUMPLE">Cumple</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Tabla de evaluaciones -->
+        <table class="table table-bordered">
+          <thead>
+            <tr>
+              <th>Aspecto</th>
+              <th>Observación</th>
+              <th>Estado</th>
+              <th>Acción</th>
+            </tr>
+          </thead>
+          <tbody id="tablaEvaluaciones"></tbody>
+        </table>
+
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Subida Evidencia -->
+<div class="modal fade" id="modalSubirEvidencia" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <form id="formEvidencia" enctype="multipart/form-data">
+        <div class="modal-header">
+          <h5 class="modal-title">Subir Evidencia</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+        </div>
+        <div class="modal-body">
+          <!-- Campo oculto con la evaluación seleccionada -->
+          <input type="hidden" name="evaluacion_id" id="evaluacion_id">
+
+          <div class="mb-3">
+            <label class="form-label">Seleccionar archivo</label>
+            <input type="file" name="evidencia" class="form-control" required>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Subir</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script src="js/evidencia.js"></script>

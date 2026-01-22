@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Historial de Aspectos</title>
+  <link rel="stylesheet" href="css/historial.css">
+  <!-- FontAwesome para íconos -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+</head>
+<body>
+  <!-- Navbar -->
+<nav class="navbar">
+  <div class="nav-left">
+    <button class="nav-toggle" id="navToggle">
+      <i class="fa-solid fa-bars"></i>
+    </button>
+
+    <div class="nav-links" id="navLinks">
+      <a href="index.php" class="btn">
+        <i class="fa-solid fa-house"></i> Inicio
+      </a>
+      <a href="visitas.html" class="btn">
+        <i class="fa-solid fa-eye"></i> Visitas
+      </a>
+    </div>
+  </div>
+
+  <h2>Sistema de visitas</h2>
+</nav>
+
+
+  <main>
+
+  <div class="historial-tabs">
+  <button id="btnPendientes" class="tab-btn active">Pendientes</button>
+  <button id="btnCumplidas" class="tab-btn">Cumplidas</button>
+</div>
+
+
+<div class="container">
+
+  <div class="historial-header">
+    <h3 class="titulo-seccion">Historial de Inspecciones</h3>
+
+    <div class="export-toolbar">
+      <select id="exportTipo" class="export-select">
+        <option value="TODOS">Todos</option>
+        <option value="PENDIENTES">Pendientes</option>
+        <option value="CUMPLIDAS">Cumplidas</option>
+      </select>
+
+            <button id="btnExportExcel" class="btn-export-icon" title="Exportar a Excel">
+        <i class="fa-solid fa-file-excel"></i>
+      </button>
+
+      <div class="filters-bar">
+  <input type="date" id="filtroFechaDesde">
+  <input type="date" id="filtroFechaHasta">
+
+  <select id="filtroVisita">
+    <option value="">Todas las visitas</option>
+  </select>
+
+  <select id="filtroResponsable">
+    <option value="">Todos los responsables</option>
+  </select>
+
+  <button id="btnAplicarFiltros">Filtrar</button>
+  <button id="btnLimpiarFiltros">Limpiar</button>
+</div>
+
+
+      
+    </div>
+  </div>
+
+  <div id="historial" class="tab-content visible"></div>
+  <div id="historialCumplidas" class="tab-content" style="display:none"></div>
+
+</div>
+
+
+    <!-- Contenedor de datos -->
+    
+  </main>
+  
+ <!-- Modal para subir evidencia -->
+<div id="modalEvidencia" class="modal" style="display:none;">
+  <div class="modal-content">
+    <h3>Subir Evidencia de Cumplimiento</h3>
+    <form id="formEvidencia" enctype="multipart/form-data">
+      <!-- 🔹 este hidden debe tener el name correcto -->
+      <input type="hidden" name="evaluacion_id" id="evalId" value="">
+      
+      <!-- 🔹 este input debe llamarse igual que esperas en PHP -->
+      <input type="file" name="evidencia" required>
+      <br><br>
+      <button type="submit">Subir</button>
+      <button type="button" onclick="cerrarModal()">Cancelar</button>
+    </form>
+  </div>
+</div>
+  <script src="js/historial.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+
+</body>
+</html>
