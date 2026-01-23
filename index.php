@@ -26,13 +26,14 @@ include  'modalEvidencia.html';
   </div>
 
   <div class="container main-content">
-    <h2 class="page-title mb-4">Dashboard de Auditorías y Visitas</h2>
+    <h2 class="page-title mb-4">Dashboard de Funcionalidades</h2>
 
     <!-- Quick Actions -->
     <div class="quick-actions mb-4">
+      <a href="turnos.html" class="quick-btn btn btn-secondary me-2"><i class=" fas fa-plus-circle"></i>Turnos</a>
       <a href="registro.html" class="quick-btn btn btn-primary me-2"><i class="fas fa-plus-circle"></i> Nueva Visita</a>
       <a href="historial.html" class="quick-btn btn btn-secondary me-2"><i class="fas fa-history"></i> Inspección de visitas</a>
-       <a href="visitas.html" class="quick-btn btn btn-secondary me-2"><i class="fas fa-history"></i>Visitas</a>
+      <a href="visitas.html" class="quick-btn btn btn-secondary me-2"><i class="fas fa-history"></i>Visitas</a>
      <!-- Botón -->
             <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalEvidencia">
   Subir Evidencia
