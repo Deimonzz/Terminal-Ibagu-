@@ -1,0 +1,309 @@
+<?php
+
+require_once __DIR__ . '/../../config/database.php';
+
+class Trabajadores {
+    private $db;
+    
+    public function __construct() {
+        $this->db = Database::getInstance()->getConnection();
+    }
+    
+    public function obtenerTodos($filtros = []) {
+        $sql = "SELECT t.*, 
+                GROUP_CONCAT(DISTINCT rt.tipo_restriccion SEPARATOR ', ') as restricciones
+                FROM trabajadores t
+                LEFT JOIN restricciones_trabajador rt ON t.id = rt.trabajador_id 
+                    AND rt.activa = true 
+                    AND (rt.fecha_fin IS NULL OR rt.fecha_fin >= CURDATE())
+                WHERE t.activo = true";
+        
+        $params = [];
+        
+        if (!empty($filtros['area'])) {
+            $sql .= " AND t.area = :area";
+            $params[':area'] = $filtros['area'];
+        }
+        
+        if (!empty($filtros['search'])) {
+            $sql .= " AND (t.nombre LIKE :search OR t.cedula LIKE :search)";
+            $params[':search'] = '%' . $filtros['search'] . '%';
+        }
+        
+        $sql .= " GROUP BY t.id ORDER BY t.nombre ASC";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
+    
+    public function obtenerPorId($id) {
+        $sql = "SELECT * FROM trabajadores WHERE id = :id";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':id' => $id]);
+        $trabajador = $stmt->fetch();
+        
+        if ($trabajador) {
+            $trabajador['restricciones'] = $this->obtenerRestricciones($id);
+        }
+        
+        return $trabajador;
+    }
+    
+    public function crear($datos) {
+        $sql = "INSERT INTO trabajadores (nombre, cedula, cargo, area, telefono, email, fecha_ingreso) 
+                VALUES (:nombre, :cedula, :cargo, :area, :telefono, :email, :fecha_ingreso)";
+        
+        try {
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([
+                ':nombre' => $datos['nombre'],
+                ':cedula' => $datos['cedula'],
+                ':cargo' => $datos['cargo'] ?? null,
+                ':area' => $datos['area'] ?? null,
+                ':telefono' => $datos['telefono'] ?? null,
+                ':email' => $datos['email'] ?? null,
+                ':fecha_ingreso' => $datos['fecha_ingreso'] ?? date('Y-m-d')
+            ]);
+            
+            return [
+                'success' => true,
+                'id' => $this->db->lastInsertId(),
+                'message' => 'Trabajador creado exitosamente'
+            ];
+        } catch (PDOException $e) {
+            return [
+                'success' => false,
+                'message' => 'Error al crear trabajador: ' . $e->getMessage()
+            ];
+        }
+    }
+    
+    public function actualizar($id, $datos) {
+        $sql = "UPDATE trabajadores SET 
+                nombre = :nombre, 
+                cedula = :cedula, 
+                cargo = :cargo, 
+                area = :area, 
+                telefono = :telefono, 
+                email = :email
+                WHERE id = :id";
+        
+        try {
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([
+                ':id' => $id,
+                ':nombre' => $datos['nombre'],
+                ':cedula' => $datos['cedula'],
+                ':cargo' => $datos['cargo'] ?? null,
+                ':area' => $datos['area'] ?? null,
+                ':telefono' => $datos['telefono'] ?? null,
+                ':email' => $datos['email'] ?? null
+            ]);
+            
+            return [
+                'success' => true,
+                'message' => 'Trabajador actualizado exitosamente'
+            ];
+        } catch (PDOException $e) {
+            return [
+                'success' => false,
+                'message' => 'Error al actualizar: ' . $e->getMessage()
+            ];
+        }
+    }
+    
+    public function desactivar($id) {
+        $sql = "UPDATE trabajadores SET activo = false WHERE id = :id";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':id' => $id]);
+        
+        return [
+            'success' => true,
+            'message' => 'Trabajador desactivado'
+        ];
+    }
+    
+    public function obtenerRestricciones($trabajador_id) {
+        $sql = "SELECT * FROM restricciones_trabajador 
+                WHERE trabajador_id = :id 
+                AND activa = true 
+                AND (fecha_fin IS NULL OR fecha_fin >= CURDATE())
+                ORDER BY fecha_inicio DESC";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':id' => $trabajador_id]);
+        return $stmt->fetchAll();
+    }
+    
+    public function agregarRestriccion($datos) {
+        $sql = "INSERT INTO restricciones_trabajador 
+                (trabajador_id, tipo_restriccion, descripcion, fecha_inicio, fecha_fin, documento_soporte) 
+                VALUES (:trabajador_id, :tipo, :descripcion, :fecha_inicio, :fecha_fin, :documento)";
+        
+        try {
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([
+                ':trabajador_id' => $datos['trabajador_id'],
+                ':tipo' => $datos['tipo_restriccion'],
+                ':descripcion' => $datos['descripcion'] ?? null,
+                ':fecha_inicio' => $datos['fecha_inicio'],
+                ':fecha_fin' => $datos['fecha_fin'] ?? null,
+                ':documento' => $datos['documento_soporte'] ?? null
+            ]);
+            
+            return [
+                'success' => true,
+                'id' => $this->db->lastInsertId(),
+                'message' => 'Restricción agregada exitosamente'
+            ];
+        } catch (PDOException $e) {
+            return [
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ];
+        }
+    }
+    
+    public function actualizarRestriccion($id, $datos) {
+        $sql = "UPDATE restricciones_trabajador SET 
+                tipo_restriccion = :tipo,
+                descripcion = :descripcion,
+                fecha_inicio = :fecha_inicio,
+                fecha_fin = :fecha_fin,
+                activa = :activa
+                WHERE id = :id";
+        
+        try {
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([
+                ':id' => $id,
+                ':tipo' => $datos['tipo_restriccion'],
+                ':descripcion' => $datos['descripcion'] ?? null,
+                ':fecha_inicio' => $datos['fecha_inicio'],
+                ':fecha_fin' => $datos['fecha_fin'] ?? null,
+                ':activa' => $datos['activa'] ?? true
+            ]);
+            
+            return [
+                'success' => true,
+                'message' => 'Restricción actualizada'
+            ];
+        } catch (PDOException $e) {
+            return [
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ];
+        }
+    }
+    
+    public function eliminarRestriccion($id) {
+        $sql = "UPDATE restricciones_trabajador SET activa = false WHERE id = :id";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':id' => $id]);
+        
+        return [
+            'success' => true,
+            'message' => 'Restricción desactivada'
+        ];
+    }
+    
+    public function puedeTrabajarNoche($trabajador_id, $fecha) {
+        $sql = "SELECT COUNT(*) as count FROM restricciones_trabajador 
+                WHERE trabajador_id = :id 
+                AND tipo_restriccion = 'no_turno_noche'
+                AND activa = true
+                AND :fecha >= fecha_inicio
+                AND (:fecha <= fecha_fin OR fecha_fin IS NULL)";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([
+            ':id' => $trabajador_id,
+            ':fecha' => $fecha
+        ]);
+        
+        $result = $stmt->fetch();
+        return $result['count'] == 0;
+    }
+    
+    public function puedeHacerFuerza($trabajador_id, $fecha) {
+        $sql = "SELECT COUNT(*) as count FROM restricciones_trabajador 
+                WHERE trabajador_id = :id 
+                AND tipo_restriccion = 'no_fuerza_fisica'
+                AND activa = true
+                AND :fecha >= fecha_inicio
+                AND (:fecha <= fecha_fin OR fecha_fin IS NULL)";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([
+            ':id' => $trabajador_id,
+            ':fecha' => $fecha
+        ]);
+        
+        $result = $stmt->fetch();
+        return $result['count'] == 0;
+    }
+    
+    public function obtenerDisponibles($puesto_id, $turno_id, $fecha) {
+        $sqlPuesto = "SELECT * FROM puestos_trabajo WHERE id = :puesto_id";
+        $stmtPuesto = $this->db->prepare($sqlPuesto);
+        $stmtPuesto->execute([':puesto_id' => $puesto_id]);
+        $puesto = $stmtPuesto->fetch();
+        
+        $sqlTurno = "SELECT es_nocturno FROM configuracion_turnos WHERE id = :turno_id";
+        $stmtTurno = $this->db->prepare($sqlTurno);
+        $stmtTurno->execute([':turno_id' => $turno_id]);
+        $turno = $stmtTurno->fetch();
+        
+        $sql = "SELECT DISTINCT t.*, 
+                GROUP_CONCAT(DISTINCT rt.tipo_restriccion SEPARATOR ', ') as restricciones
+                FROM trabajadores t
+                LEFT JOIN restricciones_trabajador rt ON t.id = rt.trabajador_id 
+                    AND rt.activa = true 
+                    AND :fecha >= rt.fecha_inicio
+                    AND (:fecha <= rt.fecha_fin OR rt.fecha_fin IS NULL)
+                WHERE t.activo = true
+                AND t.id NOT IN (
+                    SELECT trabajador_id FROM turnos_asignados 
+                    WHERE fecha = :fecha AND estado IN ('programado', 'activo')
+                )
+                AND t.id NOT IN (
+                    SELECT trabajador_id FROM incapacidades 
+                    WHERE :fecha BETWEEN fecha_inicio AND fecha_fin AND estado = 'activa'
+                )
+                AND t.id NOT IN (
+                    SELECT trabajador_id FROM dias_especiales 
+                    WHERE tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS')
+                    AND :fecha BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
+                    AND estado IN ('programado', 'activo')
+                )";
+        
+        if ($turno['es_nocturno']) {
+            $sql .= " AND t.id NOT IN (
+                SELECT trabajador_id FROM restricciones_trabajador 
+                WHERE tipo_restriccion = 'no_turno_noche'
+                AND activa = true
+                AND :fecha >= fecha_inicio
+                AND (:fecha <= fecha_fin OR fecha_fin IS NULL)
+            )";
+        }
+        
+        if ($puesto['requiere_fuerza_fisica']) {
+            $sql .= " AND t.id NOT IN (
+                SELECT trabajador_id FROM restricciones_trabajador 
+                WHERE tipo_restriccion = 'no_fuerza_fisica'
+                AND activa = true
+                AND :fecha >= fecha_inicio
+                AND (:fecha <= fecha_fin OR fecha_fin IS NULL)
+            )";
+        }
+        
+        $sql .= " GROUP BY t.id ORDER BY t.nombre ASC";
+        
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':fecha' => $fecha, ':puesto_id' => $puesto_id, ':turno_id' => $turno_id]);
+        
+        return $stmt->fetchAll();
+    }
+}
+?>
