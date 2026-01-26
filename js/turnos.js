@@ -1,20 +1,29 @@
-const datos = new FormData();
-datos.append("empleado_id", 3);
-datos.append("fecha", "2026-02-01");
-datos.append("hora_inicio", "08:00");
-datos.append("hora_fin", "16:00");
-datos.append("tipo_turno", "Diurno");
-datos.append("observacion", "Turno regular");
+//Variables Globales
 
-fetch("backend/turnos/guardarTurno.php", {
-  method: "POST",
-  body: datos
-})
-.then(res => res.json())
-.then(data => {
-  if (data.ok) {
-    alert(data.mensaje);
-  } else {
-    alert("Error: " + data.mensaje);
-  }
+const API_BASE = 'backend/api/';
+let mesActual = new Date().getMonth();
+let añoActual = new Date().getFullYear();
+let puestosData = [];
+let turnosData = [];
+
+//Inicia al cargar la pagina
+document.addEventListener('DOMContentLoaded', function() {
+    inicializarApp();
+    configurarEventos();
+    cargarDatosIniciales();
 });
+
+function inicializarApp() {
+  const fechaActual = new Date().toLocaleDateString('es-CO', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric'
+  });
+  document.getElementById('fecha-actual').textContent = fechaActual;
+
+  //Establecer una fecha minima en el formulario
+
+  const hoy = new Date().toISOString().split('T')[0];
+  document.getElementById('fecha-turn').value = hoy;
+}

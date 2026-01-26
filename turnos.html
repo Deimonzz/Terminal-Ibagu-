@@ -4,13 +4,288 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+    <link rel="icon" type="image/png" href="img/terminal.jpeg">
     <link rel="stylesheet" href="css/turnos.css">
     <title>Gestion de Turnos - Terminal Ibagué</title>
 </head>
 <body>
     <!-- Barra de navegacion -->
      <nav class="navbar">
-        <div></div>
+        <div class="nav-brand">
+            <i class="fas fa-bus"></i>
+            <span>Terminal Ibagué - Gestión de Turnos</span>
+        </div>
+        <ul class="nav-menu">
+            <li><a href="index.php"><i class="fas fa-home"></i> Inicio</a></li>
+            <li><a href="registro.html"><i class="fas fa-clipboard-list"></i> Registro Visita</a></li>
+            <li><a href="visitas.html"><i class="fas fa-users"></i> Visitas</a></li>
+            <li><a href="historial.html"><i class="fas fa-history"></i> Historial</a></li>
+            <li class="active"><a href="turnos.html"><i class="fas fa-calendar-alt"></i> Turnos</a></li>
+        </ul>
      </nav>
+     <div class="container-turnos">
+        <!-- menu lateral -->
+         <aside class="sidebar-turnos">
+            <div class="sidebar-header">
+                <h3><i class="fas fa-calendar-check"></i> Gestión de Turnos</h3>
+            </div>
+            <ul>
+                <li class="menu-item active" data-section="dashboard"><i class="fas fa-chart-line"></i> Dashboard</li>
+            </ul>
+            <ul>
+                <li class="menu-item" data-section="asignar"><i class="fas fa-calendar-plus"></i> Asignar Turnos</li>
+            </ul>
+            <ul>
+                <li class="menu-item" data-section="calendario"><i class="fas fa-calendar"></i> Calendario</li>
+            </ul>
+            <ul>
+                <li class="menu-item" data-section="trabajadores"><i class="fas fa-users"></i> Trabajadores</li>
+            </ul>
+            <ul>
+                <li class="menu-item" data-section="restricciones"><i class="fas fa-shield-alt"></i> Restricciones</li>
+            </ul>
+            <ul>
+                <li class="menu-item" data-section="incapacidades"><i class="fas fa-file-medical"></i> Incapacidades</li>
+            </ul>
+            <ul>
+                <li class="menu-item" data-section="cambios"><i class="fas fa-exchange-alt"></i> Cambios</li>
+            </ul>
+            <ul>
+                <li class="menu-item" data-section="dias-especiales"><i class="fas fa-star"></i> Días Especiales</li>
+            </ul>
+         </aside>
+
+         <!-- zona principal -->
+          <main class="main-turnos">
+            <!-- dashboard -->
+            <section id="dashboard" class="section-content active">
+                <div class="section-header">
+                    <h2>Dashboard de Turnos</h2>
+                    <span class="fecha-actual" id="fecha-actual"></span>
+                </div>
+
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon blue"><i class="fas fa-users"></i></div>
+                        <div class="stat-info">
+                            <h4>Trabajadores Activos</h4>
+                            <p class="stat-value" id="total-trabajadores">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon green"><i class="fas fa-calendar-day"></i></div>
+                        <div class="stat-info">
+                            <h4>Turnos Hoy</h4>
+                            <p class="stat-value" id="turnos-hoy">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon orange"><i class="fas fa-user-injured"></i></div>
+                        <div class="stat-info">
+                            <h4>Incapacidades activas</h4>
+                            <p class="stat-value" id="incapacidades-activas">0</p>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon red"><i class="fas fa-clock"></i></div>
+                        <div class="stat-info">
+                            <h4>Cambios Pendientes</h4>
+                            <p class="stat-value" id="cambios-pendientes">0</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="quick-actions">
+                    <h3>Acciones Rapidas</h3>
+                    <div class="actions-grid">
+                        <button class="btn-action" onclick="cambiarSeccion('asignar')">
+                            <i class="fas fa-plus-circle"></i>
+                            <span>Asignar Turno</span>
+                        </button>
+                        <button class="btn-action" onclick="cambiarSeccion('calendario')">
+                            <i class="fas fa-calendar-alt"></i>
+                            <span>Ver Calendario</span>
+                        </button>
+                        <button class="btn-action" onclick="cambiarSeccion('incapacidades')">
+                            <i class="fas fa-file-medical"></i>
+                            <span>Registrar Incapacidad</span>
+                        </button>
+                        <button class="btn-action" onclick="cambiarSeccion('trabajadores')">
+                            <i class="fas fa-user-plus"></i>
+                            <span>Nuevo Trabajador</span>
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Asignar Turnos -->
+             <section id="asignar" class="section-content">
+                <div class="section-header">
+                    <h2>Asignar Turno Laboral</h2>
+                </div>
+
+                <div class="form-container">
+                    <form id="form-asignar-turno">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="fecha-turno">Fecha <span class="required">*</span></label>
+                                <input type="date" id="fecha-turno" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="turno-select">Turno <span class="required">*</span></label>
+                                <select id="turno-select" required>
+                                    <option value="">Seleccione...</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="area-select">Área <span class="required">*</span></label>
+                                <select id="area-select" required>
+                                    <option value="">Seleccione...</option>
+                                    <option value="DELTA">DELTA</option>
+                                    <option value="FOX">FOX</option>
+                                    <option value="VIGIA">VIGIA</option>
+                                    <option value="TASA DE USO">TASA DE USO</option>
+                                    <option value="EQUIPAJES">EQUIPAJES</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="puesto-select">Puesto de Trabajo <span class="required">*</span></label>
+                                <select id="puesto-select" required disabled>
+                                    <option value="">Seleccione área primero...</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="trabajador-select">Trabajador <span class="required">*</span></label>
+                            <select id="trabajador-select" required disabled>
+                                <option value="">Complete los campos anteriores...</option>
+                            </select>
+                            <div id="trabajador-info" class="info-box" style="display: none;"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="observaciones-turno">Observaciones</label>
+                            <textarea id="observaciones-turno" rows="3" placeholder="Observaciones adicionales..."></textarea>
+                        </div>
+
+                        <div id="validacion-mensaje" class="alert" style="display: none;"></div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-secondary" onclick="validarAsignacion()">
+                                <i class="fas fa-check-circle"></i> Validar
+                            </button>
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Asignar Turno
+                            </button>
+                            <button type="button" class="btn btn-outline" onclick="limpiarFormulario()">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+             </section>
+
+             <!-- calendario -->
+
+             <section class="calendario" class="section-content">
+                <div class="section-header">
+                    <h2>Calendario de Turnos</h2>
+                    <div class="calendar-controls">
+                        <button class="btn-nav" onclick="cambiarMes(-1)"><i class="fas fa-chevron-left"></i></button>
+                        <h3 id="mes-actual"></h3>
+                        <button class="btn-nav" onclick="cambiasMes(1)"><i class="fas fa-chevron-right"></i></button>
+                    </div>
+                </div>
+                <div id="calendario-grid"></div>
+             </section>
+
+             <!-- Trabajadores -->
+
+             <section class="trabajadores" class="section-content">
+                <div class="section-header">
+                    <h2>Gestion de Trabajadores</h2>
+                    <button class="btn btn-primary" onclick="nuevoTrabajador()">
+                        <i class="fas fa-user-plus"></i> Nuevo Trabajador
+                    </button>
+                </div>
+                <div class="tabla-container" id="tabla-trabajadores"></div>
+             </section>
+
+             <!-- Restricciones -->
+
+             <section class="restricciones" class="section-content">
+                <div class="section-header">
+                    <h2>Restricciones Medicas y Laborales</h2>
+                </div>
+                <div class="info-box">
+                    <h4>Tipos de restricciones:</h4>
+                    <ul>
+                        <li><strong>No fuerza fisica:</strong> No puede realizar trabajos que requieran esfuerzo físico.</li>
+                        <li><strong>No turno noche:</strong> No puede trabajar en horarios nocturnos.</li>
+                        <li><strong>Movilidad limitada:</strong> Dificultad para desplazarse.</li>
+                        <li><strong>Problema visual:</strong> Limitaciones visuales que afectan el trabajo.</li>
+                    </ul>
+                </div>
+                <div class="tabla-container" id="tabla-restricciones"></div>
+             </section>
+
+             <!-- Incapacidades -->
+
+             <section id="incapacidades" class="section-content">
+                <div class="section-header">
+                    <h2>Gestion de Incapacidades</h2>
+                    <button class="btn btn-primary" onclick="nuevaIncapacidad()">
+                        <i class="fas fa-plus"></i> Nueva Incapacidad
+                    </button>
+                </div>
+                <div class="tabla-container" id="tabla-incapacidades"></div>
+             </section>
+
+             <!-- Cambios de turno -->
+
+             <section id="cambios" class="section-content">
+                <div class="section-header">
+                    <h2>Solicitudes de cambio de turno</h2>
+                    <button class="btn btn-primary" onclick="solicitarCambio()">
+                        <i class="fas fa-exchange-alt"></i> Solicitar Cambio
+                    </button>
+                </div>
+                <div class="tabla-container" id="tabla-cambios"></div>
+             </section>
+
+             <!-- Dias Especiales -->
+
+             <section id="dias-especiales" class="section-content">
+                <div class="section-header">
+                    <h2>Dias Especiales</h2>
+                    <button class="btn btn-primary" onclick="nuevoDiaEspecial()">
+                        <i class="fas fa-calendar-star"></i> Nuevo Dia Especial
+                    </button>
+                </div>
+                <div class="info-box">
+                    <p><strong>Tipos:</strong> LC (Libre Cumpleaños), L (Libre Semana), L4/L8 (Ley 2101), VAC (Vacaciones), SUS (Suspensión), ADMM/ADMT/ADM (Disponible)</p>
+                </div>
+                <div class="tabla-container" id="tabla-dias-especiales"></div>
+             </section>
+          </main>
+     </div>
+
+     <!-- Modal -->
+
+     <div id="modal-overlay" class="modal-overlay" onclick="cerrarModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 id="modal-titulo"></h3>
+                <button class="modal-close" onclick="cerrarModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+     </div>
+
+     <script src="js/turnos.js"></script>
 </body>
 </html>
