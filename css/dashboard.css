@@ -9,6 +9,7 @@
   --card-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
   --transition: all 0.3s ease;
   --card-bg: #ffffff;
+  --terminal: #01401C;
 }
 
 body {
@@ -19,7 +20,7 @@ body {
 }
 
 .header {
-  background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)) !important;
+  background: linear-gradient(135deg, var(--primary-color), var(--terminal)) !important;
   color: white !important;
   padding: 1rem;
   position: fixed;
@@ -64,7 +65,7 @@ body {
   left: 0;
   width: 60px;
   height: 4px;
-  background: var(--secondary-color);
+  background: var(--terminal);
   border-radius: 2px;
 }
 
@@ -91,7 +92,7 @@ body {
 }
 
 .quick-btn:hover {
-  background: var(--secondary-color);
+  background: var(--terminal);
   color: white;
   transform: translateY(-3px);
 }
@@ -243,7 +244,7 @@ td {
 }
 
 .btn-edit {
-  background-color: var(--secondary-color);
+  background-color: var(--terminal);
 }
 
 .btn-delete {

@@ -346,7 +346,7 @@ body {
 }
 
 .btn-primary:hover {
-  background: #29b935;
+  background: #03CE5B;
 }
 
 .btn-secondary {
@@ -355,7 +355,7 @@ body {
 }
 
 .btn-secondary:hover {
-  background: #229954;
+  background: #03CE5B;
 }
 
 .btn-outline {
@@ -474,7 +474,7 @@ tbody tr:hover {
 }
 
 .btn-nav:hover {
-  background: #29b935;
+  background: #03CE5B;
 }
 
 #calendario-grid {
