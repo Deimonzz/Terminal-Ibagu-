@@ -52,7 +52,6 @@ class Incapacidades {
     //Crear incapacidad
     
     public function crear($datos) {
-        // Validar que no haya solapamiento
         $sql = "SELECT COUNT(*) as count FROM incapacidades 
                 WHERE trabajador_id = :trabajador_id
                 AND estado = 'activa'
@@ -77,7 +76,6 @@ class Incapacidades {
             ];
         }
         
-        // Calcular días
         $fecha_inicio = new DateTime($datos['fecha_inicio']);
         $fecha_fin = new DateTime($datos['fecha_fin']);
         $dias = $fecha_inicio->diff($fecha_fin)->days + 1;
@@ -86,8 +84,12 @@ class Incapacidades {
             $this->db->beginTransaction();
             
             $sql = "INSERT INTO incapacidades 
-                    (trabajador_id, tipo, fecha_inicio, fecha_fin, dias_incapacidad, descripcion, documento_soporte, eps, estado) 
-                    VALUES (:trabajador_id, :tipo, :fecha_inicio, :fecha_fin, :dias, :descripcion, :documento, :eps, :estado)";
+                    (trabajador_id, tipo, fecha_inicio, fecha_fin, dias_incapacidad, descripcion, 
+                    documento_soporte, eps, estado, genera_restriccion, tipo_restriccion_generada, 
+                    restriccion_permanente, fecha_fin_restriccion) 
+                    VALUES (:trabajador_id, :tipo, :fecha_inicio, :fecha_fin, :dias, :descripcion, 
+                            :documento, :eps, :estado, :genera_restriccion, :tipo_restriccion, 
+                            :restriccion_permanente, :fecha_fin_restriccion)";
             
             $stmt = $this->db->prepare($sql);
             $stmt->execute([
@@ -99,12 +101,32 @@ class Incapacidades {
                 ':descripcion' => $datos['descripcion'] ?? null,
                 ':documento' => $datos['documento_soporte'] ?? null,
                 ':eps' => $datos['eps'] ?? null,
-                ':estado' => 'activa'
+                ':estado' => 'activa',
+                ':genera_restriccion' => $datos['genera_restriccion'] ?? false,
+                ':tipo_restriccion' => $datos['tipo_restriccion_generada'] ?? null,
+                ':restriccion_permanente' => $datos['restriccion_permanente'] ?? false,
+                ':fecha_fin_restriccion' => $datos['fecha_fin_restriccion'] ?? null
             ]);
             
             $incapacidad_id = $this->db->lastInsertId();
             
-            // Cancelar turnos asignados durante la incapacidad
+            // Si genera restricción, crearla automáticamente
+            if (!empty($datos['genera_restriccion']) && !empty($datos['tipo_restriccion_generada'])) {
+                $sqlRestr = "INSERT INTO restricciones_trabajador 
+                            (trabajador_id, tipo_restriccion, descripcion, fecha_inicio, fecha_fin, activa) 
+                            VALUES (:trabajador_id, :tipo, :descripcion, :fecha_inicio, :fecha_fin, :activa)";
+                
+                $stmtRestr = $this->db->prepare($sqlRestr);
+                $stmtRestr->execute([
+                    ':trabajador_id' => $datos['trabajador_id'],
+                    ':tipo' => $datos['tipo_restriccion_generada'],
+                    ':descripcion' => 'Generada por incapacidad: ' . ($datos['descripcion'] ?? 'Cirugía'),
+                    ':fecha_inicio' => $datos['fecha_fin'], // La restricción empieza cuando termina la incapacidad
+                    ':fecha_fin' => $datos['restriccion_permanente'] ? null : $datos['fecha_fin_restriccion'],
+                    ':activa' => true
+                ]);
+            }
+            
             $this->cancelarTurnosEnRango($datos['trabajador_id'], $datos['fecha_inicio'], $datos['fecha_fin']);
             
             $this->db->commit();
@@ -112,7 +134,7 @@ class Incapacidades {
             return [
                 'success' => true,
                 'id' => $incapacidad_id,
-                'message' => 'Incapacidad registrada y turnos cancelados'
+                'message' => 'Incapacidad registrada' . (!empty($datos['genera_restriccion']) ? ' y restricción creada' : '')
             ];
             
         } catch (PDOException $e) {

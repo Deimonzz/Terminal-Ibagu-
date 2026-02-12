@@ -22,6 +22,7 @@ class TurnosAsignados {
                 t.id as trabajador_id,
                 t.nombre as trabajador,
                 t.cedula,
+                pt.id as puesto_id,
                 pt.codigo as puesto_codigo,
                 pt.nombre as puesto_nombre,
                 pt.area,
@@ -83,20 +84,36 @@ class TurnosAsignados {
     
      // Validar asignación de turno
      
-    public function validarAsignacion($trabajador_id, $puesto_id, $turno_id, $fecha) {
+    public function validarAsignacion($trabajador_id, $puesto_id, $turno_id, $fecha, $exclude_id = null) {
         $errores = [];
         
         // 1. Verificar si ya tiene turno asignado ese día
-        $sql = "SELECT COUNT(*) as count FROM turnos_asignados 
-                WHERE trabajador_id = :trabajador_id 
-                AND fecha = :fecha 
-                AND estado IN ('programado', 'activo')";
+        $sql = "SELECT COUNT(*) as count, t.nombre as trabajador_asignado
+                FROM turnos_asignados ta
+                INNER JOIN trabajadores t ON ta.trabajador_id = t.id
+                WHERE ta.puesto_trabajo_id = :puesto_id
+                AND ta.turno_id = :turno_id
+                AND ta.fecha = :fecha
+                AND ta.estado IN ('programado', 'activo')";
+
+        $params = [
+            ':puesto_id' => $puesto_id,
+            ':turno_id' => $turno_id,
+            ':fecha' => $fecha
+        ];
+
+        if ($exclude_id !== null) {
+            $sql .= " AND ta.id != :exclude_id";
+            $params[':exclude_id'] = $exclude_id;
+        }
+
+        $sql .= " GROUP BY t.nombre";
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([':trabajador_id' => $trabajador_id, ':fecha' => $fecha]);
+        $stmt->execute($params);
         $result = $stmt->fetch();
-        
-        if ($result['count'] > 0) {
-            $errores[] = 'El trabajador ya tiene un turno asignado para esta fecha';
+
+        if ($result && $result['count'] > 0) {
+            $errores[] = 'El puesto ya está ocupado por: ' . $result['trabajador_asignado'];
         }
         
         // 2. Verificar incapacidad activa
@@ -134,7 +151,7 @@ class TurnosAsignados {
         $stmt->execute([':turno_id' => $turno_id]);
         $turno = $stmt->fetch();
         
-        if ($turno['es_nocturno']) {
+        if ($turno && $turno['es_nocturno']) {
             if (!$this->trabajadores->puedeTrabajarNoche($trabajador_id, $fecha)) {
                 $errores[] = 'El trabajador tiene restricción para trabajar en turno nocturno';
             }
@@ -146,21 +163,25 @@ class TurnosAsignados {
         $stmt->execute([':puesto_id' => $puesto_id]);
         $puesto = $stmt->fetch();
         
-        if ($puesto['requiere_fuerza_fisica']) {
+        if ($puesto && $puesto['requiere_fuerza_fisica']) {
             if (!$this->trabajadores->puedeHacerFuerza($trabajador_id, $fecha)) {
                 $errores[] = 'El puesto requiere fuerza física y el trabajador tiene restricción';
             }
         }
         
-        if ($puesto['requiere_movilidad']) {
+        if ($puesto && $puesto['requiere_movilidad']) {
             $sql = "SELECT COUNT(*) as count FROM restricciones_trabajador 
                     WHERE trabajador_id = :trabajador_id 
                     AND tipo_restriccion = 'movilidad_limitada'
                     AND activa = true
                     AND :fecha >= fecha_inicio
-                    AND (:fecha <= fecha_fin OR fecha_fin IS NULL)";
+                    AND (:fecha2 <= fecha_fin OR fecha_fin IS NULL)";
             $stmt = $this->db->prepare($sql);
-            $stmt->execute([':trabajador_id' => $trabajador_id, ':fecha' => $fecha]);
+            $stmt->execute([
+                ':trabajador_id' => $trabajador_id, 
+                ':fecha' => $fecha,
+                ':fecha2' => $fecha
+            ]);
             $result = $stmt->fetch();
             
             if ($result['count'] > 0) {
@@ -202,16 +223,18 @@ class TurnosAsignados {
                     (trabajador_id, puesto_trabajo_id, turno_id, fecha, estado, observaciones, created_by) 
                     VALUES (:trabajador_id, :puesto_id, :turno_id, :fecha, :estado, :observaciones, :created_by)";
             
+            $datos_finales = [
+                ':trabajador_id' => $datos['trabajador_id'] ?? null,
+                ':puesto_id'     => $datos['puesto_trabajo_id'] ?? null,
+                ':turno_id'      => $datos['turno_id'] ?? null,
+                ':fecha'         => $datos['fecha'] ?? null,
+                ':estado'        => $datos['estado'] ?? 'programado',
+                ':observaciones' => $datos['observaciones'] ?? '',
+                ':created_by'    => $datos['created_by'] ?? 1
+            ];
+            
             $stmt = $this->db->prepare($sql);
-            $stmt->execute([
-                ':trabajador_id' => $datos['trabajador_id'],
-                ':puesto_id' => $datos['puesto_trabajo_id'],
-                ':turno_id' => $datos['turno_id'],
-                ':fecha' => $datos['fecha'],
-                ':estado' => $datos['estado'] ?? 'programado',
-                ':observaciones' => $datos['observaciones'] ?? null,
-                ':created_by' => $datos['created_by'] ?? null
-            ]);
+            $stmt->execute($datos_finales);
             
             $turno_id = $this->db->lastInsertId();
             
@@ -270,6 +293,38 @@ class TurnosAsignados {
     //Actualizar turno
     
     public function actualizar($id, $datos) {
+        // Si se proporciona un cambio de trabajador, primero validar y actualizar trabajador_id
+        if (!empty($datos['trabajador_id'])) {
+            // Obtener detalles actuales del turno
+            $actual = $this->obtenerPorId($id);
+            if (!$actual) {
+                return [ 'success' => false, 'message' => 'Turno no encontrado' ];
+            }
+
+            // Intentar validar la asignación al nuevo trabajador
+            $valid = $this->validarAsignacion($datos['trabajador_id'], $actual['puesto_trabajo_id'] ?? $actual['puesto_id'], $actual['turno_id'] ?? null, $actual['fecha'], $id);
+            if (!$valid['valido']) {
+                return [ 'success' => false, 'message' => 'No se puede reasignar', 'errores' => $valid['errores'] ];
+            }
+
+            try {
+                $sqlUpd = "UPDATE turnos_asignados SET trabajador_id = :trabajador_id, observaciones = :observaciones WHERE id = :id";
+                $stmt = $this->db->prepare($sqlUpd);
+                $stmt->execute([
+                    ':trabajador_id' => $datos['trabajador_id'],
+                    ':observaciones' => $datos['observaciones'] ?? null,
+                    ':id' => $id
+                ]);
+
+                $turno = $this->obtenerPorId($id);
+                $this->registrarHistorial($id, $turno['trabajador_id'], $turno['puesto_trabajo_id'], $turno['turno_id'], $turno['fecha'], 'reasignado', $datos['usuario_id'] ?? null, json_encode(['from' => $actual['trabajador'], 'to' => $turno['trabajador']]));
+
+                return [ 'success' => true, 'message' => 'Turno reasignado' ];
+            } catch (PDOException $e) {
+                return [ 'success' => false, 'message' => 'Error reasignando: ' . $e->getMessage() ];
+            }
+        }
+
         $sql = "UPDATE turnos_asignados SET 
                 estado = :estado,
                 observaciones = :observaciones
@@ -349,21 +404,28 @@ class TurnosAsignados {
     //Obtener calendario de turnos (vista mensual)
     
     public function obtenerCalendario($mes, $anio, $area = null) {
-        $fecha_inicio = "$anio-$mes-01";
+        $fecha_inicio = "$anio-" . str_pad($mes, 2, '0', STR_PAD_LEFT) . "-01";
         $fecha_fin = date("Y-m-t", strtotime($fecha_inicio));
         
         $sql = "SELECT 
-                DATE(ta.fecha) as fecha,
-                COUNT(DISTINCT ta.id) as total_turnos,
-                COUNT(DISTINCT CASE WHEN ct.numero_turno = 1 THEN ta.id END) as turno_1,
-                COUNT(DISTINCT CASE WHEN ct.numero_turno = 2 THEN ta.id END) as turno_2,
-                COUNT(DISTINCT CASE WHEN ct.numero_turno = 3 THEN ta.id END) as turno_3,
-                GROUP_CONCAT(DISTINCT pt.area SEPARATOR ',') as areas
+                ta.id,
+                ta.fecha,
+                ta.estado,
+                t.nombre as trabajador,
+                t.cedula,
+                pt.codigo as puesto_codigo,
+                pt.nombre as puesto_nombre,
+                pt.area,
+                ct.numero_turno,
+                ct.nombre as turno_nombre,
+                ct.hora_inicio,
+                ct.hora_fin
                 FROM turnos_asignados ta
-                INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
+                INNER JOIN trabajadores t ON ta.trabajador_id = t.id
                 INNER JOIN puestos_trabajo pt ON ta.puesto_trabajo_id = pt.id
+                INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
                 WHERE ta.fecha BETWEEN :fecha_inicio AND :fecha_fin
-                AND ta.estado IN ('programado', 'activo')";
+                AND ta.estado IN ('programado', 'activo', 'completado')";
         
         $params = [
             ':fecha_inicio' => $fecha_inicio,
@@ -375,7 +437,7 @@ class TurnosAsignados {
             $params[':area'] = $area;
         }
         
-        $sql .= " GROUP BY DATE(ta.fecha) ORDER BY ta.fecha ASC";
+        $sql .= " ORDER BY ta.fecha ASC, ct.hora_inicio ASC";
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);

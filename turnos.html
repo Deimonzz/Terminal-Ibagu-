@@ -75,7 +75,7 @@
                     <div class="stat-card">
                         <div class="stat-icon green"><i class="fas fa-calendar-day"></i></div>
                         <div class="stat-info">
-                            <h4>Turnos Hoy</h4>
+                            <h4>Turnos Asignados</h4>
                             <p class="stat-value" id="turnos-hoy">0</p>
                         </div>
                     </div>
@@ -120,8 +120,11 @@
 
             <!-- Asignar Turnos -->
              <section id="asignar" class="section-content">
-                <div class="section-header">
+                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
                     <h2>Asignar Turno Laboral</h2>
+                    <button class="btn btn-primary" onclick="asignacionAutomaticaMes()" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fas fa-magic"></i> Asignación Automática Mensual
+                    </button>
                 </div>
 
                 <div class="form-container">
@@ -170,18 +173,15 @@
                             <div id="trabajador-info" class="info-box" style="display: none;"></div>
                         </div>
 
-                        <div class="form-group">
-                            <label for="observaciones-turno">Observaciones</label>
-                            <textarea id="observaciones-turno" rows="3" placeholder="Observaciones adicionales..."></textarea>
-                        </div>
+                       
 
                         <div id="validacion-mensaje" class="alert" style="display: none;"></div>
 
                         <div class="form-actions">
-                            <button type="submit" class="btn btn-secondary" onclick="validarAsignacion()">
+                            <button type="submit" class="btn btn-secondary" onclick="validarAsignacion(); return false;">
                                 <i class="fas fa-check-circle"></i> Validar
                             </button>
-                            <button type="submit" class="btn btn-primary">
+                            <button type="submit" class="btn btn-primary" id="btn-asignar">
                                 <i class="fas fa-save"></i> Asignar Turno
                             </button>
                             <button type="button" class="btn btn-outline" onclick="limpiarFormulario()">
@@ -194,16 +194,58 @@
 
              <!-- calendario -->
 
-             <section class="calendario" class="section-content">
-                <div class="section-header">
-                    <h2>Calendario de Turnos</h2>
-                    <div class="calendar-controls">
-                        <button class="btn-nav" onclick="cambiarMes(-1)"><i class="fas fa-chevron-left"></i></button>
-                        <h3 id="mes-actual"></h3>
-                        <button class="btn-nav" onclick="cambiasMes(1)"><i class="fas fa-chevron-right"></i></button>
+             <section id="calendario" class="section-content">
+                <div class="calendar-header">
+                    <div class="calendar-view-controls">
+                        <div class="calendar-navigation">
+                            <button class="btn-calendar-nav" onclick="cambiarDia(-1)" title="Dia anterior">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <div class="calendar-date-display" id="fecha-calendario-display"></div>
+                            <button class="btn-calendar-nav" onclick="cambiarDia(1)" title="Dia siguiente">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                            <button class="btn btn-secondary" onclick="irAHoy()" style="margin-left: 1rem;">
+                                <i class="fas fa-calendar-day"></i> Hoy
+                            </button>
+                        </div>
+
+                        <div class="calendar-filters">
+                            <select id="" class="filter-select" onchange="">
+                                <option value="">Todas los turnos</option>
+                                <option value="">Turno 1 - Mañana</option>
+                                <option value="">Turno 2 - Tarde</option>
+                                <option value="">Turno 3 - Noche</option>
+                            </select>
+                            <select id="filtro-area-calendario" class="filter-select" onchange="cargarVistaDiaria()">
+                                <option value="">Todas las áreas</option>
+                                <option value="DELTA">DELTA</option>
+                                <option value="FOX">FOX</option>
+                                <option value="VIGIA">VIGÍA</option>
+                                <option value="TASA DE USO">TASA DE USO</option>
+                                <option value="EQUIPAJES">EQUIPAJES</option>
+                            </select>
+                            
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn-export excel" onclick="exportarDiaExcel()" title="Exportar día actual">
+                                    <i class="fas fa-file-excel"></i> Día
+                                </button>
+                                <button class="btn-export excel" onclick="exportarMesExcel()" title="Exportar mes completo">
+                                    <i class="fas fa-file-excel"></i> Mes
+                                </button>
+                                <button class="btn-export pdf" onclick="exportarDiaPDF()" title="Exportar día actual">
+                                    <i class="fas fa-file-pdf"></i> Día
+                                </button>
+                                <button class="btn-export pdf" onclick="exportarMesPDF()" title="Exportar mes completo">
+                                    <i class="fas fa-file-pdf"></i> Mes
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
-                <div id="calendario-grid"></div>
+                <div id="calendario-vista-diaria" class="calendar-day-view">
+                    
+                </div>
              </section>
 
              <!-- Trabajadores -->
@@ -289,6 +331,9 @@
         </div>
      </div>
 
-     <script src="js/turnos.js"></script>
+     <!-- Librerias para generar PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="js/turnos.js"></script>
 </body>
 </html>

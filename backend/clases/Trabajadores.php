@@ -1,6 +1,5 @@
 <?php
-
-require_once __DIR__ . '/../../config/database.php';
+require_once dirname(dirname(__DIR__)) . '/config/database.php';
 
 class Trabajadores {
     private $db;
@@ -15,8 +14,14 @@ class Trabajadores {
                 FROM trabajadores t
                 LEFT JOIN restricciones_trabajador rt ON t.id = rt.trabajador_id 
                     AND rt.activa = true 
-                    AND (rt.fecha_fin IS NULL OR rt.fecha_fin >= CURDATE())
-                WHERE t.activo = true";
+                    AND (rt.fecha_fin IS NULL OR rt.fecha_fin >= CURDATE())";
+
+        // Por defecto solo activos, pero se puede incluir inactivos mediante filtro
+        if (empty($filtros['incluir_inactivos'])) {
+            $sql .= " WHERE t.activo = true";
+        } else {
+            $sql .= " WHERE 1=1";
+        }
         
         $params = [];
         
@@ -111,6 +116,41 @@ class Trabajadores {
                 'message' => 'Error al actualizar: ' . $e->getMessage()
             ];
         }
+    }
+
+    public function eliminar($id) {
+        // Verificar si tiene turnos asignados
+        $sql = "SELECT COUNT(*) as count FROM turnos_asignados WHERE trabajador_id = :id";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':id' => $id]);
+        $result = $stmt->fetch();
+        
+        if ($result['count'] > 0) {
+            return [
+                'success' => false,
+                'message' => 'No se puede eliminar. El trabajador tiene turnos asignados. Use "Desactivar" en su lugar.'
+            ];
+        }
+        
+        $sql = "DELETE FROM trabajadores WHERE id = :id";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':id' => $id]);
+        
+        return [
+            'success' => true,
+            'message' => 'Trabajador eliminado exitosamente'
+        ];
+    }
+
+    public function activar($id) {
+        $sql = "UPDATE trabajadores SET activo = true WHERE id = :id";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':id' => $id]);
+
+        return [
+            'success' => true,
+            'message' => 'Trabajador activado'
+        ];
     }
     
     public function desactivar($id) {
@@ -214,12 +254,13 @@ class Trabajadores {
                 AND tipo_restriccion = 'no_turno_noche'
                 AND activa = true
                 AND :fecha >= fecha_inicio
-                AND (:fecha <= fecha_fin OR fecha_fin IS NULL)";
+                AND (:fecha2 <= fecha_fin OR fecha_fin IS NULL)";
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
             ':id' => $trabajador_id,
-            ':fecha' => $fecha
+            ':fecha' => $fecha,
+            ':fecha2' => $fecha
         ]);
         
         $result = $stmt->fetch();
@@ -232,12 +273,13 @@ class Trabajadores {
                 AND tipo_restriccion = 'no_fuerza_fisica'
                 AND activa = true
                 AND :fecha >= fecha_inicio
-                AND (:fecha <= fecha_fin OR fecha_fin IS NULL)";
+                AND (:fecha2 <= fecha_fin OR fecha_fin IS NULL)";
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
             ':id' => $trabajador_id,
-            ':fecha' => $fecha
+            ':fecha' => $fecha,
+            ':fecha2' => $fecha
         ]);
         
         $result = $stmt->fetch();
@@ -260,48 +302,75 @@ class Trabajadores {
                 FROM trabajadores t
                 LEFT JOIN restricciones_trabajador rt ON t.id = rt.trabajador_id 
                     AND rt.activa = true 
-                    AND :fecha >= rt.fecha_inicio
-                    AND (:fecha <= rt.fecha_fin OR rt.fecha_fin IS NULL)
-                WHERE t.activo = true
-                AND t.id NOT IN (
-                    SELECT trabajador_id FROM turnos_asignados 
-                    WHERE fecha = :fecha AND estado IN ('programado', 'activo')
-                )
-                AND t.id NOT IN (
-                    SELECT trabajador_id FROM incapacidades 
-                    WHERE :fecha BETWEEN fecha_inicio AND fecha_fin AND estado = 'activa'
-                )
-                AND t.id NOT IN (
-                    SELECT trabajador_id FROM dias_especiales 
-                    WHERE tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS')
-                    AND :fecha BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
-                    AND estado IN ('programado', 'activo')
-                )";
+                    AND :fecha1 >= rt.fecha_inicio
+                    AND (:fecha2 <= rt.fecha_fin OR rt.fecha_fin IS NULL)
+                WHERE t.activo = true";
         
-        if ($turno['es_nocturno']) {
+        $params = [
+            ':fecha1' => $fecha,
+            ':fecha2' => $fecha
+        ];
+        
+        $sql .= " AND t.id NOT IN (
+            SELECT trabajador_id FROM turnos_asignados 
+            WHERE fecha = :fecha3 AND estado IN ('programado', 'activo')
+        )";
+        $params[':fecha3'] = $fecha;
+        
+        $sql .= " AND t.id NOT IN (
+            SELECT trabajador_id FROM incapacidades 
+            WHERE :fecha4 BETWEEN fecha_inicio AND fecha_fin AND estado = 'activa'
+        )";
+        $params[':fecha4'] = $fecha;
+        
+        $sql .= " AND t.id NOT IN (
+            SELECT trabajador_id FROM dias_especiales 
+            WHERE tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS')
+            AND :fecha5 BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
+            AND estado IN ('programado', 'activo')
+        )";
+        $params[':fecha5'] = $fecha;
+        
+        if ($turno && $turno['es_nocturno']) {
             $sql .= " AND t.id NOT IN (
                 SELECT trabajador_id FROM restricciones_trabajador 
                 WHERE tipo_restriccion = 'no_turno_noche'
                 AND activa = true
-                AND :fecha >= fecha_inicio
-                AND (:fecha <= fecha_fin OR fecha_fin IS NULL)
+                AND :fecha6 >= fecha_inicio
+                AND (:fecha7 <= fecha_fin OR fecha_fin IS NULL)
             )";
+            $params[':fecha6'] = $fecha;
+            $params[':fecha7'] = $fecha;
         }
         
-        if ($puesto['requiere_fuerza_fisica']) {
+        if ($puesto && $puesto['requiere_fuerza_fisica']) {
             $sql .= " AND t.id NOT IN (
                 SELECT trabajador_id FROM restricciones_trabajador 
                 WHERE tipo_restriccion = 'no_fuerza_fisica'
                 AND activa = true
-                AND :fecha >= fecha_inicio
-                AND (:fecha <= fecha_fin OR fecha_fin IS NULL)
+                AND :fecha8 >= fecha_inicio
+                AND (:fecha9 <= fecha_fin OR fecha_fin IS NULL)
             )";
+            $params[':fecha8'] = $fecha;
+            $params[':fecha9'] = $fecha;
+        }
+        
+        if ($puesto && $puesto['requiere_movilidad']) {
+            $sql .= " AND t.id NOT IN (
+                SELECT trabajador_id FROM restricciones_trabajador 
+                WHERE tipo_restriccion = 'movilidad_limitada'
+                AND activa = true
+                AND :fecha10 >= fecha_inicio
+                AND (:fecha11 <= fecha_fin OR fecha_fin IS NULL)
+            )";
+            $params[':fecha10'] = $fecha;
+            $params[':fecha11'] = $fecha;
         }
         
         $sql .= " GROUP BY t.id ORDER BY t.nombre ASC";
         
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([':fecha' => $fecha, ':puesto_id' => $puesto_id, ':turno_id' => $turno_id]);
+        $stmt->execute($params);
         
         return $stmt->fetchAll();
     }

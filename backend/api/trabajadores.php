@@ -16,7 +16,8 @@ try {
             } else {
                 $filtros = [
                     'area' => $_GET['area'] ?? null,
-                    'search' => $_GET['search'] ?? null
+                    'search' => $_GET['search'] ?? null,
+                    'incluir_inactivos' => isset($_GET['incluir_inactivos']) ? boolval($_GET['incluir_inactivos']) : false
                 ];
                 $resultado = $trabajadores->obtenerTodos($filtros);
             }
@@ -38,15 +39,25 @@ try {
             echo json_encode($resultado);
             break;
 
-        case'PUT':
+        case 'PUT':
             $datos = json_decode(file_get_contents('php://input'), true);
-
-            if ($path === 'restriccion') {
-                $resultado = $trabajadores->actualizarRestriccion($_GET['id'], $datos);
-            } else {
-                $resultado = $trabajadores->actualizar($_GET ['id'], $datos);
+            $id = $_GET['id'] ?? null;
+            $accion = $_GET['accion'] ?? null;
+            
+            if (!$id) {
+                http_response_code(400);
+                echo json_encode(['success' => false, 'message' => 'ID requerido']);
+                break;
             }
-
+            
+            if ($accion === 'desactivar') {
+                $resultado = $trabajadores->desactivar($id);
+            } elseif ($accion === 'activar') {
+                $resultado = $trabajadores->activar($id);
+            } else {
+                $resultado = $trabajadores->actualizar($id, $datos);
+            }
+            
             echo json_encode($resultado);
             break;
         
