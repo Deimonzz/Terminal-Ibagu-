@@ -10,7 +10,7 @@ try {
     switch ($method) {
         case 'GET':
             if ($action === 'estadisticas') {
-                $resultado = $incapacidades->obtenerEstadisticas($_GET['fecha_inicio'], $_GET['fecha_fin'])
+                $resultado = $incapacidades->obtenerEstadisticas($_GET['fecha_inicio'], $_GET['fecha_fin']);
             } elseif (!empty($_GET['id'])) {
                 $resultado = $incapacidades->obtenerPorId($_GET['id']);
             } else {
@@ -31,17 +31,17 @@ try {
             if ($action === 'prorrogar') {
                 $resultado = $incapacidades->porrogar($_GET['id'], $datos['nueva_fecha_fin']);
             } else {
-                $resultado = incapacidades->crear($datos);
+                $resultado = $incapacidades->crear($datos);
             }
             echo json_encode($resultado);
             break;
 
         case 'PUT':
             $datos = json_decode(file_get_contents('php://input'), true);
-            if ($action === 'finalizar'){
-                $resultado = $incapacidades->finalizar($_GET['id']);
+            if (!empty($datos['id'])) {
+                $resultado = $incapacidades->actualizar($datos['id'], $datos);
             } else {
-                $resultado = $incapacidades->finalizar($_GET['id'], $datos);
+                $resultado = ['success' => false, 'message' => 'ID no proporcionado'];
             }
             echo json_encode($resultado);
             break;

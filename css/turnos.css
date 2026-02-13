@@ -447,6 +447,117 @@ body {
   margin: 0.5rem 0;
 }
 
+/* Sección de Alertas */
+
+.alertas-section {
+  background: white;
+  padding: 2rem;
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+  margin-top: 2rem;
+}
+
+.alertas-section h3 {
+  color: var(--primary-color);
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.alertas-container {
+  display: grid;
+  gap: 1rem;
+}
+
+.alert-placeholder {
+  padding: 2rem;
+  text-align: center;
+  color: var(--light-text);
+  background: var(--light-bg);
+  border-radius: 8px;
+}
+
+.alert-item {
+  padding: 1.25rem;
+  border-left: 4px solid;
+  border-radius: 5px;
+  display: flex;
+  gap: 1rem;
+  align-items: flex-start;
+  background-color: #f9f9f9;
+}
+
+.alert-item-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.alert-item-icon {
+  font-size: 1.5rem;
+  min-width: 2rem;
+  text-align: center;
+  margin-top: 0.15rem;
+}
+
+.alert-item-title {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  color: var(--dark-text);
+}
+
+.alert-item-description {
+  font-size: 0.9rem;
+  color: var(--light-text);
+}
+
+.alert-red {
+  border-left-color: var(--danger-color);
+  background: #fff5f5;
+}
+
+.alert-red .alert-item-icon {
+  color: var(--danger-color);
+}
+
+.alert-yellow {
+  border-left-color: var(--warning-color);
+  background: #fffaf0;
+}
+
+.alert-yellow .alert-item-icon {
+  color: var(--warning-color);
+}
+
+.alert-blue {
+  border-left-color: var(--secondary-color);
+  background: #f0f8ff;
+}
+
+.alert-blue .alert-item-icon {
+  color: var(--secondary-color);
+}
+
+.alert-item-badge {
+  background: var(--danger-color);
+  color: white;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  margin-left: 1rem;
+}
+
+.alert-item-badge.warning {
+  background: var(--warning-color);
+}
+
+.alert-item-badge.info {
+  background: var(--secondary-color);
+}
+
 /* Tablas */
 
 .tabla-container {
@@ -899,6 +1010,172 @@ tbody tr:hover {
     padding: 1.5rem 1rem;
   }
  }
+
+/* Tabla de Incapacidades - Estilos Mejorados */
+.tabla-responsiva {
+  overflow-x: auto;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+.tabla-incapacidades {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tabla-incapacidades thead {
+  background: linear-gradient(135deg, var(--terminal), var(--terminalsegunda));
+  color: white;
+  font-weight: 600;
+}
+
+.tabla-incapacidades th {
+  padding: 1.2rem;
+  text-align: left;
+  font-size: 0.95rem;
+  border-bottom: 2px solid transparent;
+}
+
+.tabla-incapacidades tbody tr {
+  border-bottom: 1px solid #e9ecef;
+  transition: all 0.2s ease;
+}
+
+.tabla-incapacidades tbody tr:hover {
+  background: #f8f9fa;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+}
+
+.tabla-incapacidades td {
+  padding: 1rem 1.2rem;
+  vertical-align: middle;
+  font-size: 0.95rem;
+}
+
+.fila-incapacidad:nth-child(even) {
+  background: #fafbfc;
+}
+
+/* Badges de Estado */
+.badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-success {
+  background: linear-gradient(135deg, #27ae60, #229954);
+  color: white;
+  box-shadow: 0 2px 4px rgba(39, 174, 96, 0.2);
+}
+
+.badge-danger {
+  background: linear-gradient(135deg, #e74c3c, #c0392b);
+  color: white;
+  box-shadow: 0 2px 4px rgba(231, 76, 60, 0.2);
+}
+
+.badge-warning {
+  background: linear-gradient(135deg, #f39c12, #d68910);
+  color: white;
+  box-shadow: 0 2px 4px rgba(243, 156, 18, 0.2);
+}
+
+.badge-type {
+  background: linear-gradient(135deg, var(--secondary-color), #2980b9);
+  color: white;
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.badge-dias {
+  background: linear-gradient(135deg, #3498db, #2980b9);
+  color: white;
+  padding: 0.35rem 0.75rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  min-width: 40px;
+  text-align: center;
+  display: inline-block;
+}
+
+/* Botones de Acciones */
+.btn-icon {
+  background: white;
+  border: 1px solid #dee2e6;
+  color: var(--secondary-color);
+  padding: 0.5rem 0.75rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.2s;
+  margin: 0 0.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-icon:hover {
+  background: var(--secondary-color);
+  color: white;
+  border-color: var(--secondary-color);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(52, 152, 219, 0.2);
+}
+
+.btn-icon.btn-danger {
+  color: var(--danger-color);
+  border-color: #f5c6cb;
+}
+
+.btn-icon.btn-danger:hover {
+  background: var(--danger-color);
+  color: white;
+  border-color: var(--danger-color);
+  box-shadow: 0 4px 8px rgba(231, 76, 60, 0.2);
+}
+
+.texto-muted {
+  color: #6c757d;
+  font-style: italic;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .tabla-incapacidades td {
+    padding: 0.8rem 1rem;
+    font-size: 0.9rem;
+  }
+  
+  .tabla-incapacidades th {
+    padding: 1rem;
+    font-size: 0.9rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .tabla-responsiva {
+    font-size: 0.85rem;
+  }
+  
+  .tabla-incapacidades td,
+  .tabla-incapacidades th {
+    padding: 0.6rem;
+  }
+  
+  .badge {
+    padding: 0.4rem 0.8rem;
+    font-size: 0.75rem;
+  }
+}
+
  @media print {
   .calendar-view-controls,
   .btn-export {

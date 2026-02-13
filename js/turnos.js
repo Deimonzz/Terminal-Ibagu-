@@ -218,12 +218,12 @@ async function cargarEstadisticasDashboard() {
         }
         
         // Incapacidades activas
-        // const resIncapacidades = await fetch(API_BASE + 'incapacidades.php?activas=1');
-        // const dataIncapacidades = await resIncapacidades.json();
-        // const incapacidadesActivas = document.getElementById('incapacidades-activas');
-        // if (incapacidadesActivas) {
-        //     incapacidadesActivas.textContent = dataIncapacidades.data ? dataIncapacidades.data.length : 0;
-        // }
+        const resIncapacidades = await fetch(API_BASE + 'incapacidades.php?activas=1');
+        const dataIncapacidades = await resIncapacidades.json();
+        const incapacidadesActivas = document.getElementById('incapacidades-activas');
+        if (incapacidadesActivas) {
+            incapacidadesActivas.textContent = dataIncapacidades.data ? dataIncapacidades.data.length : 0;
+        }
         
         // Cambios pendientes
         // const resCambios = await fetch(API_BASE + 'cambios_turno.php?estado=pendiente');
@@ -233,10 +233,138 @@ async function cargarEstadisticasDashboard() {
         //     cambiosPendientes.textContent = dataCambios.data ? dataCambios.data.length : 0;
         // }
         
+        // Cargar alertas
+        await cargarAlertas();
+        
     } catch (error) {
         console.error('Error cargando estadísticas:', error);
         mostrarAlerta('Error cargando las estadisticas', 'danger')
     }
+}
+
+// ALERTAS Y AVISOS IMPORTANTES
+async function cargarAlertas() {
+    try {
+        const contenedor = document.getElementById('contenedor-alertas');
+        if (!contenedor) return;
+
+        const alertas = [];
+
+        // Cargar incapacidades próximas a vencer (próximos 7 días)
+        const incapacidadesProximas = await obtenerIncapacidadesProximasAVencer();
+        if (incapacidadesProximas && incapacidadesProximas.length > 0) {
+            incapacidadesProximas.forEach(incapacidad => {
+                alertas.push({
+                    tipo: 'warning',
+                    icono: 'fa-heartbeat',
+                    titulo: `Incapacidad por vencer - ${incapacidad.trabajador}`,
+                    descripcion: `Vence el ${incapacidad.fecha_fin}`,
+                    badge: `${incapacidad.dias_restantes}d`,
+                    badgeClass: 'warning'
+                });
+            });
+        }
+
+        // Cargar cambios de turno pendientes
+        const cambiosPendientes = await obtenerCambiosPendientes();
+        if (cambiosPendientes && cambiosPendientes.length > 0) {
+            alertas.push({
+                tipo: 'blue',
+                icono: 'fa-exchange-alt',
+                titulo: `${cambiosPendientes.length} cambios de turno pendientes de aprobación`,
+                descripcion: 'Revisa las solicitudes de cambio de turno',
+                badge: cambiosPendientes.length,
+                badgeClass: 'info'
+            });
+        }
+
+        if (alertas.length === 0) {
+            contenedor.innerHTML = '<div class="alert-placeholder"><i class="fas fa-check-circle"></i> No hay alertas activas</div>';
+        } else {
+            renderizarAlertas(alertas);
+        }
+
+    } catch (error) {
+        console.error('Error cargando alertas:', error);
+        const contenedor = document.getElementById('contenedor-alertas');
+        if (contenedor) {
+            contenedor.innerHTML = '<div class="alert-placeholder"><i class="fas fa-exclamation-circle"></i> Error cargando alertas</div>';
+        }
+    }
+}
+
+async function obtenerIncapacidadesProximasAVencer() {
+    try {
+        const hoy = new Date();
+        const hace7dias = new Date(hoy.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const en7dias = new Date(hoy.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+        const response = await fetch(API_BASE + 'incapacidades.php?activas=1');
+        const data = await response.json();
+
+        if (!data.success || !data.data) return [];
+
+        return data.data
+            .filter(inc => {
+                const fechaFin = new Date(inc.fecha_fin);
+                return fechaFin > hoy && fechaFin <= en7dias;
+            })
+            .map(inc => {
+                const diasRestantes = Math.ceil((new Date(inc.fecha_fin) - hoy) / (1000 * 60 * 60 * 24));
+                return {
+                    id: inc.id,
+                    trabajador: inc.trabajador || 'Desconocido',
+                    fecha_fin: new Date(inc.fecha_fin).toLocaleDateString('es-CO'),
+                    dias_restantes: diasRestantes
+                };
+            })
+            .sort((a, b) => a.dias_restantes - b.dias_restantes);
+    } catch (error) {
+        console.error('Error cargando incapacidades próximas:', error);
+        return [];
+    }
+}
+
+async function obtenerCambiosPendientes() {
+    try {
+        const response = await fetch(API_BASE + 'cambios_turno.php?estado=pendiente');
+        const data = await response.json();
+
+        if (!data.success || !data.data) return [];
+
+        return data.data.slice(0, 5); // Mostrar máximo 5
+    } catch (error) {
+        console.error('Error cargando cambios pendientes:', error);
+        return [];
+    }
+}
+
+function renderizarAlertas(alertas) {
+    const contenedor = document.getElementById('contenedor-alertas');
+    if (!contenedor) return;
+
+    contenedor.innerHTML = '';
+
+    alertas.forEach(alerta => {
+        const alertaElement = document.createElement('div');
+        alertaElement.className = `alert-item alert-${alerta.tipo}`;
+        
+        let badge = '';
+        if (alerta.badge) {
+            badge = `<span class="alert-item-badge ${alerta.badgeClass}">${alerta.badge}</span>`;
+        }
+
+        alertaElement.innerHTML = `
+            <div class="alert-item-icon"><i class="fas ${alerta.icono}"></i></div>
+            <div class="alert-item-content">
+                <div class="alert-item-title">${alerta.titulo}</div>
+                <div class="alert-item-description">${alerta.descripcion}</div>
+            </div>
+            ${badge}
+        `;
+
+        contenedor.appendChild(alertaElement);
+    });
 }
 
 async function cargarFormularioAsignacion() {
@@ -711,11 +839,16 @@ async function cargarVistaDiaria() {
     const fecha = fechaCalendarioActual.toISOString().split('T')[0];
     const areaFiltro = document.getElementById('filtro-area-calendario');
     const area = areaFiltro ? areaFiltro.value : '';
+    const turnoFiltro = document.getElementById('filtro-turno-calendario');
+    const turno = turnoFiltro ? turnoFiltro.value : '';
 
     try {
         let url = API_BASE + 'turnos.php?fecha=' + fecha;
         if (area) {
             url += '&area=' + area;
+        }
+        if (turno) {
+            url += '&turno=' + turno;
         }
 
         const response = await fetch(url);
@@ -801,7 +934,7 @@ function renderizarVistaDiaria(turnos, fecha) {
 
       html += '<div class="turno-section turno-' + num +'">';
       html += '<div class="turno-header">';
-      html += '<span class="turno-icon">' + (num === 1 ? '🌅' : num === 2 ? '🌆' : num === 3 ? '🌙' : '') + '</span>';
+      html += '<span class="turno-icon">' + (num === 1 ? '' : num === 2 ? '' : num === 3 ? '' : '') + '</span>';
       html += '<div class="turno-tittle">';
       html += '<h4>' + (meta.nombre || ('TURNO ' + num)) + '</h4>';
       html += '<p>' + (meta.horario || '') + '</p>';
@@ -889,11 +1022,16 @@ async function exportarDiaExcel() {
   const fecha = fechaCalendarioActual.toISOString().split('T')[0];
   const areaFiltro = document.getElementById('filtro-area-calendario');
   const area = areaFiltro ? areaFiltro.value : '';
+  const turnoFiltro = document.getElementById('filtro-turno-calendario');
+  const turno = turnoFiltro ? turnoFiltro.value : '';
 
   try {
     let url = API_BASE + 'turnos.php?fecha=' + fecha;
     if (area) {
       url += '&area=' + area;
+    }
+    if (turno) {
+      url += '&turno=' + turno;
     }
 
     const response = await fetch(url);
@@ -944,11 +1082,16 @@ async function exportarDiaPDF() {
     const fecha = fechaCalendarioActual.toISOString().split('T')[0];
     const areaFiltro = document.getElementById('filtro-area-calendario');
     const area = areaFiltro ? areaFiltro.value : '';
+    const turnoFiltro = document.getElementById('filtro-turno-calendario');
+    const turno = turnoFiltro ? turnoFiltro.value : '';
     
     try {
         let url = API_BASE + 'turnos.php?fecha=' + fecha;
         if (area) {
             url += '&area=' + area;
+        }
+        if (turno) {
+            url += '&turno=' + turno;
         }
         
         const response = await fetch(url);
@@ -1291,43 +1434,76 @@ async function cargarTablaRestricciones() {
     tabla.innerHTML = '<p class="info-box">Sección en desarrollo. Las restricciones se pueden ver en la tabla de trabajadores.</p>';
 }
 async function cargarTablaIncapacidades() {
-  const tabla = document.getElementById('tabla-incapacidades');
+    const tabla = document.getElementById('tabla-incapacidades');
     if (!tabla) return;
     
     try {
-        const response = await fetch(`${API_BASE}incapacidades.php`);
+        const response = await fetch(API_BASE + 'incapacidades.php');
         const data = await response.json();
         
         if (data.success && data.data.length > 0) {
             let html = `
-                <table>
-                    <thead>
-                        <tr>
-                            <th>Trabajador</th>
-                            <th>Tipo</th>
-                            <th>Fecha Inicio</th>
-                            <th>Fecha Fin</th>
-                            <th>Días</th>
-                            <th>Estado</th>
-                        </tr>
-                    </thead>
-                    <tbody>
+                <div class="tabla-responsiva">
+                    <table class="tabla-incapacidades">
+                        <thead>
+                            <tr>
+                                <th>Cédula</th>
+                                <th>Trabajador</th>
+                                <th>Tipo</th>
+                                <th>Fecha Inicio</th>
+                                <th>Fecha Fin</th>
+                                <th>Días</th>
+                                <th>EPS</th>
+                                <th>Descripción</th>
+                                <th>Estado</th>
+                                <th>Documento</th>
+                                <th>Acciones</th>
+                            </tr>
+                        </thead>
+                        <tbody>
             `;
             
-            data.data.forEach(inc => {
+            data.data.forEach(function(inc) {
+                const estadoClass = inc.estado === 'activa' ? 'badge-danger' : 'badge-success';
+                const estadoTexto = inc.estado === 'activa' ? '🔴 Activa' : '🟢 Finalizada';
+                
+                const tipoMap = {
+                    'EG': 'Enfermedad General',
+                    'AT': 'Accidente Trabajo',
+                    'EL': 'Enfermedad Laboral',
+                    'LM': 'Lic. Maternidad',
+                    'LP': 'Lic. Paternidad',
+                    'CIR': 'Cirugía'
+                };
+                
+                const tipoIncapacidad = tipoMap[inc.tipo] || inc.tipo || '-';
+
+                let btnDocumento = '<span class="texto-muted">-</span>';
+                if (inc.documento_soporte) {
+                    btnDocumento = `<a href="uploads/incapacidades/${inc.documento_soporte}" target="_blank" class="btn-icon" title="Descargar"><i class="fas fa-download"></i></a>`;
+                }
+
                 html += `
-                    <tr>
-                        <td>${inc.trabajador}</td>
-                        <td>${inc.tipo}</td>
-                        <td>${inc.fecha_inicio}</td>
-                        <td>${inc.fecha_fin}</td>
-                        <td>${inc.dias_incapacidad}</td>
-                        <td>${inc.estado}</td>
+                    <tr class="fila-incapacidad">
+                        <td><strong>${inc.cedula || '-'}</strong></td>
+                        <td>${inc.trabajador || '-'}</td>
+                        <td><span class="badge-tipo">${tipoIncapacidad}</span></td>
+                        <td>${inc.fecha_inicio || '-'}</td>
+                        <td>${inc.fecha_fin || '-'}</td>
+                        <td><span class="badge-dias">${inc.dias_incapacidad}</span></td>
+                        <td>${inc.eps || '-'}</td>
+                        <td><small>${inc.descripcion || '-'}</small></td>
+                        <td><span class="badge ${estadoClass}">${estadoTexto}</span></td>
+                        <td>${btnDocumento}</td>
+                        <td>
+                            <button class="btn-icon" onclick="editarIncapacidad(${inc.id})" title="Editar"><i class="fas fa-edit"></i></button>
+                            <button class="btn-icon btn-danger" onclick="eliminarIncapacidad(${inc.id})" title="Eliminar"><i class="fas fa-trash"></i></button>
+                        </td>
                     </tr>
                 `;
             });
             
-            html += '</tbody></table>';
+            html += '</tbody></table></div>';
             tabla.innerHTML = html;
         } else {
             tabla.innerHTML = '<p class="info-box">No hay incapacidades registradas.</p>';
@@ -1529,25 +1705,13 @@ function nuevoTrabajador() {
             
             <div class="form-group">
                 <label for="cedula-trabajador">Cédula <span class="required">*</span></label>
-                <input type="text" id="cedula-trabajador" required placeholder="Ej: 1234567890">
+                <input type="text" id="cedula-trabajador" required placeholder="Ej: 1234567890" pattern="[0-9]{1,}">
             </div>
             
             <div class="form-group">
                 <label for="cargo-trabajador">Cargo</label>
                 <input type="text" id="cargo-trabajador" placeholder="Ej: Auxiliar de servicio">
                 <small style="color: #7f8c8d; font-size: 0.85rem;">Opcional</small>
-            </div>
-            <div class="form-group">
-                <label for="turno-select">Restricción Medica <span class="required">*</span></label>
-                <select id="turno-select" required>
-                  <option value="">Seleccione...</option>
-                  <option value="">No fuerza fisica</option>
-                  <option value="">No turno noche</option>
-                  <option value="">Movilidad limitada</option>
-                  <option value="">Problema visual</option>
-                  <option value="">Otra</option>
-                  <option value="">Ninguna</option>
-                </select>
             </div>
             
             <div class="form-grid">
@@ -1563,12 +1727,12 @@ function nuevoTrabajador() {
             </div>
             
             <div class="form-group">
-                <label for="fecha-ingreso-trabajador">Fecha de Ingreso</label>
-                <input type="date" id="fecha-ingreso-trabajador" value="${new Date().toISOString().split('T')[0]}">
+                <label for="fecha-ingreso-trabajador">Fecha de Ingreso <span class="required">*</span></label>
+                <input type="date" id="fecha-ingreso-trabajador" required value="${new Date().toISOString().split('T')[0]}">
             </div>
             
             <div class="info-box" style="margin-top: 1rem;">
-                <p><strong>ℹ️ Nota:</strong> No olvides llenar todos los datos solicitados.</p>
+                <p><strong>ℹ️ Nota:</strong> Llena los campos marcados con * (obligatorios). Las restricciones médicas se pueden agregar después.</p>
             </div>
             
             <div class="form-actions">
@@ -1587,14 +1751,26 @@ function nuevoTrabajador() {
   document.getElementById('form-nuevo-trabajador').addEventListener('submit', async function(e) {
     e.preventDefault();
 
+    const nombre = document.getElementById('nombre-trabajador').value.trim();
+    const cedula = document.getElementById('cedula-trabajador').value.trim();
+    const cargo = document.getElementById('cargo-trabajador').value.trim() || null;
+    const telefono = document.getElementById('telefono-trabajador').value.trim() || null;
+    const email = document.getElementById('email-trabajador').value.trim() || null;
+    const fecha_ingreso = document.getElementById('fecha-ingreso-trabajador').value;
+
+    // Validación de cédula
+    if (!/^[0-9]{1,}$/.test(cedula)) {
+      mostrarAlerta('La cédula solo debe contener números', 'danger');
+      return;
+    }
+
     const datos = {
-      nombre: document.getElementById('nombre-trabajador').value,
-      cedula: document.getElementById('cedula-trabajador').value,
-      cargo: document.getElementById('cargo-trabajador').value || null,
-      area: null,
-      telefono: document.getElementById('telefono-trabajador').value || null,
-      email: document.getElementById('email-trabajador').value || null,
-      fecha_ingreso: document.getElementById('fecha-ingreso-trabajador').value
+      nombre: nombre,
+      cedula: cedula,
+      cargo: cargo,
+      telefono: telefono,
+      email: email,
+      fecha_ingreso: fecha_ingreso
     };
 
     try {
@@ -1609,16 +1785,17 @@ function nuevoTrabajador() {
         mostrarAlerta('Trabajador creado exitosamente!', 'success');
         cerrarModal();
 
-        if (document.querySelector('[data-section="trabajadores"]').classList.contains('active')) {
+        const workersSection = document.getElementById('trabajadores');
+        if (workersSection && workersSection.classList.contains('active')) {
           cargarTablaTrabajadores();
         }
         cargarEstadisticasDashboard();
       } else {
-        mostrarAlerta('Error: ' + data.message, 'danger');
+        mostrarAlerta('Error: ' + (data.message || 'No se pudo crear el trabajador'), 'danger');
       }
     } catch (error) {
       console.error('Error creando trabajador:', error);
-      mostrarAlerta('Error al crear trabajador', 'danger')
+      mostrarAlerta('Error al crear trabajador: ' + error.message, 'danger')
     }
   });
 }
@@ -1789,7 +1966,6 @@ function nuevaIncapacidad() {
   const modalBody = document.getElementById('modal-body');
 
   modalTitulo.textContent = 'Registrar Incapacidad';
-
   fetch(API_BASE + 'trabajadores.php')
       .then(res => res.json())
       .then(data => {
@@ -1802,79 +1978,126 @@ function nuevaIncapacidad() {
             });
           }
 
-          modalBody.innerHTML = '<form id="form-nueva-incapacidad">' +
-                '<div class="form-group">' +
-                '<label for="trabajador-incapacidad">Trabajador <span class="required">*</span></label>' +
-                '<select id="trabajador-incapacidad" required>' + trabajadoresOptions + '</select>' +
-                '</div>' +
-                '<div class="form-group">' +
-                '<label for="tipo-incapacidad">Tipo <span class="required">*</span></label>' +
-                '<select id="tipo-incapacidad" required>' +
-                '<option value="">Seleccione...</option>' +
-                '<option value="EG">Enfermedad General</option>' +
-                '<option value="AT">Accidente de Trabajo</option>' +
-                '<option value="EL">Enfermedad Laboral</option>' +
-                '<option value="LM">Licencia de Maternidad</option>' +
-                '<option value="LP">Licencia de Paternidad</option>' +
-                '<option value="CIR">Cirugía</option>' +
-                '</select>' +
-                '</div>' +
-                '<div class="form-grid">' +
-                '<div class="form-group">' +
-                '<label for="fecha-inicio-incapacidad">Fecha Inicio <span class="required">*</span></label>' +
-                '<input type="date" id="fecha-inicio-incapacidad" required>' +
-                '</div>' +
-                '<div class="form-group">' +
-                '<label for="fecha-fin-incapacidad">Fecha Fin <span class="required">*</span></label>' +
-                '<input type="date" id="fecha-fin-incapacidad" required>' +
-                '</div>' +
-                '</div>' +
-                '<div class="form-group">' +
-                '<label for="descripcion-incapacidad">Descripción</label>' +
-                '<textarea id="descripcion-incapacidad" rows="2" placeholder="Ej: Cirugía de rodilla"></textarea>' +
-                '</div>' +
-                '<div class="form-group">' +
-                '<label for="eps-incapacidad">EPS</label>' +
-                '<input type="text" id="eps-incapacidad" placeholder="Ej: Sanitas">' +
-                '</div>' +
-                '<hr style="margin: 1.5rem 0; border: none; border-top: 2px solid #e9ecef;">' +
-                '<h4 style="margin-bottom: 1rem; color: #495057;">📋 Restricciones Posteriores</h4>' +
-                '<div class="form-group">' +
-                '<label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">' +
-                '<input type="checkbox" id="genera-restriccion" onchange="toggleRestriccionFields()">' +
-                '<span>Esta incapacidad genera una restricción médica posterior</span>' +
-                '</label>' +
-                '</div>' +
-                '<div id="campos-restriccion" style="display: none; padding: 1rem; background: #f8f9fa; border-radius: 6px; margin-top: 1rem;">' +
-                '<div class="form-group">' +
-                '<label for="tipo-restriccion-generada">Tipo de Restricción <span class="required">*</span></label>' +
-                '<select id="tipo-restriccion-generada">' +
-                '<option value="">Seleccione...</option>' +
-                '<option value="no_fuerza_fisica">No puede hacer fuerza física</option>' +
-                '<option value="movilidad_limitada">Movilidad limitada</option>' +
-                '<option value="no_turno_noche">No puede trabajar turno nocturno</option>' +
-                '<option value="problema_visual">Problema visual</option>' +
-                '</select>' +
-                '</div>' +
-                '<div class="form-group">' +
-                '<label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">' +
-                '<input type="checkbox" id="restriccion-permanente" onchange="toggleFechaFinRestriccion()">' +
-                '<span>Restricción permanente (indefinida)</span>' +
-                '</label>' +
-                '</div>' +
-                '<div class="form-group" id="campo-fecha-fin-restriccion">' +
-                '<label for="fecha-fin-restriccion">Fecha Fin de Restricción <span class="required">*</span></label>' +
-                '<input type="date" id="fecha-fin-restriccion">' +
-                '<small style="color: #6c757d;">La restricción inicia cuando termina la incapacidad</small>' +
-                '</div>' +
-                '</div>' +
-                '<div class="form-actions" style="margin-top: 1.5rem;">' +
-                '<button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Registrar Incapacidad</button>' +
-                '<button type="button" class="btn btn-outline" onclick="cerrarModal()"><i class="fas fa-times"></i> Cancelar</button>' +
-                '</div>' +
-                '</form>';
+          const hoy = new Date().toISOString().split('T')[0];
+
+          modalBody.innerHTML = `
+            <form id="form-nueva-incapacidad">
+              <div class="form-group">
+                <label for="trabajador-incapacidad">Trabajador <span class="required">*</span></label>
+                <select id="trabajador-incapacidad" required>${trabajadoresOptions}</select>
+              </div>
+
+              <div class="form-group">
+                <label for="tipo-incapacidad">Tipo <span class="required">*</span></label>
+                <select id="tipo-incapacidad" required>
+                  <option value="">Seleccione...</option>
+                  <option value="EG">Enfermedad General</option>
+                  <option value="AT">Accidente de Trabajo</option>
+                  <option value="EL">Enfermedad Laboral</option>
+                  <option value="LM">Licencia de Maternidad</option>
+                  <option value="LP">Licencia de Paternidad</option>
+                  <option value="CIR">Cirugía</option>
+                </select>
+              </div>
+
+              <div class="form-grid">
+                <div class="form-group">
+                  <label for="fecha-inicio-incapacidad">Fecha Inicio <span class="required">*</span></label>
+                  <input type="date" id="fecha-inicio-incapacidad" required min="${hoy}">
+                </div>
+                <div class="form-group">
+                  <label for="fecha-fin-incapacidad">Fecha Fin <span class="required">*</span></label>
+                  <input type="date" id="fecha-fin-incapacidad" required min="${hoy}">
+                </div>
+              </div>
+
+              <div id="dias-incapacidad" class="info-box" style="display:none;">Días de incapacidad: <strong id="dias-count">0</strong></div>
+
+              <div class="form-group">
+                <label for="descripcion-incapacidad">Descripción</label>
+                <textarea id="descripcion-incapacidad" rows="2" placeholder="Ej: Cirugía de rodilla"></textarea>
+              </div>
+
+              <div class="form-group">
+                <label for="eps-incapacidad">EPS</label>
+                <input type="text" id="eps-incapacidad" placeholder="Ej: Sanitas">
+              </div>
+
+              <div class="form-group">
+                <label for="documento-incapacidad">Documento de soporte (opcional)</label>
+                <input type="file" id="documento-incapacidad" accept=".pdf,.jpg,.jpeg,.png,.gif">
+                <small style="color:#6c757d; display:block; margin-top:.25rem;">Formatos: PDF, JPG, PNG, GIF (máx 10MB)</small>
+              </div>
+
+              <hr style="margin: 1.5rem 0; border: none; border-top: 2px solid #e9ecef;">
+              <h4 style="margin-bottom: 1rem; color: #495057;">📋 Restricciones Posteriores</h4>
+              <div class="form-group">
+                <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                  <input type="checkbox" id="genera-restriccion" onchange="toggleRestriccionFields()">
+                  <span>Esta incapacidad genera una restricción médica posterior</span>
+                </label>
+              </div>
+
+              <div id="campos-restriccion" style="display: none; padding: 1rem; background: #f8f9fa; border-radius: 6px; margin-top: 1rem;">
+                <div class="form-group">
+                  <label for="tipo-restriccion-generada">Tipo de Restricción <span class="required">*</span></label>
+                  <select id="tipo-restriccion-generada">
+                    <option value="">Seleccione...</option>
+                    <option value="no_fuerza_fisica">No puede hacer fuerza física</option>
+                    <option value="movilidad_limitada">Movilidad limitada</option>
+                    <option value="no_turno_noche">No puede trabajar turno nocturno</option>
+                    <option value="problema_visual">Problema visual</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                    <input type="checkbox" id="restriccion-permanente" onchange="toggleFechaFinRestriccion()">
+                    <span>Restricción permanente (indefinida)</span>
+                  </label>
+                </div>
+                <div class="form-group" id="campo-fecha-fin-restriccion">
+                  <label for="fecha-fin-restriccion">Fecha Fin de Restricción <span class="required">*</span></label>
+                  <input type="date" id="fecha-fin-restriccion" min="${hoy}">
+                  <small style="color: #6c757d;">La restricción inicia cuando termina la incapacidad</small>
+                </div>
+              </div>
+
+              <div class="form-actions" style="margin-top: 1.5rem;">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Registrar Incapacidad</button>
+                <button type="button" class="btn btn-outline" onclick="cerrarModal()"><i class="fas fa-times"></i> Cancelar</button>
+              </div>
+            </form>
+          `;
 
           modalOverlay.classList.add('active');
+
+          // Eventos para calcular días
+          const fechaInicioEl = document.getElementById('fecha-inicio-incapacidad');
+          const fechaFinEl = document.getElementById('fecha-fin-incapacidad');
+          const diasBox = document.getElementById('dias-incapacidad');
+          const diasCount = document.getElementById('dias-count');
+
+          function actualizarDias() {
+            const fi = fechaInicioEl.value;
+            const ff = fechaFinEl.value;
+            if (fi && ff) {
+              const d1 = new Date(fi);
+              const d2 = new Date(ff);
+              if (d2 < d1) {
+                diasBox.style.display = 'block';
+                diasCount.textContent = '0';
+                return;
+              }
+              const diff = Math.ceil((d2 - d1) / (1000*60*60*24)) + 1;
+              diasBox.style.display = 'block';
+              diasCount.textContent = diff;
+            } else {
+              diasBox.style.display = 'none';
+            }
+          }
+
+          fechaInicioEl.addEventListener('change', actualizarDias);
+          fechaFinEl.addEventListener('change', actualizarDias);
 
           document.getElementById('form-nueva-incapacidad').addEventListener('submit', guardarIncapacidad);
       });
@@ -1905,31 +2128,35 @@ async function guardarIncapacidad(e) {
     e.preventDefault();
 
     const generaRestriccion = document.getElementById('genera-restriccion').checked;
+    const formData = new FormData();
 
-    const datos = {
-        trabajador_id: document.getElementById('trabajador-incapacidad').value,
-        tipo: document.getElementById('tipo-incapacidad').value,
-        fecha_inicio: document.getElementById('fecha-inicio-incapacidad').value,
-        fecha_fin: document.getElementById('fecha-fin-incapacidad').value,
-        descripcion: document.getElementById('descripcion-incapacidad').value || null,
-        eps: document.getElementById('eps-incapacidad').value || null,
-        genera_restriccion: generaRestriccion
-    };
+    formData.append('trabajador_id', document.getElementById('trabajador-incapacidad').value);
+    formData.append('tipo', document.getElementById('tipo-incapacidad').value);
+    formData.append('fecha_inicio', document.getElementById('fecha-inicio-incapacidad').value);
+    formData.append('fecha_fin', document.getElementById('fecha-fin-incapacidad').value);
+    formData.append('descripcion', document.getElementById('descripcion-incapacidad').value || '');
+    formData.append('eps', document.getElementById('eps-incapacidad').value || '');
+    formData.append('genera_restriccion', generaRestriccion ? '1' : '0');
 
     if (generaRestriccion) {
-      datos.tipo_restriccion_generada = document.getElementById('tipo-restriccion-generada').value;
-      datos.restriccion_permanente = document.getElementById('restriccion-permanente').checked;
+      formData.append('tipo_restriccion_generada', document.getElementById('tipo-restriccion-generada').value);
+      formData.append('restriccion_permanente', document.getElementById('restriccion-permanente').checked ? '1' : '0');
 
-      if (!datos.restriccion_permanente) {
-        datos.fecha_fin_restriccion = document.getElementById('fecha-fin-restriccion').value;
+      if (!document.getElementById('restriccion-permanente').checked) {
+        formData.append('fecha_fin_restriccion', document.getElementById('fecha-fin-restriccion').value);
       }
     }
 
+    // Agregar archivo si existe
+    const fileInput = document.getElementById('documento-incapacidad');
+    if (fileInput && fileInput.files.length > 0) {
+        formData.append('documento', fileInput.files[0]);
+    }
+
     try {
-        const response = await fetch(API_BASE + 'incapacidades.php', {
+        const response = await fetch(API_BASE + 'incapacidades_upload.php', {
           method: 'POST',
-          headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify(datos)
+          body: formData
         });
 
         const result = await response.json();
@@ -1945,6 +2172,16 @@ async function guardarIncapacidad(e) {
         console.error('Error:', error);
         mostrarAlerta('Error al registrar incapacidad', 'danger');
     }
+}
+
+// helper: leer archivo en base64
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
 function solicitarCambio() {
@@ -2110,5 +2347,191 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
   } catch (err) {
     console.error('Error cargando disponibles:', err);
     modalBody.innerHTML = '<p class="alert alert-danger">Error al cargar datos</p>';
+  }
+}
+
+// ===== FUNCIONES PARA INCAPACIDADES =====
+
+async function editarIncapacidad(id) {
+  const modalOverlay = document.getElementById('modal-overlay');
+  const modalTitulo = document.getElementById('modal-titulo');
+  const modalBody = document.getElementById('modal-body');
+
+  try {
+    // Cargar datos de la incapacidad
+    const response = await fetch(API_BASE + 'incapacidades.php?id=' + id);
+    const data = await response.json();
+
+    if (!data.success || !data.data) {
+      mostrarAlerta('No se pudo cargar la incapacidad', 'danger');
+      return;
+    }
+
+    const inc = data.data;
+
+    modalTitulo.textContent = 'Editar Incapacidad';
+
+    const hoy = new Date().toISOString().split('T')[0];
+
+    modalBody.innerHTML = `
+      <form id="form-editar-incapacidad">
+        <input type="hidden" id="incapacidad-id" value="${inc.id}">
+
+        <div class="form-group">
+          <label for="editar-trabajador">Trabajador</label>
+          <input type="text" disabled value="${inc.trabajador} (${inc.cedula})">
+        </div>
+
+        <div class="form-group">
+          <label for="editar-tipo-incapacidad">Tipo <span class="required">*</span></label>
+          <select id="editar-tipo-incapacidad" required>
+            <option value="">Seleccione...</option>
+            <option value="EG" ${inc.tipo === 'EG' ? 'selected' : ''}>Enfermedad General</option>
+            <option value="AT" ${inc.tipo === 'AT' ? 'selected' : ''}>Accidente de Trabajo</option>
+            <option value="EL" ${inc.tipo === 'EL' ? 'selected' : ''}>Enfermedad Laboral</option>
+            <option value="LM" ${inc.tipo === 'LM' ? 'selected' : ''}>Licencia de Maternidad</option>
+            <option value="LP" ${inc.tipo === 'LP' ? 'selected' : ''}>Licencia de Paternidad</option>
+            <option value="CIR" ${inc.tipo === 'CIR' ? 'selected' : ''}>Cirugía</option>
+          </select>
+        </div>
+
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="editar-fecha-inicio-incapacidad">Fecha Inicio <span class="required">*</span></label>
+            <input type="date" id="editar-fecha-inicio-incapacidad" required value="${inc.fecha_inicio}">
+          </div>
+          <div class="form-group">
+            <label for="editar-fecha-fin-incapacidad">Fecha Fin <span class="required">*</span></label>
+            <input type="date" id="editar-fecha-fin-incapacidad" required value="${inc.fecha_fin}">
+          </div>
+        </div>
+
+        <div id="editar-dias-incapacidad" class="info-box" style="display:none;">Días de incapacidad: <strong id="editar-dias-count">0</strong></div>
+
+        <div class="form-group">
+          <label for="editar-descripcion-incapacidad">Descripción</label>
+          <textarea id="editar-descripcion-incapacidad" rows="2">${inc.descripcion || ''}</textarea>
+        </div>
+
+        <div class="form-group">
+          <label for="editar-eps-incapacidad">EPS</label>
+          <input type="text" id="editar-eps-incapacidad" value="${inc.eps || ''}">
+        </div>
+
+        <div class="form-group">
+          <label for="editar-estado-incapacidad">Estado</label>
+          <select id="editar-estado-incapacidad" required>
+            <option value="activa" ${inc.estado === 'activa' ? 'selected' : ''}>Activa</option>
+            <option value="finalizada" ${inc.estado === 'finalizada' ? 'selected' : ''}>Finalizada</option>
+          </select>
+        </div>
+
+        <div class="form-actions" style="margin-top: 1.5rem;">
+          <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar Cambios</button>
+          <button type="button" class="btn btn-outline" onclick="cerrarModal()"><i class="fas fa-times"></i> Cancelar</button>
+        </div>
+      </form>
+    `;
+
+    modalOverlay.classList.add('active');
+
+    // Eventos para calcular días
+    const fechaInicioEl = document.getElementById('editar-fecha-inicio-incapacidad');
+    const fechaFinEl = document.getElementById('editar-fecha-fin-incapacidad');
+    const diasBox = document.getElementById('editar-dias-incapacidad');
+    const diasCount = document.getElementById('editar-dias-count');
+
+    function actualizarDias() {
+      const fi = fechaInicioEl.value;
+      const ff = fechaFinEl.value;
+      if (fi && ff) {
+        const d1 = new Date(fi);
+        const d2 = new Date(ff);
+        if (d2 < d1) {
+          diasBox.style.display = 'block';
+          diasCount.textContent = '0';
+          return;
+        }
+        const diff = Math.ceil((d2 - d1) / (1000*60*60*24)) + 1;
+        diasBox.style.display = 'block';
+        diasCount.textContent = diff;
+      } else {
+        diasBox.style.display = 'none';
+      }
+    }
+
+    fechaInicioEl.addEventListener('change', actualizarDias);
+    fechaFinEl.addEventListener('change', actualizarDias);
+
+    // Trigger para mostrar días iniciales
+    actualizarDias();
+
+    document.getElementById('form-editar-incapacidad').addEventListener('submit', guardarEdicionIncapacidad);
+
+  } catch (error) {
+    console.error('Error:', error);
+    mostrarAlerta('Error al cargar la incapacidad', 'danger');
+  }
+}
+
+async function guardarEdicionIncapacidad(e) {
+  e.preventDefault();
+
+  const id = document.getElementById('incapacidad-id').value;
+  const datos = {
+    id: id,
+    tipo: document.getElementById('editar-tipo-incapacidad').value,
+    fecha_inicio: document.getElementById('editar-fecha-inicio-incapacidad').value,
+    fecha_fin: document.getElementById('editar-fecha-fin-incapacidad').value,
+    descripcion: document.getElementById('editar-descripcion-incapacidad').value || '',
+    eps: document.getElementById('editar-eps-incapacidad').value || '',
+    estado: document.getElementById('editar-estado-incapacidad').value
+  };
+
+  try {
+    const response = await fetch(API_BASE + 'incapacidades.php', {
+      method: 'PUT',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(datos)
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      mostrarAlerta('✅ Incapacidad actualizada correctamente', 'success');
+      cerrarModal();
+      cargarTablaIncapacidades();
+    } else {
+      mostrarAlerta('Error: ' + result.message, 'danger');
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    mostrarAlerta('Error al guardar cambios', 'danger');
+  }
+}
+
+async function eliminarIncapacidad(id) {
+  if (!confirm('¿Estás seguro de que deseas eliminar esta incapacidad?')) {
+    return;
+  }
+
+  try {
+    const response = await fetch(API_BASE + 'incapacidades.php', {
+      method: 'DELETE',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({id: id})
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
+      mostrarAlerta('✅ Incapacidad eliminada correctamente', 'success');
+      cargarTablaIncapacidades();
+    } else {
+      mostrarAlerta('Error: ' + result.message, 'danger');
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    mostrarAlerta('Error al eliminar incapacidad', 'danger');
   }
 }

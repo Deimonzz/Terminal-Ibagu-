@@ -16,10 +16,7 @@
             <span>Terminal Ibagué - Gestión de Turnos</span>
         </div>
         <ul class="nav-menu">
-            <li><a href="index.php"><i class="fas fa-home"></i> Inicio</a></li>
-            <li><a href="registro.html"><i class="fas fa-clipboard-list"></i> Registro Visita</a></li>
-            <li><a href="visitas.html"><i class="fas fa-users"></i> Visitas</a></li>
-            <li><a href="historial.html"><i class="fas fa-history"></i> Historial</a></li>
+            <li><a href="index.php"><i class="fas fa-home"></i> Volver al inicio</a></li>
             <li class="active"><a href="turnos.html"><i class="fas fa-calendar-alt"></i> Turnos</a></li>
         </ul>
      </nav>
@@ -36,7 +33,7 @@
                 <li class="menu-item" data-section="asignar"><i class="fas fa-calendar-plus"></i> Asignar Turnos</li>
             </ul>
             <ul>
-                <li class="menu-item" data-section="calendario"><i class="fas fa-calendar"></i> Calendario</li>
+                <li class="menu-item" data-section="calendario"><i class="fas fa-calendar"></i> Turnos Asignados</li>
             </ul>
             <ul>
                 <li class="menu-item" data-section="trabajadores"><i class="fas fa-users"></i> Trabajadores</li>
@@ -104,7 +101,7 @@
                         </button>
                         <button class="btn-action" onclick="cambiarSeccion('calendario')">
                             <i class="fas fa-calendar-alt"></i>
-                            <span>Ver Calendario</span>
+                            <span>Ver Turnos</span>
                         </button>
                         <button class="btn-action" onclick="cambiarSeccion('incapacidades')">
                             <i class="fas fa-file-medical"></i>
@@ -114,6 +111,16 @@
                             <i class="fas fa-user-plus"></i>
                             <span>Nuevo Trabajador</span>
                         </button>
+                    </div>
+                </div>
+
+                <!-- Alertas y Avisos Importantes -->
+                <div class="alertas-section">
+                    <h3><i class="fas fa-exclamation-triangle"></i> Alertas y Avisos Importantes</h3>
+                    <div id="contenedor-alertas" class="alertas-container">
+                        <div class="alert-placeholder">
+                            <i class="fas fa-spinner fa-spin"></i> Cargando alertas...
+                        </div>
                     </div>
                 </div>
             </section>
@@ -211,11 +218,11 @@
                         </div>
 
                         <div class="calendar-filters">
-                            <select id="" class="filter-select" onchange="">
+                            <select id="filtro-turno-calendario" class="filter-select" onchange="cargarVistaDiaria()">
                                 <option value="">Todas los turnos</option>
-                                <option value="">Turno 1 - Mañana</option>
-                                <option value="">Turno 2 - Tarde</option>
-                                <option value="">Turno 3 - Noche</option>
+                                <option value="1">Turno 1 - Mañana</option>
+                                <option value="2">Turno 2 - Tarde</option>
+                                <option value="3">Turno 3 - Noche</option>
                             </select>
                             <select id="filtro-area-calendario" class="filter-select" onchange="cargarVistaDiaria()">
                                 <option value="">Todas las áreas</option>
@@ -250,7 +257,7 @@
 
              <!-- Trabajadores -->
 
-             <section class="trabajadores" class="section-content">
+             <section id="trabajadores" class="section-content">
                 <div class="section-header">
                     <h2>Gestion de Trabajadores</h2>
                     <button class="btn btn-primary" onclick="nuevoTrabajador()">
@@ -262,7 +269,7 @@
 
              <!-- Restricciones -->
 
-             <section class="restricciones" class="section-content">
+             <section id="restricciones" class="section-content">
                 <div class="section-header">
                     <h2>Restricciones Medicas y Laborales</h2>
                 </div>

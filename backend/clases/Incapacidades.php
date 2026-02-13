@@ -52,22 +52,24 @@ class Incapacidades {
     //Crear incapacidad
     
     public function crear($datos) {
-        $sql = "SELECT COUNT(*) as count FROM incapacidades 
+        $sql = "SELECT COUNT(*) as count FROM incapacidades
                 WHERE trabajador_id = :trabajador_id
                 AND estado = 'activa'
                 AND (
                     (:fecha_inicio BETWEEN fecha_inicio AND fecha_fin)
                     OR (:fecha_fin BETWEEN fecha_inicio AND fecha_fin)
-                    OR (fecha_inicio BETWEEN :fecha_inicio AND :fecha_fin)
+                    OR (fecha_fin BETWEEN :fecha_inicio2 AND :fecha_fin2)
                 )";
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute([
             ':trabajador_id' => $datos['trabajador_id'],
             ':fecha_inicio' => $datos['fecha_inicio'],
-            ':fecha_fin' => $datos['fecha_fin']
+            ':fecha_fin' => $datos['fecha_fin'],
+            ':fecha_inicio2' => $datos['fecha_inicio'],
+            ':fecha_fin2' => $datos['fecha_fin']
         ]);
-        
+
         $result = $stmt->fetch();
         if ($result['count'] > 0) {
             return [
@@ -75,22 +77,19 @@ class Incapacidades {
                 'message' => 'Ya existe una incapacidad activa en estas fechas'
             ];
         }
-        
+
         $fecha_inicio = new DateTime($datos['fecha_inicio']);
         $fecha_fin = new DateTime($datos['fecha_fin']);
         $dias = $fecha_inicio->diff($fecha_fin)->days + 1;
-        
+
         try {
             $this->db->beginTransaction();
-            
-            $sql = "INSERT INTO incapacidades 
-                    (trabajador_id, tipo, fecha_inicio, fecha_fin, dias_incapacidad, descripcion, 
-                    documento_soporte, eps, estado, genera_restriccion, tipo_restriccion_generada, 
-                    restriccion_permanente, fecha_fin_restriccion) 
-                    VALUES (:trabajador_id, :tipo, :fecha_inicio, :fecha_fin, :dias, :descripcion, 
-                            :documento, :eps, :estado, :genera_restriccion, :tipo_restriccion, 
-                            :restriccion_permanente, :fecha_fin_restriccion)";
-            
+
+            $sql = "INSERT INTO incapacidades
+                    (trabajador_id, tipo, fecha_inicio, fecha_fin, dias_incapacidad, descripcion, documento_soporte, eps, estado, genera_restriccion, tipo_restriccion_generada, restriccion_permanente, fecha_fin_restriccion)
+                    VALUES
+                    (:trabajador_id, :tipo, :fecha_inicio, :fecha_fin, :dias, :descripcion, :documento, :eps, 'activa', :genera_restriccion, :tipo_restriccion, :restriccion_permanente, :fecha_fin_restriccion)";
+
             $stmt = $this->db->prepare($sql);
             $stmt->execute([
                 ':trabajador_id' => $datos['trabajador_id'],
@@ -101,51 +100,48 @@ class Incapacidades {
                 ':descripcion' => $datos['descripcion'] ?? null,
                 ':documento' => $datos['documento_soporte'] ?? null,
                 ':eps' => $datos['eps'] ?? null,
-                ':estado' => 'activa',
                 ':genera_restriccion' => $datos['genera_restriccion'] ?? false,
                 ':tipo_restriccion' => $datos['tipo_restriccion_generada'] ?? null,
                 ':restriccion_permanente' => $datos['restriccion_permanente'] ?? false,
                 ':fecha_fin_restriccion' => $datos['fecha_fin_restriccion'] ?? null
             ]);
-            
+
             $incapacidad_id = $this->db->lastInsertId();
-            
-            // Si genera restricción, crearla automáticamente
+
             if (!empty($datos['genera_restriccion']) && !empty($datos['tipo_restriccion_generada'])) {
-                $sqlRestr = "INSERT INTO restricciones_trabajador 
-                            (trabajador_id, tipo_restriccion, descripcion, fecha_inicio, fecha_fin, activa) 
-                            VALUES (:trabajador_id, :tipo, :descripcion, :fecha_inicio, :fecha_fin, :activa)";
-                
+                $sqlRestr = "INSERT INTO restricciones_trabajador
+                            (trabajador_id, tipo_restriccion, descripcion, fecha_inicio, fecha_fin, activa)
+                            VALUES
+                            (:trabajador_id, :tipo, :descripcion, :fecha_inicio, :fecha_fin, :activa)";
+
                 $stmtRestr = $this->db->prepare($sqlRestr);
                 $stmtRestr->execute([
                     ':trabajador_id' => $datos['trabajador_id'],
                     ':tipo' => $datos['tipo_restriccion_generada'],
-                    ':descripcion' => 'Generada por incapacidad: ' . ($datos['descripcion'] ?? 'Cirugía'),
-                    ':fecha_inicio' => $datos['fecha_fin'], // La restricción empieza cuando termina la incapacidad
+                    ':descripcion' => 'Generada por incapacidad: ' . ($datos['descripcion'] ?? 'Cirugia'),
+                    ':fecha_inicio' => $datos['fecha_fin'],
                     ':fecha_fin' => $datos['restriccion_permanente'] ? null : $datos['fecha_fin_restriccion'],
                     ':activa' => true
                 ]);
             }
-            
+
             $this->cancelarTurnosEnRango($datos['trabajador_id'], $datos['fecha_inicio'], $datos['fecha_fin']);
-            
+
             $this->db->commit();
-            
+
             return [
                 'success' => true,
                 'id' => $incapacidad_id,
-                'message' => 'Incapacidad registrada' . (!empty($datos['genera_restriccion']) ? ' y restricción creada' : '')
+                'message' => 'Incapacidad Registrada' . (!empty($datos['genera_restriccion']) ? ' y restriccion creada' : '')
             ];
-            
-        } catch (PDOException $e) {
-            $this->db->rollBack();
-            return [
+        } catch(PDOException $e) {
+            $this->db->rollback();
+            return[
                 'success' => false,
                 'message' => 'Error: ' . $e->getMessage()
             ];
         }
     }
-    
     
     //Actualizar incapacidad
     
@@ -237,7 +233,7 @@ class Incapacidades {
     //Obtener incapacidad por ID
     
     public function obtenerPorId($id) {
-        $sql = "SELECT i.*, t.nombre as trabajador 
+        $sql = "SELECT i.*, t.nombre as trabajador, t.cedula
                 FROM incapacidades i
                 INNER JOIN trabajadores t ON i.trabajador_id = t.id
                 WHERE i.id = :id";
@@ -270,10 +266,10 @@ class Incapacidades {
     //Cancelar turnos en rango de fechas
     
     private function cancelarTurnosEnRango($trabajador_id, $fecha_inicio, $fecha_fin) {
-        $sql = "UPDATE turnos_asignados SET 
-                estado = 'cancelado',
-                observaciones = CONCAT(COALESCE(observaciones, ''), ' | Cancelado por incapacidad')
-                WHERE trabajador_id = :trabajador_id
+        $sql = "UPDATE turnos_asignados 
+                SET estado = 'cancelado', 
+                    observaciones = CONCAT(IFNULL(observaciones, ''), ' - Cancelado por incapacidad')
+                WHERE trabajador_id = :trabajador_id 
                 AND fecha BETWEEN :fecha_inicio AND :fecha_fin
                 AND estado IN ('programado', 'activo')";
         
@@ -282,8 +278,8 @@ class Incapacidades {
             ':trabajador_id' => $trabajador_id,
             ':fecha_inicio' => $fecha_inicio,
             ':fecha_fin' => $fecha_fin
-        ]);
-    }
+    ]);
+}
     
     
     //Obtener estadísticas de incapacidades
