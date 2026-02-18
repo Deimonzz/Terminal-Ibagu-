@@ -293,5 +293,38 @@ class DiasEspeciales {
             'tipos' => $result['tipos']
         ];
     }
+
+
+    // Actualizar estados automáticamente según fecha actual
+
+    public function actualizarEstados() {
+        try {
+            $actualizados = 0;
+
+            // programado → activo cuando fecha_inicio <= hoy <= fecha_fin
+            $sql = "UPDATE dias_especiales
+                    SET estado = 'activo'
+                    WHERE estado = 'programado'
+                    AND fecha_inicio <= CURDATE()
+                    AND (fecha_fin IS NULL OR fecha_fin >= CURDATE())";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute();
+            $actualizados += $stmt->rowCount();
+
+            // activo o programado → finalizado cuando fecha_fin < hoy
+            $sql = "UPDATE dias_especiales
+                    SET estado = 'finalizado'
+                    WHERE estado IN ('activo', 'programado')
+                    AND fecha_fin IS NOT NULL
+                    AND fecha_fin < CURDATE()";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute();
+            $actualizados += $stmt->rowCount();
+
+            return $actualizados;
+        } catch (PDOException $e) {
+            return 0;
+        }
+    }
 }
 ?>

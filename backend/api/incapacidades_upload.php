@@ -18,9 +18,16 @@ try {
     }
 
     // Preparar datos
+    $tiposValidos = ['EG', 'AT', 'EL', 'LM', 'LP', 'CIR'];
+    $tipoLimpio = strtoupper(trim($tipo));
+    if (!in_array($tipoLimpio, $tiposValidos)) {
+        echo json_encode(['success' => false, 'message' => 'Tipo de incapacidad no válido: ' . $tipo]);
+        exit;
+    }
+
     $datos = [
         'trabajador_id' => intval($trabajador_id),
-        'tipo' => sanitizar($tipo),
+        'tipo' => $tipoLimpio,
         'fecha_inicio' => $fecha_inicio,
         'fecha_fin' => $fecha_fin,
         'descripcion' => sanitizar($_POST['descripcion'] ?? ''),

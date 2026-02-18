@@ -72,6 +72,9 @@ class TurnosAsignados {
         if (!empty($filtros['estado'])) {
             $sql .= " AND ta.estado = :estado";
             $params[':estado'] = $filtros['estado'];
+        } else {
+            // Por defecto excluir cancelados
+            $sql .= " AND ta.estado != 'cancelado'";
         }
         
         $sql .= " ORDER BY ta.fecha DESC, ct.hora_inicio ASC";

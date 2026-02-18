@@ -45,9 +45,6 @@
                 <li class="menu-item" data-section="incapacidades"><i class="fas fa-file-medical"></i> Incapacidades</li>
             </ul>
             <ul>
-                <li class="menu-item" data-section="cambios"><i class="fas fa-exchange-alt"></i> Cambios</li>
-            </ul>
-            <ul>
                 <li class="menu-item" data-section="dias-especiales"><i class="fas fa-star"></i> Días Especiales</li>
             </ul>
          </aside>
@@ -81,13 +78,6 @@
                         <div class="stat-info">
                             <h4>Incapacidades activas</h4>
                             <p class="stat-value" id="incapacidades-activas">0</p>
-                        </div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="stat-icon red"><i class="fas fa-clock"></i></div>
-                        <div class="stat-info">
-                            <h4>Cambios Pendientes</h4>
-                            <p class="stat-value" id="cambios-pendientes">0</p>
                         </div>
                     </div>
                 </div>
@@ -282,6 +272,9 @@
                         <li><strong>Problema visual:</strong> Limitaciones visuales que afectan el trabajo.</li>
                     </ul>
                 </div>
+                <div style="display:flex; justify-content:flex-end; margin-bottom:1rem;">
+                    <button class="btn btn-primary" onclick="agregarRestriccionDesdeSeccion()"><i class="fas fa-plus"></i> Nueva Restricción</button>
+                </div>
                 <div class="tabla-container" id="tabla-restricciones"></div>
              </section>
 
@@ -296,19 +289,7 @@
                 </div>
                 <div class="tabla-container" id="tabla-incapacidades"></div>
              </section>
-
-             <!-- Cambios de turno -->
-
-             <section id="cambios" class="section-content">
-                <div class="section-header">
-                    <h2>Solicitudes de cambio de turno</h2>
-                    <button class="btn btn-primary" onclick="solicitarCambio()">
-                        <i class="fas fa-exchange-alt"></i> Solicitar Cambio
-                    </button>
-                </div>
-                <div class="tabla-container" id="tabla-cambios"></div>
-             </section>
-
+             
              <!-- Dias Especiales -->
 
              <section id="dias-especiales" class="section-content">

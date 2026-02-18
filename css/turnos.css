@@ -912,7 +912,92 @@ tbody tr:hover {
     background: #d32f2f;
     color: white;
 }
+/* Estilos Restricciones*/
 
+.badge-restricciones {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.3rem 0.6rem;
+  border-radius: 4px;
+  font-size: 0.85rem;
+  margin: 0.2rem;
+  font-weight: 500;
+}
+
+.restriccion-item {
+  border: 1px solid #ddd;
+  padding: 1rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  background: #fff;
+  transition: box-shadow 0.3s ease;
+}
+
+.restriccion-item:hover {
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+
+.restricciones-lista {
+  max-height: 400px;
+  overflow-y: auto;
+  padding-right: 0.5rem;
+}
+
+.restriccion-lista::-webkit-scrollbar {
+  width: 6px;
+}
+
+.restriccion-lista::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.restriccion-lista::-webkit-scrollbar-thumb {
+  background: #888;
+  border-radius: 3px;
+}
+
+.restriccion-lista::-webkit-scrollbar-thumb:hover {
+  background: #555;
+}
+
+.no-data-message {
+  text-align: center;
+  padding: 3rem 1rem;
+  color: #666;
+}
+
+.no-data-message i {
+  font-size: 4rem;
+  color: #ddd;
+  margin-bottom: 1rem;
+}
+
+.no-data-message p {
+  font-size: 1.1rem;
+  margin-bottom: 1.5rem;
+}
+
+.badge-restriccion .fa-moon {
+  color: #6c5ce7;
+}
+
+.badge-restriccion .fa-dumbell {
+  color: #e17055;
+}
+
+.badge-restriccion .fa-wheelchair {
+  color: #0984e3;
+}
+
+.badge-restriccion .fa-eye-slash {
+  color: #d63031;
+}
+
+.badge-restriccion .fa-shield-alt {
+  color: #e74c3c;
+}
 /* Modal */
 
 .modal-overlay {
@@ -964,53 +1049,7 @@ tbody tr:hover {
 .modal-body {
   padding: 1.5rem;
 }
- /* Responsivo */
-
- @media (max-width: 768px) {
-  .container-turnos {
-    flex-direction: column;
-  }
-  .sidebar-turnos {
-    width: 100%;
-    height: auto;
-    position: relative;
-  }
-  .nav-menu {
-    flex-direction: row;
-    gap: 0.5rem;
-    width: 40vh;
-  }
-  .stats-grid {
-    grid-template-columns: 1fr;
-  }
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
-  .navbar {
-    flex-direction: column;
-    gap: 1rem;
-  }
-  .calendar-view-controls {
-    flex-direction: column;
-    padding: 1rem;
-  }
-  .area-grid {
-    grid-template-columns: 1fr;
-  }
-  .day-header {
-    flex-direction: column;
-    text-align: center;
-    padding: 1.5rem;
-  }
-  .day-stats {
-    text-align: center;
-    margin-top: 1rem;
-  }
-  .turno-section {
-    padding: 1.5rem 1rem;
-  }
- }
-
+ 
 /* Tabla de Incapacidades - Estilos Mejorados */
 .tabla-responsiva {
   overflow-x: auto;
@@ -1174,7 +1213,56 @@ tbody tr:hover {
     padding: 0.4rem 0.8rem;
     font-size: 0.75rem;
   }
-}
+  .container-turnos {
+    flex-direction: column;
+  }
+  .sidebar-turnos {
+    width: 100%;
+    height: auto;
+    position: relative;
+  }
+  .nav-menu {
+    flex-direction: row;
+    gap: 0.5rem;
+    width: 40vh;
+  }
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .navbar {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  .calendar-view-controls {
+    flex-direction: column;
+    padding: 1rem;
+  }
+  .area-grid {
+    grid-template-columns: 1fr;
+  }
+  .day-header {
+    flex-direction: column;
+    text-align: center;
+    padding: 1.5rem;
+  }
+  .day-stats {
+    text-align: center;
+    margin-top: 1rem;
+  }
+  .turno-section {
+    padding: 1.5rem 1rem;
+  }
+  .badge-restriccion {
+    font-size: 0.75rem;
+    padding: 0.2rem 0.4rem;
+  }
+  .restriccion-item {
+    padding: 0.75rem;
+  }
+ }
 
  @media print {
   .calendar-view-controls,

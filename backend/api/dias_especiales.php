@@ -9,6 +9,9 @@ $action = $_GET['action'] ?? '';
 try {
     switch ($method) {
         case 'GET':
+            // Actualizar estados automáticamente antes de devolver datos
+            $dias->actualizarEstados();
+
             if ($action === 'disponibles'){
                 $resultado = $dias->obtenerDisponibles($_GET['fecha'], $_GET['horario'] ?? null);
             } else {

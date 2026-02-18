@@ -282,6 +282,24 @@ class Incapacidades {
 }
     
     
+    // Actualizar estados automáticamente según fecha actual
+
+    public function actualizarEstados() {
+        try {
+            // activa → finalizada cuando fecha_fin < hoy
+            $sql = "UPDATE incapacidades 
+                    SET estado = 'finalizada'
+                    WHERE estado = 'activa'
+                    AND fecha_fin < CURDATE()";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute();
+            return $stmt->rowCount();
+        } catch (PDOException $e) {
+            return 0;
+        }
+    }
+
+
     //Obtener estadísticas de incapacidades
     
     public function obtenerEstadisticas($fecha_inicio, $fecha_fin) {
