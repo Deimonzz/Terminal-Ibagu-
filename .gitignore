@@ -1,0 +1,19 @@
+# ─── Secretos — NUNCA subir a git ────────────────────────────
+.env
+.env.local
+.env.production
+
+# ─── XAMPP / PHP ──────────────────────────────────────────────
+backend/logs/
+*.log
+
+# ─── Sistema operativo ────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ─── Editores ─────────────────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.user

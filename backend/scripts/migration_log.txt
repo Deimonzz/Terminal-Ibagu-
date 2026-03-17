@@ -1,0 +1,3 @@
+[2026-02-13 16:07:13] [INFO] === INICIANDO BACKUP ===
+[2026-02-13 16:07:13] [INFO] Backup creado en: C:\xampp\htdocs\Visitas\backend\scripts/../../config/backup_incapacidades_2026-02-13_16-07-13.sql
+[2026-02-13 16:07:13] [INFO] No hay registros para migrar

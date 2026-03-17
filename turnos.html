@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+    <link rel="icon" type="image/png" href="img/terminal.jpeg">
+    <link rel="stylesheet" href="css/turnos.css">
+    <title>Gestion de Turnos - Terminal Ibagué</title>
+</head>
+<body>
+    <!-- Barra de navegacion -->
+     <nav class="navbar">
+        <div class="nav-brand">
+            <i class="fas fa-bus"></i>
+            <span>Terminal Ibagué - Gestión de Turnos</span>
+        </div>
+        <ul class="nav-menu">
+            <li><a href="index.php"><i class="fas fa-home"></i> Volver al inicio</a></li>
+            <li class="active"><a href="turnos.html"><i class="fas fa-calendar-alt"></i> Turnos</a></li>
+            <li><button class="btn-historial" onclick="verHistorial()"><i class="fas fa-history"></i> Historial <span id="historial-badge"></span></button></li>
+        </ul>
+     </nav>
+     <div class="container-turnos">
+        <!-- menu lateral -->
+         <aside class="sidebar-turnos">
+            <div class="sidebar-header">
+                <h3><i class="fas fa-calendar-check"></i> Gestión de Turnos</h3>
+            </div>
+            <ul>
+                <li class="menu-item active" data-section="dashboard"><i class="fas fa-chart-line"></i> Dashboard</li>
+            </ul>
+            <ul>
+                <li class="menu-item" data-section="asignar"><i class="fas fa-calendar-plus"></i> Asignar Turnos</li>
+            </ul>
+            <ul>
+                <li class="menu-item" data-section="calendario"><i class="fas fa-calendar"></i> Turnos Asignados</li>
+            </ul>
+            <ul>
+                <li class="menu-item" data-section="trabajadores"><i class="fas fa-users"></i> Trabajadores</li>
+            </ul>
+            <ul>
+                <li class="menu-item" data-section="restricciones"><i class="fas fa-shield-alt"></i> Restricciones</li>
+            </ul>
+            <ul>
+                <li class="menu-item" data-section="incapacidades"><i class="fas fa-file-medical"></i> Incapacidades</li>
+            </ul>
+            <ul>
+                <li class="menu-item" data-section="dias-especiales"><i class="fas fa-star"></i> Días Especiales</li>
+            </ul>
+         </aside>
+
+         <!-- zona principal -->
+          <main class="main-turnos">
+            <!-- dashboard -->
+            <section id="dashboard" class="section-content active">
+                <div class="section-header" style="display:flex;justify-content:space-between;align-items:center;">
+                    <div>
+                        <h2>Dashboard de Turnos</h2>
+                        <span class="fecha-actual" id="fecha-actual"></span>
+                    </div>
+                    <button class="btn btn-outline" onclick="cargarEstadisticasDashboard()" style="font-size:0.85rem;gap:6px;display:flex;align-items:center;">
+                        <i class="fas fa-sync-alt" id="refresh-icon"></i> Actualizar
+                    </button>
+                </div>
+
+                <!-- Tarjetas principales -->
+                <div class="stats-grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));">
+                    <div class="stat-card" style="cursor:pointer;" onclick="cambiarSeccion('trabajadores')">
+                        <div class="stat-icon blue"><i class="fas fa-users"></i></div>
+                        <div class="stat-info">
+                            <h4>Trabajadores Activos</h4>
+                            <p class="stat-value" id="total-trabajadores">—</p>
+                        </div>
+                    </div>
+                    <div class="stat-card" id="card-turnos-hoy" style="cursor:pointer;" onclick="cambiarSeccion('calendario')">
+                        <div class="stat-icon green"><i class="fas fa-calendar-day"></i></div>
+                        <div class="stat-info">
+                            <h4>Turnos Hoy</h4>
+                            <p class="stat-value" id="turnos-hoy">—</p>
+                            <small id="turnos-hoy-sub" style="color:#6c757d;font-size:0.78rem;"></small>
+                        </div>
+                    </div>
+                    <div class="stat-card" id="card-puestos-libres" style="cursor:pointer;" onclick="cambiarSeccion('calendario')">
+                        <div class="stat-icon" id="icon-puestos-libres" style="background:#fff3cd;"><i class="fas fa-map-marker-alt" style="color:#856404;"></i></div>
+                        <div class="stat-info">
+                            <h4>Puestos Sin Cubrir</h4>
+                            <p class="stat-value" id="puestos-sin-cubrir">—</p>
+                            <small id="puestos-sin-cubrir-sub" style="color:#6c757d;font-size:0.78rem;"></small>
+                        </div>
+                    </div>
+                    <div class="stat-card" style="cursor:pointer;" onclick="cambiarSeccion('incapacidades')">
+                        <div class="stat-icon orange"><i class="fas fa-user-injured"></i></div>
+                        <div class="stat-info">
+                            <h4>Incapacidades Activas</h4>
+                            <p class="stat-value" id="incapacidades-activas">—</p>
+                        </div>
+                    </div>
+                    <div class="stat-card" id="card-sin-libre" style="cursor:pointer;" onclick="cambiarSeccion('calendario')">
+                        <div class="stat-icon" id="icon-sin-libre" style="background:#e2d9f3;"><i class="fas fa-calendar-times" style="color:#6f42c1;"></i></div>
+                        <div class="stat-info">
+                            <h4>Sin Día Libre (semana)</h4>
+                            <p class="stat-value" id="sin-libre-semana">—</p>
+                            <small id="sin-libre-sub" style="color:#6c757d;font-size:0.78rem;"></small>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Progreso del día -->
+                <div class="dash-panel" id="panel-progreso" style="display:none;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                        <h4 style="margin:0;font-size:0.95rem;color:#212529;"><i class="fas fa-tasks" style="color:var(--terminal);margin-right:6px;"></i>Cobertura de hoy por turno</h4>
+                        <span id="progreso-total" style="font-size:0.82rem;color:#6c757d;"></span>
+                    </div>
+                    <div id="barras-turnos"></div>
+                </div>
+
+                <!-- Dos columnas: puestos sin cubrir + sin libre -->
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:1.2rem;margin-top:1.2rem;" id="panel-detalles">
+                    <div class="dash-panel">
+                        <h4 style="margin:0 0 12px;font-size:0.92rem;color:#212529;"><i class="fas fa-exclamation-circle" style="color:#dc3545;margin-right:6px;"></i>Puestos sin cubrir hoy</h4>
+                        <div id="lista-puestos-sin-cubrir"><div class="dash-loading"><i class="fas fa-spinner fa-spin"></i></div></div>
+                    </div>
+                    <div class="dash-panel">
+                        <h4 style="margin:0 0 12px;font-size:0.92rem;color:#212529;"><i class="fas fa-calendar-times" style="color:#6f42c1;margin-right:6px;"></i>Sin día libre esta semana</h4>
+                        <div id="lista-sin-libre"><div class="dash-loading"><i class="fas fa-spinner fa-spin"></i></div></div>
+                    </div>
+                </div>
+
+                <!-- Acciones rápidas -->
+                <div class="quick-actions" style="margin-top:1.2rem;">
+                    <h3>Acciones Rápidas</h3>
+                    <div class="actions-grid">
+                        <button class="btn-action" onclick="cambiarSeccion('asignar')">
+                            <i class="fas fa-plus-circle"></i><span>Asignar Turno</span>
+                        </button>
+                        <button class="btn-action" onclick="cambiarSeccion('calendario')">
+                            <i class="fas fa-calendar-alt"></i><span>Ver Turnos</span>
+                        </button>
+                        <button class="btn-action" onclick="cambiarSeccion('incapacidades')">
+                            <i class="fas fa-file-medical"></i><span>Registrar Incapacidad</span>
+                        </button>
+                        <button class="btn-action" onclick="cambiarSeccion('trabajadores')">
+                            <i class="fas fa-user-plus"></i><span>Nuevo Trabajador</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Alertas -->
+                <div class="alertas-section" style="margin-top:1.2rem;">
+                    <h3><i class="fas fa-bell"></i> Alertas y Avisos</h3>
+                    <div id="contenedor-alertas" class="alertas-container">
+                        <div class="alert-placeholder"><i class="fas fa-spinner fa-spin"></i> Cargando...</div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Asignar Turnos -->
+             <section id="asignar" class="section-content">
+                <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                    <h2>Asignar Turno Laboral</h2>
+                    <button class="btn btn-primary" onclick="asignacionAutomaticaMes()" style="display: flex; align-items: center; gap: 0.5rem;">
+                        <i class="fas fa-magic"></i> Asignación Automática Mensual
+                    </button>
+                </div>
+
+                <!-- Pestañas -->
+                <div style="display:flex; gap:0; margin-bottom:1.5rem; border-bottom:2px solid #dee2e6;">
+                    <button id="tab-normal" onclick="cambiarTabAsignar('normal')"
+                        style="padding:10px 24px; border:none; background:#fff; border-bottom:3px solid var(--terminal); color:var(--terminal); font-weight:700; cursor:pointer; font-size:0.95rem;">
+                        <i class="fas fa-calendar-plus"></i> Turno Normal
+                    </button>
+                    <button id="tab-especial" onclick="cambiarTabAsignar('especial')"
+                        style="padding:10px 24px; border:none; background:#fff; border-bottom:3px solid transparent; color:#6c757d; font-weight:600; cursor:pointer; font-size:0.95rem;">
+                        <i class="fas fa-star"></i> Turno Especial
+                    </button>
+                </div>
+
+                <!-- Formulario Turno Normal -->
+                <div id="panel-turno-normal" class="form-container">
+                    <form id="form-asignar-turno">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="fecha-turno">Fecha <span class="required">*</span></label>
+                                <input type="date" id="fecha-turno" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="area-select">Área <span class="required">*</span></label>
+                                <select id="area-select" required>
+                                    <option value="">Seleccione...</option>
+                                    <option value="DELTA">DELTA</option>
+                                    <option value="FOX">FOX</option>
+                                    <option value="VIGIA">VIGIA</option>
+                                    <option value="TASA DE USO">TASA DE USO</option>
+                                    <option value="EQUIPAJES">EQUIPAJES</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="puesto-select">Puesto de Trabajo <span class="required">*</span></label>
+                                <select id="puesto-select" required disabled>
+                                    <option value="">Seleccione área primero...</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="turno-select">Turno <span class="required">*</span></label>
+                                <select id="turno-select" required disabled>
+                                    <option value="">Seleccione puesto primero...</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="trabajador-select">Trabajador <span class="required">*</span></label>
+                            <select id="trabajador-select" required disabled>
+                                <option value="">Complete los campos anteriores...</option>
+                            </select>
+                            <div id="trabajador-info" class="info-box" style="display: none;"></div>
+                        </div>
+                        <div id="validacion-mensaje" class="alert" style="display: none;"></div>
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-secondary" onclick="validarAsignacion(); return false;">
+                                <i class="fas fa-check-circle"></i> Validar
+                            </button>
+                            <button type="submit" class="btn btn-primary" id="btn-asignar">
+                                <i class="fas fa-save"></i> Asignar Turno
+                            </button>
+                            <button type="button" class="btn btn-outline" onclick="limpiarFormulario()">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Formulario Turno Especial -->
+                <div id="panel-turno-especial" class="form-container" style="display:none;">
+                    <form id="form-turno-especial">
+
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="fecha-especial">Fecha <span class="required">*</span></label>
+                                <input type="date" id="fecha-especial" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="tipo-especial">Tipo <span class="required">*</span></label>
+                                <select id="tipo-especial" required onchange="onCambioTipoEspecial()">
+                                    <option value="">Seleccione...</option>
+                                    <option value="L">🔵 L — Día Libre semanal</option>
+                                    <option value="ADMM">🟠 ADMM — Administrativo Mañana (desde 8:00 am)</option>
+                                    <option value="ADMT">🟠 ADMT — Administrativo Tarde (desde 2:00 pm)</option>
+                                    <option value="ADM">🟠 ADM — Administrativo Día Completo (8am-12pm / 2pm-6pm)</option>
+                                    <option value="SUP">🟣 SUP — Turno Supervisor (hora libre)</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div id="aviso-libre" class="info-box" style="display:none; border-left:4px solid #0d6efd; background:#e8f0fe;">
+                            <p><i class="fas fa-info-circle" style="color:#0d6efd;"></i> <strong>Trabajadores sin día libre esta semana:</strong></p>
+                            <div id="lista-sin-libre" style="margin-top:6px;"></div>
+                        </div>
+
+                        <div class="form-group">
+                            <label for="trabajador-especial">Trabajador <span class="required">*</span></label>
+                            <select id="trabajador-especial" required disabled>
+                                <option value="">Seleccione fecha y tipo primero...</option>
+                            </select>
+                            <div id="aviso-ya-tiene-libre" style="display:none; margin-top:6px; color:#dc3545; font-size:0.88rem;">
+                                <i class="fas fa-exclamation-triangle"></i> Este trabajador ya tiene día libre esta semana.
+                            </div>
+                        </div>
+
+                        <!-- Campos hora supervisor — solo visibles cuando tipo=SUP -->
+                        <div id="panel-horas-sup" style="display:none;">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="sup-hora-inicio">Hora entrada <span class="required">*</span></label>
+                                    <input type="time" id="sup-hora-inicio" step="60"
+                                        style="font-size:1rem;padding:8px 12px;">
+                                    <small style="color:#6c757d;">Ej: 05:13</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="sup-hora-fin">Hora salida <span class="required">*</span></label>
+                                    <input type="time" id="sup-hora-fin" step="60"
+                                        style="font-size:1rem;padding:8px 12px;">
+                                    <small style="color:#6c757d;">Ej: 13:21</small>
+                                </div>
+                            </div>
+                            <div id="sup-horas-resumen" style="display:none;margin-top:4px;padding:8px 12px;background:#f3e8ff;border-radius:8px;font-size:0.85rem;color:#6a1b9a;"></div>
+                        </div>
+
+                        <div id="validacion-especial" class="alert" style="display:none;"></div>
+
+                        <div class="form-actions">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Guardar
+                            </button>
+                            <button type="button" class="btn btn-outline" onclick="limpiarFormularioEspecial()">
+                                <i class="fas fa-times"></i> Cancelar
+                            </button>
+                        </div>
+                    </form>
+                </div>
+             </section>
+
+             <!-- calendario -->
+
+             <section id="calendario" class="section-content" style="display:none;flex-direction:column;height:calc(100vh - 80px);overflow:hidden;">
+                <div class="calendar-header">
+                    <div class="calendar-view-controls">
+                        <div class="calendar-navigation">
+                            <button class="btn-calendar-nav" onclick="cambiarDia(-1)" title="Dia anterior">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <div class="calendar-date-display" id="fecha-calendario-display"></div>
+                            <button class="btn-calendar-nav" onclick="cambiarDia(1)" title="Dia siguiente">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                            <button class="btn btn-secondary" onclick="irAHoy()" style="margin-left: 1rem;">
+                                <i class="fas fa-calendar-day"></i> Hoy
+                            </button>
+                        </div>
+
+                        <div class="calendar-filters">
+                            <!-- Toggle vista diaria / mensual -->
+                            <div style="display:flex; border:1px solid #ced4da; border-radius:6px; overflow:hidden;">
+                                <button id="btn-vista-diaria" onclick="cambiarVista('diaria')"
+                                    style="padding:6px 14px; border:none; background:var(--terminal); color:white; font-weight:600; cursor:pointer; font-size:0.88rem;">
+                                    <i class="fas fa-calendar-day"></i> Día
+                                </button>
+                                <button id="btn-vista-mensual" onclick="cambiarVista('mensual')"
+                                    style="padding:6px 14px; border:none; background:#fff; color:#6c757d; font-weight:600; cursor:pointer; font-size:0.88rem;">
+                                    <i class="fas fa-calendar-alt"></i> Mes
+                                </button>
+                            </div>
+
+                            <select id="filtro-turno-calendario" class="filter-select" onchange="cargarVistaDiaria()">
+                                <option value="">Todas los turnos</option>
+                                <option value="1">Turno 1 - Mañana</option>
+                                <option value="2">Turno 2 - Tarde</option>
+                                <option value="3">Turno 3 - Noche</option>
+                            </select>
+                            <select id="filtro-area-calendario" class="filter-select" onchange="cargarVistaDiaria()">
+                                <option value="">Todas las áreas</option>
+                                <option value="DELTA">DELTA</option>
+                                <option value="FOX">FOX</option>
+                                <option value="VIGIA">VIGÍA</option>
+                                <option value="TASA DE USO">TASA DE USO</option>
+                                <option value="EQUIPAJES">EQUIPAJES</option>
+                            </select>
+                            
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn-export excel" onclick="exportarDiaExcel()" title="Exportar día actual">
+                                    <i class="fas fa-file-excel"></i> Día
+                                </button>
+                                <button class="btn-export excel" onclick="exportarMesExcel()" title="Exportar mes completo">
+                                    <i class="fas fa-file-excel"></i> Mes
+                                </button>
+                                <button class="btn-export pdf" onclick="exportarDiaPDF()" title="Exportar día actual">
+                                    <i class="fas fa-file-pdf"></i> Día
+                                </button>
+                                <button class="btn-export pdf" onclick="exportarMesPDF()" title="Exportar mes completo">
+                                    <i class="fas fa-file-pdf"></i> Mes
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vista diaria -->
+                <div id="calendario-vista-diaria" class="calendar-day-view"></div>
+
+                <!-- Panel de novedades del día -->
+                <div id="panel-novedades" style="margin-top:1.25rem;background:#fff;border:1px solid #dee2e6;border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,0.06);">
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:#f8f9fa;border-bottom:1px solid #dee2e6;">
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <i class="fas fa-clipboard-list" style="color:var(--terminal);font-size:0.95rem;"></i>
+                            <span style="font-weight:700;font-size:0.9rem;color:#212529;">Novedades del día</span>
+                            <span id="novedades-fecha-label" style="font-size:0.8rem;color:#6c757d;"></span>
+                        </div>
+                        <div style="display:flex;gap:6px;align-items:center;">
+                            <span id="novedades-estado" style="font-size:0.75rem;color:#6c757d;"></span>
+                            <button id="btn-editar-novedad" onclick="toggleEditarNovedad()" style="padding:4px 10px;border:1px solid #ced4da;border-radius:6px;background:#fff;font-size:0.8rem;cursor:pointer;color:#495057;">
+                                <i class="fas fa-pen"></i> Editar
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Modo lectura -->
+                    <div id="novedades-lectura" style="padding:14px 16px;min-height:60px;">
+                        <p id="novedades-texto-display" style="margin:0;font-size:0.88rem;color:#495057;white-space:pre-wrap;line-height:1.6;"></p>
+                        <p id="novedades-vacio" style="margin:0;font-size:0.85rem;color:#adb5bd;font-style:italic;">Sin novedades registradas para este día.</p>
+                    </div>
+                    <!-- Modo edición -->
+                    <div id="novedades-edicion" style="display:none;padding:12px 16px;">
+                        <textarea id="novedades-textarea"
+                            placeholder="Escribe las novedades del turno aquí... (cambios de puesto, incidencias, observaciones)"
+                            style="width:100%;min-height:110px;padding:10px;border:1px solid #ced4da;border-radius:8px;font-size:0.87rem;font-family:inherit;resize:vertical;line-height:1.6;box-sizing:border-box;color:#212529;"
+                            oninput="novedadCambiada()"></textarea>
+                        <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">
+                            <button onclick="cancelarEditarNovedad()" style="padding:6px 14px;border:1px solid #ced4da;border-radius:6px;background:#fff;font-size:0.82rem;cursor:pointer;color:#6c757d;">
+                                Cancelar
+                            </button>
+                            <button id="btn-guardar-novedad" onclick="guardarNovedad()" style="padding:6px 14px;border:none;border-radius:6px;background:var(--terminal);color:white;font-size:0.82rem;cursor:pointer;font-weight:600;">
+                                <i class="fas fa-save"></i> Guardar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Vista mensual -->
+                <div id="calendario-vista-mensual" style="display:none; flex-direction:column; height:calc(100vh - 220px);">
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:0.75rem; padding:0 0.5rem; flex-shrink:0; gap:0.75rem;">
+                        <button class="btn-calendar-nav" onclick="cambiarMesGrilla(-1)"><i class="fas fa-chevron-left"></i></button>
+                        <h3 id="titulo-mes-grilla" style="margin:0; font-size:1.1rem; color:var(--terminal); white-space:nowrap;"></h3>
+                        <button class="btn-calendar-nav" onclick="cambiarMesGrilla(1)"><i class="fas fa-chevron-right"></i></button>
+                        <div style="position:relative; flex:1; max-width:320px; margin-left:auto;">
+                            <i class="fas fa-search" style="position:absolute; left:10px; top:50%; transform:translateY(-50%); color:#6c757d; font-size:0.85rem; pointer-events:none;"></i>
+                            <input type="text" id="filtro-grilla" placeholder="Buscar trabajador..." oninput="filtrarGrilla(this.value)"
+                                style="width:100%; padding:7px 32px 7px 32px; border:1px solid #dee2e6; border-radius:20px; font-size:0.85rem; outline:none; box-sizing:border-box; transition:border-color 0.2s;"
+                                onfocus="this.style.borderColor='var(--terminal)'" onblur="this.style.borderColor='#dee2e6'">
+                            <i class="fas fa-times" id="filtro-clear" onclick="limpiarFiltroGrilla()" title="Limpiar"
+                                style="position:absolute; right:10px; top:50%; transform:translateY(-50%); color:#6c757d; font-size:0.8rem; cursor:pointer; display:none;"></i>
+                        </div>
+                        <span id="filtro-contador" style="font-size:0.8rem; color:#6c757d; white-space:nowrap; display:none;"></span>
+                    </div>
+                    <div style="overflow:auto; flex:1; border-radius:8px; border:1px solid #e9ecef;">
+                        <div id="grilla-mensual"></div>
+                    </div>
+                </div>
+             </section>
+
+             <!-- Trabajadores -->
+
+             <section id="trabajadores" class="section-content">
+                <div class="section-header">
+                    <h2>Gestion de Trabajadores</h2>
+                    <button class="btn btn-primary" onclick="nuevoTrabajador()">
+                        <i class="fas fa-user-plus"></i> Nuevo Trabajador
+                    </button>
+                </div>
+                <div class="tabla-container" id="tabla-trabajadores"></div>
+             </section>
+
+             <!-- Restricciones -->
+
+             <section id="restricciones" class="section-content">
+                <div class="section-header">
+                    <h2>Restricciones Medicas y Laborales</h2>
+                </div>
+
+                <!-- Pestañas -->
+                <div style="display:flex;gap:0;margin-bottom:1.5rem;border-bottom:2px solid #dee2e6;">
+                    <button id="tab-restr-lista" onclick="cambiarTabRestricciones('lista')"
+                        style="padding:10px 24px;border:none;background:#fff;border-bottom:3px solid var(--terminal);color:var(--terminal);font-weight:700;cursor:pointer;font-size:0.95rem;">
+                        <i class="fas fa-list"></i> Lista de Restricciones
+                    </button>
+                    <button id="tab-restr-matriz" onclick="cambiarTabRestricciones('matriz')"
+                        style="padding:10px 24px;border:none;background:#fff;border-bottom:3px solid transparent;color:#6c757d;font-weight:600;cursor:pointer;font-size:0.95rem;">
+                        <i class="fas fa-th"></i> Matriz de Puestos
+                    </button>
+                </div>
+
+                <!-- Panel Lista -->
+                <div id="panel-restr-lista">
+                    <div class="info-box" style="margin-bottom:1rem;">
+                        <h4>Tipos de restricciones:</h4>
+                        <ul>
+                            <li><strong>No fuerza fisica:</strong> No puede realizar trabajos que requieran esfuerzo físico.</li>
+                            <li><strong>No turno noche:</strong> No puede trabajar en horarios nocturnos.</li>
+                            <li><strong>Movilidad limitada:</strong> Dificultad para desplazarse.</li>
+                            <li><strong>Problema visual:</strong> Limitaciones visuales que afectan el trabajo.</li>
+                        </ul>
+                    </div>
+                    <div class="tabla-container" id="tabla-restricciones"></div>
+                </div>
+
+                <!-- Panel Matriz -->
+                <div id="panel-restr-matriz" style="display:none;">
+                    <div class="info-box" style="margin-bottom:1rem;display:flex;justify-content:space-between;align-items:center;">
+                        <div>
+                            <strong>¿Cómo usar?</strong> Haz clic en una celda para bloquear o desbloquear ese puesto para el trabajador.
+                            <span style="display:inline-flex;align-items:center;gap:4px;margin-left:12px;background:#f8d7da;border:2px solid #dc3545;border-radius:4px;padding:2px 8px;font-size:0.82rem;color:#721c24;"><i class="fas fa-ban"></i> Bloqueado</span>
+                            <span style="display:inline-flex;align-items:center;gap:4px;margin-left:6px;background:#d4edda;border:2px solid #28a745;border-radius:4px;padding:2px 8px;font-size:0.82rem;color:#155724;"><i class="fas fa-check"></i> Permitido</span>
+                        </div>
+                        <button class="btn btn-outline" onclick="cargarMatrizPuestos()" style="font-size:0.85rem;">
+                            <i class="fas fa-sync-alt"></i> Actualizar
+                        </button>
+                    </div>
+                    <div id="matriz-puestos-container">
+                        <div style="text-align:center;padding:2rem;color:#6c757d;"><i class="fas fa-spinner fa-spin"></i> Cargando matriz...</div>
+                    </div>
+                </div>
+             </section>
+
+             <!-- Incapacidades -->
+
+             <section id="incapacidades" class="section-content">
+                <div class="section-header">
+                    <h2>Gestion de Incapacidades</h2>
+                    <button class="btn btn-primary" onclick="nuevaIncapacidad()">
+                        <i class="fas fa-plus"></i> Nueva Incapacidad
+                    </button>
+                </div>
+                <div class="tabla-container" id="tabla-incapacidades"></div>
+             </section>
+             
+             <!-- Dias Especiales -->
+
+             <section id="dias-especiales" class="section-content">
+                <div class="section-header">
+                    <h2>Dias Especiales</h2>
+                    <button class="btn btn-primary" onclick="nuevoDiaEspecial()">
+                        <i class="fas fa-calendar-star"></i> Nuevo Dia Especial
+                    </button>
+                </div>
+                <div class="info-box">
+                    <p><strong>Tipos:</strong> LC (Libre Cumpleaños), VAC (Vacaciones), SUS (Suspensión)</p>
+                </div>
+                <div class="tabla-container" id="tabla-dias-especiales"></div>
+             </section>
+          </main>
+     </div>
+
+     <!-- Modal -->
+
+     <div id="modal-overlay" class="modal-overlay" onclick="cerrarModal()">
+        <div class="modal-content" onclick="event.stopPropagation()">
+            <div class="modal-header">
+                <h3 id="modal-titulo"></h3>
+                <button class="modal-close" onclick="cerrarModal()"><i class="fas fa-times"></i></button>
+            </div>
+            <div class="modal-body" id="modal-body"></div>
+        </div>
+     </div>
+
+     <!-- IA Asistente flotante -->
+     <div id="ia-chat-bubble" onclick="toggleChat()" title="Asistente IA">
+         <div class="ia-bubble-inner">
+             <i class="fas fa-robot"></i>
+             <span class="ia-badge" id="ia-badge" style="display:none;">!</span>
+         </div>
+     </div>
+
+     <div id="ia-chat-panel" class="ia-panel">
+         <div class="ia-panel-header">
+             <div class="ia-header-info">
+                 <div class="ia-avatar"><i class="fas fa-robot"></i></div>
+                 <div>
+                     <strong>Asistente de Turnos</strong>
+                     <span class="ia-status"><span class="ia-dot"></span> En línea</span>
+                 </div>
+             </div>
+             <button onclick="toggleChat()" class="ia-close-btn"><i class="fas fa-times"></i></button>
+         </div>
+
+         <div class="ia-sugerencias" id="ia-sugerencias">
+             <p class="ia-sugerencias-titulo">Sugerencias rápidas:</p>
+             <div class="ia-chips">
+                 <button class="ia-chip" onclick="enviarSugerencia('¿Qué puestos no tienen turno asignado hoy?')">📋 Puestos sin cubrir hoy</button>
+                 <button class="ia-chip" onclick="enviarSugerencia('¿Quién no tiene día libre esta semana?')">🔵 Sin día libre esta semana</button>
+                 <button class="ia-chip" onclick="enviarSugerencia('Muéstrame un resumen del estado actual de los turnos')">📊 Resumen general</button>
+                 <button class="ia-chip" onclick="enviarSugerencia('¿Hay trabajadores con incapacidad activa?')">🏥 Incapacidades activas</button>
+                 <button class="ia-chip" onclick="enviarSugerencia('¿Cuáles son las restricciones de turno nocturno?')">🌙 Restricciones nocturnas</button>
+             </div>
+         </div>
+
+         <div class="ia-messages" id="ia-messages">
+             <div class="ia-msg ia-msg-bot">
+                 <div class="ia-msg-bubble">
+                     👋 Hola, soy tu asistente de gestión de turnos. Tengo acceso en tiempo real a los trabajadores, turnos, incapacidades y restricciones del sistema.<br><br>
+                     Puedo ayudarte a <strong>revisar el estado del día</strong>, <strong>detectar puestos sin cubrir</strong>, <strong>sugerir asignaciones</strong> y mucho más. ¿En qué te ayudo?
+                 </div>
+             </div>
+         </div>
+
+         <div class="ia-typing" id="ia-typing" style="display:none;">
+             <div class="ia-msg-bubble ia-typing-bubble">
+                 <span></span><span></span><span></span>
+             </div>
+         </div>
+
+         <div class="ia-input-area">
+             <textarea id="ia-input" placeholder="Escribe tu pregunta..." rows="1" onkeydown="iaKeyDown(event)" oninput="autoResize(this)"></textarea>
+             <button id="ia-send-btn" onclick="enviarMensajeIA()" title="Enviar">
+                 <i class="fas fa-paper-plane"></i>
+             </button>
+         </div>
+     </div>
+
+     <!-- Librerias para generar PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="js/turnos.js"></script>
+    <script src="js/ia-asistente.js"></script>
+</body>
+</html>
