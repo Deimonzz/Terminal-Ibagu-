@@ -1,0 +1,9 @@
+services:
+  - type: web
+    name: terminal-ibague
+    runtime: php
+    buildCommand: composer install
+    startCommand: php -S 0.0.0.0:$PORT
+    envVars:
+      - key: PHP_VERSION
+        value: 8.2

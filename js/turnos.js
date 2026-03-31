@@ -1024,7 +1024,8 @@ async function asignacionAutomaticaMes() {
 
     
     htmlContent += '<div class="alert alert-warning" style="margin-top: 1rem;">';
-    htmlContent += '<strong>⚠️ Advertencia:</strong> Si ya existen turnos asignados para este mes, NO se sobrescribirán. Solo se llenarán los espacios vacíos.';
+    htmlContent += '<strong>⚠️ Advertencia:</strong> Si ya existen turnos asignados para este mes, NO se sobrescribirán. Solo se llenarán los espacios vacíos. </br>';
+    htmlContent += '<strong>🔄️ Realizar dos veces:</strong> Realizar dos veces la asignación automática para mayor cobertura de turnos.';
     htmlContent += '</div>';
     
     htmlContent += '<div class="form-actions">';
@@ -2090,6 +2091,10 @@ function cambiarVista(vista) {
     // Filtros de turno/área solo aplican a vista diaria
     document.getElementById('filtro-turno-calendario').style.display = esDiaria ? '' : 'none';
     document.getElementById('filtro-area-calendario').style.display  = esDiaria ? '' : 'none';
+
+    // Panel de novedades solo en vista diaria
+    const panelNovedades = document.getElementById('panel-novedades');
+    if (panelNovedades) panelNovedades.style.display = esDiaria ? '' : 'none';
 
     if (!esDiaria) cargarGrillaMensual();
 }

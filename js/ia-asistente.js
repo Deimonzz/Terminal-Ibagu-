@@ -94,24 +94,24 @@ async function obtenerContextoSistema() {
             return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
         })();
 
-        const [rTrab, rTurnosHoy, rTurnosSemana, rIncap, rDiasEsp, rTurnosMes, rDiasEspMes, rPuestos, rIncapMes] = await Promise.all([
+        const [rTrab, rTurnosHoy, rTurnosSemana, rIncap, rDiasEspSemana, rTurnosMes, rDiasEspMes, rPuestos, rIncapMes] = await Promise.all([
             fetch(API_BASE + 'trabajadores.php').then(r => r.json()),
             fetch(API_BASE + 'turnos.php?fecha=' + hoy).then(r => r.json()),
             fetch(API_BASE + 'turnos.php?fecha_inicio=' + inicioSemana + '&fecha_fin=' + finSemana).then(r => r.json()),
             fetch(API_BASE + 'incapacidades.php?activas=1').then(r => r.json()),
-            fetch(API_BASE + 'incapacidades.php?fecha_inicio=' + primerDiaMes + '&fecha_fin=' + ultimoDiaMes).then(r => r.json()).catch(() => ({ success: false })),
-            fetch(API_BASE + 'dias_especiales.php').then(r => r.json()).catch(() => ({ success: false })),
+            fetch(API_BASE + 'dias_especiales.php?fecha_inicio=' + inicioSemana + '&fecha_fin=' + finSemana).then(r => r.json()).catch(() => ({ success: false })),
             fetch(API_BASE + 'turnos.php?fecha_inicio=' + primerDiaMes + '&fecha_fin=' + ultimoDiaMes).then(r => r.json()).catch(() => ({ success: false })),
             fetch(API_BASE + 'dias_especiales.php?fecha_inicio=' + primerDiaMes + '&fecha_fin=' + ultimoDiaMes).then(r => r.json()).catch(() => ({ success: false })),
-            fetch(API_BASE + 'turnos.php?action=puestos').then(r => r.json()).catch(() => ({ success: false }))
+            fetch(API_BASE + 'turnos.php?action=puestos').then(r => r.json()).catch(() => ({ success: false })),
+            fetch(API_BASE + 'incapacidades.php?fecha_inicio=' + primerDiaMes + '&fecha_fin=' + ultimoDiaMes).then(r => r.json()).catch(() => ({ success: false }))
         ]);
 
-        const trabajadores   = (rTrab.success ? rTrab.data : []).filter(t => t.activo);
-        const turnosHoy      = (rTurnosHoy.success ? rTurnosHoy.data : []).filter(t => t.estado !== 'cancelado');
-        const turnosSemana   = (rTurnosSemana.success ? rTurnosSemana.data : []).filter(t => t.estado !== 'cancelado');
-        const incapacidades  = rIncap.success ? (rIncap.data || []) : [];
-        const restricciones  = [];
-        const diasEspeciales = rDiasEsp.success ? (rDiasEsp.data || []) : [];
+        const trabajadores     = (rTrab.success ? rTrab.data : []).filter(t => t.activo);
+        const turnosHoy        = (rTurnosHoy.success ? rTurnosHoy.data : []).filter(t => t.estado !== 'cancelado');
+        const turnosSemana     = (rTurnosSemana.success ? rTurnosSemana.data : []).filter(t => t.estado !== 'cancelado');
+        const incapacidades    = rIncap.success ? (rIncap.data || []) : [];
+        const restricciones    = [];
+        const diasEspSemana    = rDiasEspSemana.success ? (rDiasEspSemana.data || []) : [];
         const turnosMes        = (rTurnosMes.success ? rTurnosMes.data : []).filter(t => t.estado !== 'cancelado');
         const diasEspMes       = rDiasEspMes.success ? (rDiasEspMes.data || []) : [];
         const puestosLista     = rPuestos.success ? (rPuestos.data || []) : [];
@@ -139,7 +139,12 @@ async function obtenerContextoSistema() {
         const TURNOS_SISTEMA = [1, 2, 3];
 
         const puestosCubiertos = new Set(
-            turnosHoy.map(t => t.numero_turno + (t.puesto_codigo || ''))
+            turnosHoy.map(t => {
+                let n = Number(t.numero_turno);
+                if ([4,9].includes(n))  n = 1;
+                if ([5,10].includes(n)) n = 2;
+                return n + (t.puesto_codigo || '');
+            })
         );
 
         // Solo estos puestos operan en Turno 3 nocturno
@@ -158,13 +163,14 @@ async function obtenerContextoSistema() {
             });
         });
 
-        // Trabajadores sin día libre esta semana
+        // Trabajadores con día libre esta semana (desde dias_especiales)
         const libresEstaSemana = new Set(
-            turnosSemana
-                .filter(t => t.tipo_especial === 'L')
-                .map(t => Number(t.trabajador_id))
+            diasEspSemana
+                .filter(d => ['L','L8','LC'].includes(d.tipo))
+                .map(d => Number(d.trabajador_id))
         );
-        const sinLibreSemana = trabajadores.filter(t => !libresEstaSemana.has(t.id));
+        const conLibreSemana  = trabajadores.filter(t =>  libresEstaSemana.has(t.id));
+        const sinLibreSemana  = trabajadores.filter(t => !libresEstaSemana.has(t.id));
 
         // Restricciones agrupadas por trabajador
         const restrPorTrab = {};
@@ -186,7 +192,12 @@ ${trabajadores.map(t => {
     const turnoHoy = turnosHoy.find(x => Number(x.trabajador_id) === t.id);
     const restr = restrPorTrab[t.id] ? ' | Restricciones: ' + restrPorTrab[t.id].join(', ') : '';
     const estado = tieneIncap ? ' [INCAPACITADO]' : tieneTurnoHoy
-        ? ` [T${turnoHoy.numero_turno || turnoHoy.tipo_especial} ${turnoHoy.puesto_codigo || ''}]`
+        ? (() => {
+            const n0 = Number(turnoHoy.numero_turno);
+            const esL4w = [4,5,9,10].includes(n0);
+            const nw = [4,9].includes(n0)?1:[5,10].includes(n0)?2:n0;
+            return ` [T${nw} ${turnoHoy.puesto_codigo||''}${esL4w?' L4':''}]`;
+          })()
         : ' [DISPONIBLE HOY]';
     return `- ${t.nombre} (C.C. ${t.cedula})${estado}${restr}`;
 }).join('\n')}
@@ -196,7 +207,11 @@ ${turnosHoy.length === 0 ? 'Ninguno asignado aún.' :
 turnosHoy.map(t => {
     if (t.tipo_especial) return `- ${t.trabajador}: ${t.tipo_especial}`;
     const tnr = t.estado === 'no_presentado' ? ' [TNR - NO SE PRESENTÓ]' : '';
-    return `- T${t.numero_turno} ${t.puesto_codigo} (${t.area}): ${t.trabajador}${tnr}`;
+    const origN = Number(t.numero_turno);
+    const esL4  = [4,5,9,10].includes(origN);
+    const numN  = [4,9].includes(origN) ? 1 : [5,10].includes(origN) ? 2 : origN;
+    const etiq  = esL4 ? `T${numN} ${t.puesto_codigo} L4` : `T${numN} ${t.puesto_codigo}`;
+    return `- ${etiq} (${t.area}): ${t.trabajador}${tnr}${esL4 ? ' [turno 4h]' : ''}`;
 }).join('\n')}
 
 --- PUESTOS SIN CUBRIR HOY (${puestosSinCubrir.length}) ---
@@ -211,22 +226,30 @@ disponiblesHoy.map(t => `- ${t.nombre}`).join('\n')}
 ${incapacidades.length === 0 ? 'Ninguna.' :
 incapacidades.map(i => `- ${i.trabajador_nombre || i.trabajador}: hasta ${i.fecha_fin} (${i.tipo || 'general'})`).join('\n')}
 
---- DÍAS ESPECIALES ESTA SEMANA ---
-${diasEspeciales.filter(d => d.fecha >= inicioSemana && d.fecha <= finSemana).length === 0
+--- DÍAS LIBRES ESTA SEMANA (${conLibreSemana.length} trabajadores) ---
+${conLibreSemana.length === 0
+    ? 'Ninguno registrado aún.'
+    : conLibreSemana.map(t => {
+        const de = diasEspSemana.find(d => Number(d.trabajador_id) === t.id && ['L','L8','LC'].includes(d.tipo));
+        return `- ${t.nombre}: libre el ${de ? de.fecha_inicio : '?'}`;
+      }).join('\n')}
+
+--- OTROS ESPECIALES ESTA SEMANA (ADM, ADMM, ADMT) ---
+${diasEspSemana.filter(d => ['ADM','ADMM','ADMT'].includes(d.tipo)).length === 0
     ? 'Ninguno.'
-    : diasEspeciales
-        .filter(d => d.fecha >= inicioSemana && d.fecha <= finSemana)
-        .map(d => `- ${d.trabajador_nombre || ''}: ${d.tipo} el ${d.fecha}`)
+    : diasEspSemana
+        .filter(d => ['ADM','ADMM','ADMT'].includes(d.tipo))
+        .map(d => `- ${d.trabajador || d.trabajador_nombre || '?'}: ${d.tipo} el ${d.fecha_inicio}`)
         .join('\n')}
 
 --- TRABAJADORES SIN DÍA LIBRE ESTA SEMANA (${sinLibreSemana.length}) ---
-${sinLibreSemana.length === 0 ? 'Todos tienen día libre asignado.' :
+${sinLibreSemana.length === 0 ? 'Todos tienen día libre asignado esta semana.' :
 sinLibreSemana.map(t => `- ${t.nombre}`).join('\n')}
 
 --- RESTRICCIONES TURNO NOCTURNO ---
 Turno 3 (noche 22:00-06:00) SOLO opera en: V1, V2, C (Conduces), D3, F6, F11.
 Los demás puestos (D1, D2, D4, F4, F5, F14, F15, G) NO tienen Turno 3.
-L4 (4 horas): F5 (14-18h), F15 (14-18h), D2 (16-20h), F11 (06-10h).
+L4 (4 horas): F5 (14-18h), F15 (14-18h), D2 (16-20h), D1 (16-20h), F11 (06-10h). Un L4 SUSTITUYE el turno normal de ese puesto ese día — el puesto sí está cubierto.
 TNR (Turno No Realizado): trabajador no se presentó a su turno. Se registra para reportes.
 
 --- ESTRUCTURA DE TURNOS ---

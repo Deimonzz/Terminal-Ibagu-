@@ -1,12 +1,4 @@
 <?php
-// ─── PROXY PARA GROQ API (GRATUITO, SIN TARJETA) ─────────────────────────────
-// Coloca este archivo en: backend/api/ia_proxy.php
-//
-// CÓMO OBTENER TU API KEY GRATIS:
-// 1. Ve a https://console.groq.com
-// 2. Crea cuenta (puedes usar Google)
-// 3. Ve a "API Keys" → "Create API Key"
-// 4. Pega la key abajo
 
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
@@ -21,7 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 }
 
 // ─── API KEY desde .env (nunca hardcodear aquí) ──────────────────────────────
-$envFile = dirname(dirname(dirname(__DIR__))) . '/.env';
+$envFile = dirname(dirname(__DIR__)) . '/.env';
 if (file_exists($envFile)) {
     foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
         if (strpos(trim($line), '#') === 0) continue;
