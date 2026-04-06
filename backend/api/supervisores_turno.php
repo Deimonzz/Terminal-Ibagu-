@@ -104,6 +104,28 @@ try {
                 sendJson(['success' => false, 'message' => 'Este supervisor ya tiene turno registrado ese día'], 409);
             }
 
+            // Verificar que no tenga un turno normal asignado ese día
+            $chkTurno = $db->prepare(
+                "SELECT COUNT(*) as cnt FROM turnos_asignados
+                 WHERE trabajador_id = :tid AND fecha = :fecha AND estado IN ('programado', 'activo')"
+            );
+            $chkTurno->execute([':tid' => $trabId, ':fecha' => $fecha]);
+            if ((int)$chkTurno->fetch(PDO::FETCH_ASSOC)['cnt'] > 0) {
+                sendJson(['success' => false, 'message' => 'Este trabajador ya tiene un turno normal asignado ese día'], 409);
+            }
+
+            // Verificar que no tenga un día especial que impida asignación
+            $chkEspecial = $db->prepare(
+                "SELECT COUNT(*) as cnt FROM dias_especiales
+                 WHERE trabajador_id = :tid AND tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS')
+                 AND :fecha BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
+                 AND estado IN ('programado', 'activo')"
+            );
+            $chkEspecial->execute([':tid' => $trabId, ':fecha' => $fecha]);
+            if ((int)$chkEspecial->fetch(PDO::FETCH_ASSOC)['cnt'] > 0) {
+                sendJson(['success' => false, 'message' => 'Este trabajador tiene un día especial que impide asignación'], 409);
+            }
+
             $stmt = $db->prepare(
                 "INSERT INTO supervisores_turno (trabajador_id, fecha, hora_inicio, hora_fin, usuario_id)
                  VALUES (:tid, :fecha, :hi, :hf, :uid)"

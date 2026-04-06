@@ -19,16 +19,23 @@ $method = $_SERVER['REQUEST_METHOD'];
 try {
     if ($method === 'GET') {
         $fecha = $_GET['fecha'] ?? '';
-        if (!$fecha) sendJson(['success' => false, 'message' => 'Fecha requerida'], 400);
+        $fechaInicio = $_GET['fecha_inicio'] ?? '';
+        $fechaFin = $_GET['fecha_fin'] ?? '';
 
-        $stmt = $db->prepare("SELECT * FROM novedades_dia WHERE fecha = :fecha");
-        $stmt->execute([':fecha' => $fecha]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-
-        sendJson([
-            'success' => true,
-            'data'    => $row ?: null
-        ]);
+        if ($fechaInicio && $fechaFin) {
+            // Obtener rango de fechas
+            $stmt = $db->prepare("SELECT * FROM novedades_dia WHERE fecha BETWEEN :fi AND :ff ORDER BY fecha ASC");
+            $stmt->execute([':fi' => $fechaInicio, ':ff' => $fechaFin]);
+            sendJson(['success' => true, 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
+        } elseif ($fecha) {
+            // Obtener una fecha específica
+            $stmt = $db->prepare("SELECT * FROM novedades_dia WHERE fecha = :fecha");
+            $stmt->execute([':fecha' => $fecha]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            sendJson(['success' => true, 'data' => $row ?: null]);
+        } else {
+            sendJson(['success' => false, 'message' => 'Fecha requerida'], 400);
+        }
 
     } elseif ($method === 'POST') {
         $body    = json_decode(file_get_contents('php://input'), true);

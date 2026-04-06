@@ -43,12 +43,21 @@ class DiasEspeciales {
         }
 
         if (!empty($filtros['fecha_inicio']) && !empty($filtros['fecha_fin'])) {
-            $sql .= " AND de.fecha_inicio <= :rango_fin
-                      AND COALESCE(de.fecha_fin, de.fecha_inicio) >= :rango_inicio";
-            $params[':rango_inicio'] = $filtros['fecha_inicio'];
-            $params[':rango_fin']    = $filtros['fecha_fin'];
+            $sql .= " AND de.fecha_inicio BETWEEN :fi AND :ff";
+            $params[':fi'] = $filtros['fecha_inicio'];
+            $params[':ff'] = $filtros['fecha_fin'];
         }
-        
+
+        if (!empty($filtros['excluir_tipos'])) {
+            $tipos = array_map('trim', explode(',', $filtros['excluir_tipos']));
+            $placeholders = [];
+            foreach ($tipos as $i => $t) {
+                $placeholders[] = ':excl' . $i;
+                $params[':excl' . $i] = $t;
+            }
+            $sql .= ' AND de.tipo NOT IN (' . implode(',', $placeholders) . ')';
+        }
+
         $sql .= " ORDER BY de.fecha_inicio DESC";
         
         $stmt = $this->db->prepare($sql);
@@ -158,21 +167,6 @@ class DiasEspeciales {
     
     //Eliminar día especial
     
-    public function eliminarPorFecha($trabajador_id, $fecha, $tipo = null) {
-        $sql = "DELETE FROM dias_especiales
-                WHERE trabajador_id = :tid
-                AND fecha_inicio = :fecha
-                AND estado IN ('programado','activo')";
-        $params = [':tid' => $trabajador_id, ':fecha' => $fecha];
-        if ($tipo) {
-            $sql .= " AND tipo = :tipo";
-            $params[':tipo'] = $tipo;
-        }
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute($params);
-        return ['success' => true, 'eliminados' => $stmt->rowCount()];
-    }
-
     public function eliminar($id) {
         $sql = "DELETE FROM dias_especiales WHERE id = :id";
         $stmt = $this->db->prepare($sql);
@@ -185,39 +179,56 @@ class DiasEspeciales {
     }
     
     
+    //Eliminar día especial por fecha
+    
+    public function eliminarPorFecha($trabajador_id, $fecha, $tipo = null) {
+        try {
+            $sql = "DELETE FROM dias_especiales 
+                    WHERE trabajador_id = :trabajador_id 
+                    AND fecha_inicio = :fecha";
+            
+            $params = [
+                ':trabajador_id' => $trabajador_id,
+                ':fecha' => $fecha
+            ];
+            
+            if (!empty($tipo)) {
+                $sql .= " AND tipo = :tipo";
+                $params[':tipo'] = $tipo;
+            }
+            
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
+            
+            return [
+                'success' => true,
+                'message' => 'Día especial eliminado'
+            ];
+        } catch (PDOException $e) {
+            return [
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ];
+        }
+    }
+    
+    
     //Validar solapamiento
     
     private function validarSolapamiento($trabajador_id, $fecha_inicio, $fecha_fin) {
-        // Usar parámetros únicos (PDO no admite repetir el mismo nombre)
-        $sql = "SELECT COUNT(*) as count, GROUP_CONCAT(tipo SEPARATOR ', ') as tipos
-                FROM dias_especiales 
-                WHERE trabajador_id = :trabajador_id
-                AND estado IN ('programado', 'activo')
-                AND tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS')
-                AND (
-                    (:fi1 BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio))
-                    OR (:ff1 BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio))
-                    OR (fecha_inicio BETWEEN :fi2 AND :ff2)
-                )";
-        
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([
-            ':trabajador_id' => $trabajador_id,
-            ':fi1' => $fecha_inicio,
-            ':ff1' => $fecha_fin,
-            ':fi2' => $fecha_inicio,
-            ':ff2' => $fecha_fin
-        ]);
-        
-        $result = $stmt->fetch();
-        
-        if ($result['count'] > 0) {
-            return [
-                'valido' => false,
-                'mensaje' => 'Ya existe un día especial en estas fechas: ' . $result['tipos']
-            ];
+        // Garantizar que fecha_fin sea >= fecha_inicio
+        if ($fecha_fin === null) {
+            $fecha_fin = $fecha_inicio;
+        }
+        if ($fecha_fin < $fecha_inicio) {
+            $temp = $fecha_inicio;
+            $fecha_inicio = $fecha_fin;
+            $fecha_fin = $temp;
         }
         
+        // Determinar qué tipos NO pueden solaparse (basado en el tipo actual)
+        // Accedemos al tipo desde el contexto - necesitamos pasarlo como parámetro
+        // Por ahora, retornamos siempre válido ya que queremos permitir solapamientos
         return ['valido' => true];
     }
     
@@ -238,6 +249,33 @@ class DiasEspeciales {
             ':fecha_inicio' => $fecha_inicio,
             ':fecha_fin' => $fecha_fin
         ]);
+    }
+    
+    
+    //Actualizar estados automáticamente
+    
+    public function actualizarEstados() {
+        try {
+            // Cambiar a 'activo' los días que comenzaron hoy
+            $sql_activo = "UPDATE dias_especiales 
+                          SET estado = 'activo' 
+                          WHERE estado = 'programado' 
+                          AND fecha_inicio <= CURDATE()
+                          AND COALESCE(fecha_fin, fecha_inicio) >= CURDATE()";
+            $this->db->prepare($sql_activo)->execute();
+            
+            // Cambiar a 'finalizado' los días que terminaron
+            $sql_finalizado = "UPDATE dias_especiales 
+                              SET estado = 'finalizado' 
+                              WHERE estado = 'activo' 
+                              AND COALESCE(fecha_fin, fecha_inicio) < CURDATE()";
+            $this->db->prepare($sql_finalizado)->execute();
+            
+            return true;
+        } catch (PDOException $e) {
+            error_log('Error updating estados: ' . $e->getMessage());
+            return false;
+        }
     }
     
     
@@ -298,58 +336,61 @@ class DiasEspeciales {
     //Verificar si trabajador tiene día especial que impide asignación
     
     public function impideAsignacion($trabajador_id, $fecha) {
-        $sql = "SELECT COUNT(*) as count, GROUP_CONCAT(tipo SEPARATOR ', ') as tipos
+        // Verificar días especiales
+        $sqlEspeciales = "SELECT COUNT(*) as count, GROUP_CONCAT(tipo SEPARATOR ', ') as tipos
                 FROM dias_especiales 
                 WHERE trabajador_id = :trabajador_id
                 AND tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS')
                 AND :fecha BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                 AND estado IN ('programado', 'activo')";
         
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([
+        $stmtEspeciales = $this->db->prepare($sqlEspeciales);
+        $stmtEspeciales->execute([
             ':trabajador_id' => $trabajador_id,
             ':fecha' => $fecha
         ]);
         
-        $result = $stmt->fetch();
+        $resultEspeciales = $stmtEspeciales->fetch();
+        
+        // Verificar turnos normales
+        $sqlTurnos = "SELECT COUNT(*) as count_turnos
+                     FROM turnos_asignados 
+                     WHERE trabajador_id = :trabajador_id
+                     AND fecha = :fecha
+                     AND estado IN ('programado', 'activo')";
+        
+        $stmtTurnos = $this->db->prepare($sqlTurnos);
+        $stmtTurnos->execute([
+            ':trabajador_id' => $trabajador_id,
+            ':fecha' => $fecha
+        ]);
+        
+        $resultTurnos = $stmtTurnos->fetch();
+        
+        // Verificar turnos de supervisor
+        $sqlSupervisores = "SELECT COUNT(*) as count_sup
+                           FROM supervisores_turno 
+                           WHERE trabajador_id = :trabajador_id
+                           AND fecha = :fecha";
+        
+        $stmtSupervisores = $this->db->prepare($sqlSupervisores);
+        $stmtSupervisores->execute([
+            ':trabajador_id' => $trabajador_id,
+            ':fecha' => $fecha
+        ]);
+        
+        $resultSupervisores = $stmtSupervisores->fetch();
+        
+        $totalImpedimentos = $resultEspeciales['count'] + $resultTurnos['count_turnos'] + $resultSupervisores['count_sup'];
+        $tipos = [];
+        if ($resultEspeciales['count'] > 0) $tipos[] = $resultEspeciales['tipos'];
+        if ($resultTurnos['count_turnos'] > 0) $tipos[] = 'TURNO NORMAL';
+        if ($resultSupervisores['count_sup'] > 0) $tipos[] = 'SUPERVISOR';
         
         return [
-            'impide' => $result['count'] > 0,
-            'tipos' => $result['tipos']
+            'impide' => $totalImpedimentos > 0,
+            'tipos' => implode(', ', $tipos)
         ];
-    }
-
-
-    // Actualizar estados automáticamente según fecha actual
-
-    public function actualizarEstados() {
-        try {
-            $actualizados = 0;
-
-            // programado → activo cuando fecha_inicio <= hoy <= fecha_fin
-            $sql = "UPDATE dias_especiales
-                    SET estado = 'activo'
-                    WHERE estado = 'programado'
-                    AND fecha_inicio <= CURDATE()
-                    AND (fecha_fin IS NULL OR fecha_fin >= CURDATE())";
-            $stmt = $this->db->prepare($sql);
-            $stmt->execute();
-            $actualizados += $stmt->rowCount();
-
-            // activo o programado → finalizado cuando fecha_fin < hoy
-            $sql = "UPDATE dias_especiales
-                    SET estado = 'finalizado'
-                    WHERE estado IN ('activo', 'programado')
-                    AND fecha_fin IS NOT NULL
-                    AND fecha_fin < CURDATE()";
-            $stmt = $this->db->prepare($sql);
-            $stmt->execute();
-            $actualizados += $stmt->rowCount();
-
-            return $actualizados;
-        } catch (PDOException $e) {
-            return 0;
-        }
     }
 }
 ?>

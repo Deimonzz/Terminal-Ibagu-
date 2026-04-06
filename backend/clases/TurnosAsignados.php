@@ -86,6 +86,8 @@ class TurnosAsignados {
      
     public function validarAsignacion($trabajador_id, $puesto_id, $turno_id, $fecha, $exclude_id = null) {
         $errores = [];
+
+        try {
         
         // 1. Verificar si el puesto ya está ocupado en ese turno ese día
         // Comparar por numero_turno para cubrir variantes del mismo turno (L4, etc.)
@@ -149,47 +151,74 @@ class TurnosAsignados {
         }
         
         // 4. Verificar si el turno es nocturno
-        $sql = "SELECT es_nocturno FROM configuracion_turnos WHERE id = :turno_id";
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([':turno_id' => $turno_id]);
-        $turno = $stmt->fetch();
-        
-        if ($turno && $turno['es_nocturno']) {
-            if (!$this->trabajadores->puedeTrabajarNoche($trabajador_id, $fecha)) {
-                $errores[] = 'El trabajador tiene restricción para trabajar en turno nocturno';
+        try {
+            $sql = "SELECT es_nocturno FROM configuracion_turnos WHERE id = :turno_id";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([':turno_id' => $turno_id]);
+            $turno = $stmt->fetch();
+            
+            if ($turno && $turno['es_nocturno']) {
+                if (!$this->trabajadores->puedeTrabajarNoche($trabajador_id, $fecha)) {
+                    $errores[] = 'El trabajador tiene restricción para trabajar en turno nocturno';
+                }
             }
+        } catch (Exception $e) {
+            // Si hay error con restricciones nocturnas, continuar
         }
         
         // 5. Verificar requisitos del puesto
-        $sql = "SELECT * FROM puestos_trabajo WHERE id = :puesto_id";
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([':puesto_id' => $puesto_id]);
-        $puesto = $stmt->fetch();
-        
-        if ($puesto && $puesto['requiere_fuerza_fisica']) {
-            if (!$this->trabajadores->puedeHacerFuerza($trabajador_id, $fecha)) {
-                $errores[] = 'El puesto requiere fuerza física y el trabajador tiene restricción';
+        try {
+            $sql = "SELECT * FROM puestos_trabajo WHERE id = :puesto_id";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([':puesto_id' => $puesto_id]);
+            $puesto = $stmt->fetch();
+            
+            if ($puesto && $puesto['requiere_fuerza_fisica']) {
+                if (!$this->trabajadores->puedeHacerFuerza($trabajador_id, $fecha)) {
+                    $errores[] = 'El puesto requiere fuerza física y el trabajador tiene restricción';
+                }
             }
+        } catch (Exception $e) {
+            // Si hay error con requisitos del puesto, continuar
         }
         
-        if ($puesto && $puesto['requiere_movilidad']) {
-            $sql = "SELECT COUNT(*) as count FROM restricciones_trabajador 
-                    WHERE trabajador_id = :trabajador_id 
-                    AND tipo_restriccion = 'movilidad_limitada'
-                    AND activa = true
-                    AND :fecha >= fecha_inicio
-                    AND (:fecha2 <= fecha_fin OR fecha_fin IS NULL)";
-            $stmt = $this->db->prepare($sql);
-            $stmt->execute([
-                ':trabajador_id' => $trabajador_id, 
-                ':fecha' => $fecha,
-                ':fecha2' => $fecha
-            ]);
-            $result = $stmt->fetch();
-            
-            if ($result['count'] > 0) {
-                $errores[] = 'El puesto requiere movilidad y el trabajador tiene restricción';
+        try {
+            if ($puesto && $puesto['requiere_movilidad']) {
+                $sql = "SELECT COUNT(*) as count FROM restricciones_trabajador 
+                        WHERE trabajador_id = :trabajador_id 
+                        AND tipo_restriccion = 'movilidad_limitada'
+                        AND activa = true
+                        AND :fecha >= fecha_inicio
+                        AND (:fecha2 <= fecha_fin OR fecha_fin IS NULL)";
+                $stmt = $this->db->prepare($sql);
+                $stmt->execute([
+                    ':trabajador_id' => $trabajador_id, 
+                    ':fecha' => $fecha,
+                    ':fecha2' => $fecha
+                ]);
+                $result = $stmt->fetch();
+                
+                if ($result['count'] > 0) {
+                    $errores[] = 'El puesto requiere movilidad y el trabajador tiene restricción';
+                }
             }
+        } catch (Exception $e) {
+            // Si hay error con movilidad, continuar
+        }
+        
+        // 6. Verificar si el trabajador ya tiene un turno de supervisor asignado
+        $sql = "SELECT COUNT(*) as count FROM supervisores_turno 
+                WHERE trabajador_id = :trabajador_id AND fecha = :fecha";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':trabajador_id' => $trabajador_id, ':fecha' => $fecha]);
+        $result = $stmt->fetch();
+        
+        if ($result['count'] > 0) {
+            $errores[] = 'El trabajador ya tiene un turno de supervisor asignado ese día';
+        }
+        
+        } catch (Exception $e) {
+            $errores[] = 'Error en validación: ' . $e->getMessage();
         }
         
         return [

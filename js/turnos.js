@@ -1,6 +1,6 @@
 //Variables Globales
 
-const API_BASE = 'backend/api/';
+const API_BASE = '/Terminal-Ibagu-/backend/api/';
 
 function cerrarModal() {
     const overlay = document.getElementById('modal-overlay');
@@ -120,6 +120,9 @@ function cambiarSeccion(seccion) {
   switch(seccion) {
     case 'dashboard':
       cargarEstadisticasDashboard();
+      break;
+    case 'asignar':
+      cambiarTabAsignar('normal');
       break;
     case 'calendario':
       cargarCalendario();
@@ -348,12 +351,13 @@ async function cargarEstadisticasDashboard() {
         const inicioSemana = lunes.toISOString().split('T')[0];
         const finSemana    = domingo.toISOString().split('T')[0];
 
-        const [rTrab, rTurnosHoy, rTurnosSemana, rIncap, rLibresSemana] = await Promise.all([
+        const [rTrab, rTurnosHoy, rTurnosSemana, rIncap, rLibresSemana, rSupervisoresHoy] = await Promise.all([
             fetch(API_BASE + 'trabajadores.php').then(r => r.json()),
             fetch(API_BASE + 'turnos.php?fecha=' + hoy).then(r => r.json()),
             fetch(API_BASE + 'turnos.php?fecha_inicio=' + inicioSemana + '&fecha_fin=' + finSemana).then(r => r.json()),
             fetch(API_BASE + 'incapacidades.php?activas=1').then(r => r.json()),
             fetch(API_BASE + 'dias_especiales.php?fecha_inicio=' + inicioSemana + '&fecha_fin=' + finSemana).then(r => r.json()).catch(() => ({ success: false })),
+            fetch(API_BASE + 'supervisores_turno.php?fecha=' + hoy).then(r => r.json()).catch(() => ({ success: false })),
         ]);
 
         const trabajadores   = (rTrab.success ? rTrab.data : []).filter(t => t.activo);
@@ -362,6 +366,7 @@ async function cargarEstadisticasDashboard() {
         const incapacidades  = rIncap.success ? (rIncap.data || []) : [];
         const libresSemana   = (rLibresSemana.success ? rLibresSemana.data : [])
                                 .filter(d => ['L','L8','LC'].includes(d.tipo) && ['programado','activo'].includes(d.estado));
+        const supervisoresHoy = (rSupervisoresHoy.success ? rSupervisoresHoy.data : []);
 
         // ── Tarjeta trabajadores ──────────────────────────────────────
         const elTrab = document.getElementById('total-trabajadores');
@@ -415,12 +420,13 @@ async function cargarEstadisticasDashboard() {
 
         // Contar solo normales (sin especiales) para el total
         const turnosNormalesHoy = turnosHoy.filter(t => !t.tipo_especial).length;
+        const totalTurnosHoy = turnosNormalesHoy + supervisoresHoy.length;
 
         const elTurnosHoy = document.getElementById('turnos-hoy');
-        if (elTurnosHoy) elTurnosHoy.textContent = turnosNormalesHoy;
+        if (elTurnosHoy) elTurnosHoy.textContent = totalTurnosHoy;
         const ausentes = turnosHoy.filter(t => t.estado === 'no_presentado').length;
         const elTurnosSub = document.getElementById('turnos-hoy-sub');
-        if (elTurnosSub) elTurnosSub.textContent = 'de ' + totalEsperado + ' esperados' + (ausentes > 0 ? ' · ' + ausentes + ' TNR' : '');
+        if (elTurnosSub) elTurnosSub.textContent = 'de ' + totalEsperado + ' esperados' + (ausentes > 0 ? ' · ' + ausentes + ' TNR' : '') + (supervisoresHoy.length > 0 ? ' · ' + supervisoresHoy.length + ' SUP' : '');
 
         const elSinCubrir = document.getElementById('puestos-sin-cubrir');
         if (elSinCubrir) {
@@ -831,7 +837,8 @@ async function cargarTrabajadoresDisponibles() {
         trabajadorSelect.innerHTML = '<option value="">Seleccione...</option>';
         
         if (data.success && data.data && data.data.length > 0) {
-            data.data.forEach(trabajador => {
+            const disponibles = data.data.filter(t => String(t.cargo || '').toLowerCase() !== 'supervisor');
+            disponibles.forEach(trabajador => {
                 const option = document.createElement('option');
                 option.value = trabajador.id;
                 option.textContent = `${trabajador.nombre} - ${trabajador.cedula}`;
@@ -840,7 +847,12 @@ async function cargarTrabajadoresDisponibles() {
                 }
                 trabajadorSelect.appendChild(option);
             });
-            trabajadorSelect.disabled = false;
+            if (disponibles.length > 0) {
+                trabajadorSelect.disabled = false;
+            } else {
+                trabajadorSelect.innerHTML = '<option value="">No hay trabajadores disponibles para asignar</option>';
+                trabajadorSelect.disabled = true;
+            }
         } else {
             trabajadorSelect.innerHTML = '<option value="">No hay trabajadores disponibles</option>';
             trabajadorSelect.disabled = true;
@@ -944,6 +956,27 @@ async function asignarTurno(e) {
     return;
   }
 
+  // Validar automáticamente antes de guardar
+  try {
+    const response = await fetch(`${API_BASE}turnos.php?action=validar`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(datos)
+    });
+
+    const data = await response.json();
+    
+    if (!data.success || !data.data.valido) {
+      const errores = data.data?.errores || ['Error desconocido en validación'];
+      mostrarAlerta('No se puede asignar el turno:<br>' + errores.map(e => '• ' + e).join('<br>'), 'danger');
+      return;
+    }
+  } catch (error) {
+    console.error('Error validando:', error);
+    mostrarAlerta('Error al validar la asignación', 'danger');
+    return;
+  }
+
   mostrarSpinner('Asignando turno...');
 
   try {
@@ -991,7 +1024,7 @@ async function asignacionAutomaticaMes() {
     htmlContent += '<p>Esta función asignará automáticamente trabajadores a todos los turnos del mes seleccionado.</p>';
     htmlContent += '<ul style="margin: 0.5rem 0; padding-left: 1.5rem;">';
     htmlContent += '<li>Se respetarán restricciones, incapacidades y días especiales</li>';
-    htmlContent += '<li>La asignación es aleatoria pero inteligente</li>';
+    htmlContent += '<li>Los supervisores NO se asignan automáticamente</li>';
     htmlContent += '<li>Puedes editar las asignaciones después si es necesario</li>';
     htmlContent += '</ul>';
     htmlContent += '</div>';
@@ -1024,8 +1057,7 @@ async function asignacionAutomaticaMes() {
 
     
     htmlContent += '<div class="alert alert-warning" style="margin-top: 1rem;">';
-    htmlContent += '<strong>⚠️ Advertencia:</strong> Si ya existen turnos asignados para este mes, NO se sobrescribirán. Solo se llenarán los espacios vacíos. </br>';
-    htmlContent += '<strong>🔄️ Realizar dos veces:</strong> Realizar dos veces la asignación automática para mayor cobertura de turnos.';
+    htmlContent += '<strong>⚠️ Advertencia:</strong> Si ya existen turnos asignados para este mes, NO se sobrescribirán. Solo se llenarán los espacios vacíos.';
     htmlContent += '</div>';
     
     htmlContent += '<div class="form-actions">';
@@ -1296,7 +1328,7 @@ async function onCambioTipoEspecial() {
     if (hf) hf.value = '';
     if (res) res.style.display = 'none';
 
-    if (!tipo || !fecha) {
+    if (!tipo || (!fecha && tipo !== 'SUP')) {
         sel.innerHTML = '<option value="">Seleccione fecha y tipo primero...</option>';
         return;
     }
@@ -1315,8 +1347,12 @@ async function cargarTrabajadoresEspecial(tipo, fecha) {
 
         if (!data.success) return;
 
-        const todos = data.data.filter(t => t.activo);
+        let todos = data.data.filter(t => t.activo);
         sel.innerHTML = '<option value="">Seleccione trabajador...</option>';
+
+        if (tipo === 'SUP') {
+            // todos = todos.filter(t => String(t.cargo || '').toLowerCase() === 'supervisor');
+        }
 
         if (tipo === 'L') {
             // Obtener quiénes ya tienen libre esta semana
@@ -1570,7 +1606,16 @@ async function guardarTurnoEspecial(e) {
     const tiposDiasEspeciales = ['L','L8','LC','VAC','SUS','ADM','ADMM','ADMT'];
     const esDiaEspecial = tiposDiasEspeciales.includes(tipo);
 
-    const datos = { trabajador_id: trabId, tipo, fecha_inicio: fecha, fecha_fin: null, descripcion: '', estado: 'programado' };
+    const datos = { 
+        trabajador_id: trabId, 
+        tipo, 
+        fecha_inicio: fecha, 
+        fecha_fin: null, 
+        horas_inicio: null,
+        horas_fin: null,
+        descripcion: '', 
+        estado: 'programado' 
+    };
     const endpoint = 'dias_especiales.php';
 
     try {
@@ -2019,22 +2064,39 @@ function renderizarVistaDiaria(turnos, fecha, filtroTurno, admList = [], supervi
         html += '</div>';
         });
 
-    // ── Sección supervisores ──────────────────────────────────
-    if (supervisores.length > 0) {
-        html += '<div style="margin:1.5rem 0 0.5rem;border:1px solid #d8b4fe;border-radius:10px;overflow:hidden;">';
-        html += '<div style="background:linear-gradient(135deg,#6a1b9a,#9c27b0);padding:10px 16px;display:flex;align-items:center;gap:10px;">';
-        html += '<span style="font-size:1.2rem;">🟣</span>';
-        html += '<strong style="color:white;font-size:0.95rem;letter-spacing:0.5px;">SUPERVISORES</strong>';
-        html += '<span style="background:rgba(255,255,255,0.2);color:white;padding:2px 12px;border-radius:20px;font-size:0.82rem;margin-left:auto;">' + supervisores.length + ' en turno</span>';
-        html += '</div>';
-        html += '<div style="background:white;padding:8px 4px;">';
+    // ── Sección de asignación de supervisores (formulario simple) ──────────────────────────────────
+    html += '<div style="margin:1.5rem 0 0.5rem;border:1px solid #d8b4fe;border-radius:10px;overflow:hidden;background:white;">';
+    html += '<div style="background:linear-gradient(135deg,#6a1b9a,#9c27b0);padding:12px 16px;display:flex;align-items:center;gap:10px;">';
+    html += '<span style="font-size:1.2rem;">🟣</span>';
+    html += '<strong style="color:white;font-size:0.95rem;letter-spacing:0.5px;">SUPERVISORES</strong>';
+    html += '<span style="background:rgba(255,255,255,0.2);color:white;padding:2px 12px;border-radius:20px;font-size:0.82rem;margin-left:auto;">' + supervisores.length + ' en turno</span>';
+    html += '</div>';
+    
+    // Formulario para agregar supervisor
+    html += '<div style="padding:12px 16px;border-bottom:1px solid #e9d5ff;background:#fdf4ff;">';
+    html += '<div style="display:grid;grid-template-columns:1fr auto auto auto;gap:8px;align-items:end;">';
+    html += '<div><label style="display:block;font-size:0.78rem;font-weight:600;color:#6a1b9a;margin-bottom:4px;">Supervisor</label>';
+    html += '<select id="sel-supervisor-diaria" style="width:100%;padding:7px 10px;border:1px solid #d8b4fe;border-radius:6px;font-size:0.85rem;background:white;"><option value="">Seleccionar...</option></select></div>';
+    html += '<div><label style="display:block;font-size:0.78rem;font-weight:600;color:#6a1b9a;margin-bottom:4px;">Entrada</label>';
+    html += '<input type="time" id="sup-hora-inicio-diaria" step="60" style="padding:7px 8px;border:1px solid #d8b4fe;border-radius:6px;font-size:0.85rem;"></div>';
+    html += '<div><label style="display:block;font-size:0.78rem;font-weight:600;color:#6a1b9a;margin-bottom:4px;">Salida</label>';
+    html += '<input type="time" id="sup-hora-fin-diaria" step="60" style="padding:7px 8px;border:1px solid #d8b4fe;border-radius:6px;font-size:0.85rem;"></div>';
+    html += '<button id="btn-agregar-supervisor-diaria" onclick="agregarSupervisorDiaria(\'' + fecha + '\')" style="background:#9c27b0;color:white;border:none;border-radius:6px;padding:6px 12px;font-size:0.85rem;cursor:pointer;font-weight:600;">+ Agregar</button>';
+    html += '</div>';
+    html += '</div>';
+    
+    // Lista de supervisores asignados
+    html += '<div style="padding:8px 4px;background:white;">';
+    if (supervisores.length === 0) {
+        html += '<div style="padding:12px;text-align:center;color:#6c757d;font-size:0.9rem;">Sin supervisores asignados para este día</div>';
+    } else {
         html += '<table style="width:100%;border-collapse:collapse;font-size:0.88rem;">';
         html += '<thead><tr style="background:#f9f5ff;">';
-        html += '<th style="padding:7px 14px;text-align:left;color:#6a1b9a;font-size:0.78rem;border-bottom:1px solid #e9d5ff;width:200px;">Supervisor</th>';
-        html += '<th style="padding:7px 14px;text-align:left;color:#6a1b9a;font-size:0.78rem;border-bottom:1px solid #e9d5ff;width:110px;">Entrada</th>';
-        html += '<th style="padding:7px 14px;text-align:left;color:#6a1b9a;font-size:0.78rem;border-bottom:1px solid #e9d5ff;width:110px;">Salida</th>';
-        html += '<th style="padding:7px 14px;text-align:left;color:#6a1b9a;font-size:0.78rem;border-bottom:1px solid #e9d5ff;">Duración</th>';
-        html += '<th style="padding:7px 10px;border-bottom:1px solid #e9d5ff;width:80px;"></th>';
+        html += '<th style="padding:7px 14px;text-align:left;color:#6a1b9a;font-size:0.78rem;border-bottom:1px solid #e9d5ff;">Supervisor</th>';
+        html += '<th style="padding:7px 14px;text-align:center;color:#6a1b9a;font-size:0.78rem;border-bottom:1px solid #e9d5ff;width:90px;">Entrada</th>';
+        html += '<th style="padding:7px 14px;text-align:center;color:#6a1b9a;font-size:0.78rem;border-bottom:1px solid #e9d5ff;width:90px;">Salida</th>';
+        html += '<th style="padding:7px 14px;text-align:center;color:#6a1b9a;font-size:0.78rem;border-bottom:1px solid #e9d5ff;width:80px;">Duración</th>';
+        html += '<th style="padding:7px 10px;border-bottom:1px solid #e9d5ff;width:70px;text-align:center;"></th>';
         html += '</tr></thead><tbody>';
 
         supervisores.forEach((s, i) => {
@@ -2047,21 +2109,25 @@ function renderizarVistaDiaria(turnos, fecha, filtroTurno, admList = [], supervi
             const f = fecha.replace(/'/g,"\'");
             html += '<tr style="background:' + bg + ';border-top:1px solid #f3e8ff;">';
             html += '<td style="padding:8px 14px;font-weight:600;color:#3b0764;">' + (s.trabajador||s.nombre||'') + '</td>';
-            html += '<td style="padding:8px 14px;font-family:monospace;font-size:0.9rem;color:#6a1b9a;font-weight:700;">' + s.hora_inicio.substring(0,5) + '</td>';
-            html += '<td style="padding:8px 14px;font-family:monospace;font-size:0.9rem;color:#6a1b9a;font-weight:700;">' + s.hora_fin.substring(0,5) + '</td>';
-            html += '<td style="padding:8px 14px;color:#7c3aed;font-size:0.84rem;">' + durStr + '</td>';
+            html += '<td style="padding:8px 14px;font-family:monospace;font-size:0.9rem;color:#6a1b9a;font-weight:700;text-align:center;">' + s.hora_inicio.substring(0,5) + '</td>';
+            html += '<td style="padding:8px 14px;font-family:monospace;font-size:0.9rem;color:#6a1b9a;font-weight:700;text-align:center;">' + s.hora_fin.substring(0,5) + '</td>';
+            html += '<td style="padding:8px 14px;color:#7c3aed;font-size:0.84rem;text-align:center;">' + durStr + '</td>';
             html += '<td style="padding:8px 10px;text-align:center;">';
-            html += '<button style="padding:3px 8px;border:none;background:transparent;cursor:pointer;" title="Editar" onclick="editarSupervisorTurno(' + s.id + ')"><i class="fas fa-edit" style="color:#9c27b0;font-size:0.82rem;"></i></button>';
+            html += '<button style="padding:3px 6px;border:none;background:transparent;cursor:pointer;" title="Editar" onclick="editarSupervisorTurno(' + s.id + ')"><i class="fas fa-edit" style="color:#9c27b0;font-size:0.82rem;"></i></button>';
             const nomEsc = (s.trabajador||'').replace(/'/g,'&#39;');
-            html += '<button style="padding:3px 8px;border:none;background:transparent;cursor:pointer;" title="Eliminar" onclick="eliminarSupervisorTurno(' + s.id + ',\'' + nomEsc + '\',\'' + f + '\')"><i class="fas fa-trash-alt" style="color:#dc3545;font-size:0.82rem;"></i></button>';
+            html += '<button style="padding:3px 6px;border:none;background:transparent;cursor:pointer;" title="Eliminar" onclick="eliminarSupervisorTurno(' + s.id + ',\'' + nomEsc + '\',\'' + f + '\')"><i class="fas fa-trash-alt" style="color:#dc3545;font-size:0.82rem;"></i></button>';
             html += '</td>';
             html += '</tr>';
         });
 
-        html += '</tbody></table></div></div>';
+        html += '</tbody></table>';
     }
+    html += '</div></div>';
 
     container.innerHTML = html;
+    
+    // Cargar supervisores disponibles en el select
+    cargarSupervisoresDisponiblesDiaria(fecha);
 }
 
 
@@ -2188,6 +2254,13 @@ async function cargarGrillaMensual() {
         const turnos      = dataTurnos.data.filter(t => t.estado !== 'cancelado');
         const trabajadores = dataTrab.data.filter(t => t.activo);
 
+        trabajadores.sort((a, b) => {
+            const aSup = String(a.cargo || '').toLowerCase() === 'supervisor';
+            const bSup = String(b.cargo || '').toLowerCase() === 'supervisor';
+            if (aSup !== bSup) return aSup ? -1 : 1;
+            return a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' });
+        });
+
         // Construir índice: turnosPorTrabajadorFecha[trab_id][fecha] = [item, ...]
         const idx = {};
 
@@ -2306,8 +2379,11 @@ async function cargarGrillaMensual() {
         // Filas por trabajador
         trabajadores.forEach((trab, i) => {
             const bg = i % 2 === 0 ? '#fff' : '#f8f9fa';
+            const cargoBadge = String(trab.cargo || '').toLowerCase() === 'supervisor'
+                ? ' <span style="display:inline-block;margin-left:6px;padding:2px 8px;border-radius:999px;background:#f3e8ff;color:#6b21a8;font-size:0.72rem;font-weight:700;letter-spacing:0.2px;">SUP</span>'
+                : '';
             html += '<tr data-trab-id="' + trab.id + '" data-nombre="' + trab.nombre.toLowerCase() + '" style="background:' + bg + ';">';
-            html += '<td style="position:sticky;left:0;z-index:1;background:' + bg + ';padding:6px 10px;font-weight:600;border-right:2px solid #dee2e6;white-space:nowrap;">' + trab.nombre + '</td>';
+            html += '<td style="position:sticky;left:0;z-index:1;background:' + bg + ';padding:6px 10px;font-weight:600;border-right:2px solid #dee2e6;white-space:nowrap;">' + trab.nombre + cargoBadge + '</td>';
 
             dias.forEach(d => {
                 const asigs = (idx[trab.id] && idx[trab.id][d.fecha]) ? idx[trab.id][d.fecha] : [];
@@ -2317,13 +2393,16 @@ async function cargarGrillaMensual() {
                 const asigsSafe = JSON.stringify(asigs.map(a => ({
                     id: a.id||null, tipo_especial: a.tipo_especial||null,
                     descripcion: a.descripcion||'', estado: a.estado||'',
-                    numero_turno: a.numero_turno||null, puesto_codigo: a.puesto_codigo||null
+                    numero_turno: a.numero_turno||null, puesto_codigo: a.puesto_codigo||null,
+                    hora_inicio: a.hora_inicio||null, hora_fin: a.hora_fin||null
                 }))).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
                 const nombreSafe = trab.nombre.replace(/'/g, '&#39;');
+                const cargoSafeAttr = (trab.cargo || '').replace(/'/g, '&#39;');
                 // onclick lee data-asigs en tiempo real para siempre tener datos frescos
                 html += '<td onclick="abrirPopoverMensualDesdecelda(this)" '
                       + 'data-trab-id-cel="' + trab.id + '" '
                       + 'data-fecha="' + d.fecha + '" data-nombre="' + nombreSafe + '" '
+                      + 'data-cargo="' + cargoSafeAttr + '" '
                       + 'data-asigs="' + asigsSafe + '" '
                       + 'style="padding:3px;text-align:center;vertical-align:middle;cursor:pointer;' + borderFin + '"'
                       + ' onmouseenter="this.style.outline=\'2px solid #025B2D\'" onmouseleave="this.style.outline=\'none\'">';
@@ -2396,6 +2475,7 @@ async function cargarGrillaMensual() {
             {label:'L4',          bg:'#e2d9f3', color:'#6f42c1'},
             {label:'L - Libre',   bg:'#cce5ff', color:'#004085'},
             {label:'ADM',         bg:'#fde8d8', color:'#7d3800'},
+            {label:'SUP - Supervisor', bg:'#f3e8ff', color:'#6b21a8'},
         ];
         leyenda.forEach(l => {
             html += '<span style="background:' + l.bg + ';color:' + l.color + ';padding:3px 10px;border-radius:12px;font-size:0.78rem;font-weight:600;">' + l.label + '</span>';
@@ -2442,6 +2522,17 @@ function exportBuildIdx(turnos) {
         idx[pid + '_' + n] = t;
     });
     return idx;
+}
+
+// Función auxiliar para calcular duración en horas
+function calcularDuracionHoras(horaInicio, horaFin) {
+    const [h1, m1] = horaInicio.split(':').map(Number);
+    const [h2, m2] = horaFin.split(':').map(Number);
+    let minutos = (h2 * 60 + m2) - (h1 * 60 + m1);
+    if (minutos < 0) minutos += 1440; // Si cruza medianoche
+    const horas = Math.floor(minutos / 60);
+    const mins = minutos % 60;
+    return horas + 'h' + (mins > 0 ? ' ' + mins + 'm' : '');
 }
 
 async function exportarDiaExcel() {
@@ -2526,16 +2617,16 @@ async function exportarDiaExcel() {
                 return false;
             });
             espEste.forEach(e => {
-                ws_data.push([e.tipo_especial, 'ESPECIAL', cfg.nombre, e.trabajador || '', e.cedula || '', 'Especial']);
+                ws_data.push([e.tipo_especial, 'ESPECIAL', cfg.nombre, e.trabajador || '', 'Especial']);
             });
         });
 
         const ws = XLSX.utils.aoa_to_sheet(ws_data);
         ws['!merges'] = merges;
-        ws['!cols'] = [{ wch:12 },{ wch:14 },{ wch:22 },{ wch:34 },{ wch:14 },{ wch:10 }];
+        ws['!cols'] = [{ wch:12 },{ wch:14 },{ wch:22 },{ wch:34 },{ wch:10 }];
 
         ws_data.forEach((row, ri) => {
-            ['A','B','C','D','E','F'].forEach((col, ci) => {
+            ['A','B','C','D','E'].forEach((col, ci) => {
                 const addr = col + (ri + 1);
                 if (!ws[addr]) ws[addr] = { v:'', t:'s' };
                 if (ri === 0) ws[addr].s = { font:{ bold:true, sz:14, name:'Arial', color:{rgb:'FFFFFF'} }, fill:FILL_HDR, alignment:center };
@@ -2544,7 +2635,7 @@ async function exportarDiaExcel() {
                 else {
                     const val = String(row[0] || '');
                     const esSep = ['Turno 1','Turno 2','Turno 3'].some(t => val.startsWith(t));
-                    const esVacante = row[5] === 'Vacante';
+                    const esVacante = row[4] === 'Vacante';
                     if (esSep) {
                         const fillH = val.includes('Tarde') ? FILL_T2H : val.includes('Noche') ? FILL_T3H : FILL_T1H;
                         ws[addr].s = { font:{ bold:true, sz:10, name:'Arial', color:{rgb:'FFFFFF'} }, fill:fillH, alignment:ci===0?left:center, border };
@@ -2576,8 +2667,16 @@ async function exportarDiaPDF() {
     const fecha = fechaCalendarioActual.toISOString().split('T')[0];
     try {
         mostrarSpinner('Generando PDF...');
-        const rTurnos = await fetch(API_BASE + 'turnos.php?fecha=' + fecha).then(r => r.json());
-        const turnos  = (rTurnos.success ? rTurnos.data : []).filter(t => t.estado !== 'cancelado');
+        const [rTurnos, rSupervisores, rNovedades] = await Promise.all([
+            fetch(API_BASE + 'turnos.php?fecha=' + fecha).then(r => r.json()),
+            fetch(API_BASE + 'supervisores_turno.php?fecha=' + fecha).then(r => r.json()),
+            fetch(API_BASE + 'novedades.php?fecha=' + fecha).then(r => r.json())
+        ]);
+        
+        const turnos       = (rTurnos.success ? rTurnos.data : []).filter(t => t.estado !== 'cancelado');
+        const supervisores = (rSupervisores.success ? rSupervisores.data : []);
+        const novedades    = (rNovedades.success ? rNovedades.data : null);
+        
         const idx     = exportBuildIdx(turnos);
         const especiales = turnos.filter(t => t.tipo_especial);
 
@@ -2609,7 +2708,7 @@ async function exportarDiaPDF() {
                     const esNP = t?.estado === 'no_presentado';
                     const esL4 = t && [4,5,9,10].includes(Number(t.numero_turno));
                     const cod  = esL4 ? String(cfg.num)+p.cod+'L4' : String(cfg.num)+p.cod;
-                    filas.push({ cod, area: areaConf.area, trabajador: t ? (t.trabajador||'') : '', cedula: t ? (t.cedula||'') : '', esNP, esVacante:!t, esEspecial:false });
+                    filas.push({ cod, area: areaConf.area, trabajador: t ? (t.trabajador||'') : '', esNP, esVacante:!t, esEspecial:false });
                 });
             });
             const espEste = especiales.filter(e => {
@@ -2618,7 +2717,7 @@ async function exportarDiaPDF() {
                 if (e.tipo_especial === 'ADMT') return cfg.num === 2;
                 return false;
             });
-            espEste.forEach(e => filas.push({ cod: e.tipo_especial, area:'Especial', trabajador: e.trabajador||'', cedula: e.cedula||'', esNP:false, esVacante:false, esEspecial:true }));
+            espEste.forEach(e => filas.push({ cod: e.tipo_especial, area:'Especial', trabajador: e.trabajador||'', esNP:false, esVacante:false, esEspecial:true }));
 
             const asignados = filas.filter(f => !f.esVacante).length;
 
@@ -2657,8 +2756,8 @@ async function exportarDiaPDF() {
             const rowH   = Math.max(7, tableH / (filas.length + 1));
 
             pdf.autoTable({
-                head: [['Puesto','Área','Trabajador','Cédula']],
-                body: filas.map(f => [f.cod, f.area, f.esVacante ? 'Sin asignar' : (f.esNP ? '⚠ TNR — ' + f.trabajador : f.trabajador), f.cedula]),
+                head: [['Puesto','Área','Trabajador']],
+                body: filas.map(f => [f.cod, f.area, f.esVacante ? 'Sin asignar' : (f.esNP ? '⚠ TNR — ' + f.trabajador : f.trabajador)]),
                 startY: tableStartY,
                 margin: { left: MARGIN, right: MARGIN },
                 tableWidth: CONTENT_W,
@@ -2684,7 +2783,6 @@ async function exportarDiaPDF() {
                     0: { cellWidth: 22, fontStyle:'bold', halign:'center' },
                     1: { cellWidth: 30 },
                     2: { cellWidth: 'auto' },
-                    3: { cellWidth: 36 },
                 },
                 didParseCell(data) {
                     if (data.section !== 'body') return;
@@ -2713,6 +2811,110 @@ async function exportarDiaPDF() {
             pdf.text('Generado: ' + new Date().toLocaleDateString('es-CO') + ' ' + new Date().toLocaleTimeString('es-CO') + '  —  Sistema de Gestión de Turnos', PAGE_W/2, PAGE_H - 5, { align:'center' });
         }
 
+        // ── SECCIÓN SUPERVISORES ──────────────────────────────────────────────
+        if (supervisores.length > 0) {
+            pdf.addPage();
+            
+            // Banda verde superior
+            pdf.setFillColor(...VERDE);
+            pdf.rect(0, 0, PAGE_W, 22, 'F');
+            pdf.setFont('helvetica','bold');
+            pdf.setFontSize(13);
+            pdf.setTextColor(255,255,255);
+            pdf.text('Terminal de Transportes de Ibagué', PAGE_W/2, 10, { align:'center' });
+            pdf.setFont('helvetica','normal');
+            pdf.setFontSize(9);
+            pdf.setTextColor(200, 230, 210);
+            pdf.text(fechaFmtCap, PAGE_W/2, 17, { align:'center' });
+
+            // Nombre de la sección
+            pdf.setFont('helvetica','bold');
+            pdf.setFontSize(10);
+            pdf.setTextColor(...VERDE);
+            pdf.text('SUPERVISORES', MARGIN, 32);
+            pdf.setFont('helvetica','normal');
+            pdf.setFontSize(8);
+            pdf.setTextColor(120,120,120);
+            pdf.text('Turnos de supervisión  ·  ' + supervisores.length + ' supervisores asignados', MARGIN, 38);
+            pdf.setDrawColor(...VERDE);
+            pdf.setLineWidth(0.4);
+            pdf.line(MARGIN, 41, PAGE_W - MARGIN, 41);
+            pdf.setLineWidth(0.2);
+
+            // Tabla de supervisores
+            const filasSup = supervisores.map(s => [
+                s.trabajador || '',
+                s.hora_inicio.substring(0,5) + ' → ' + s.hora_fin.substring(0,5),
+                calcularDuracionHoras(s.hora_inicio, s.hora_fin)
+            ]);
+
+            pdf.autoTable({
+                head: [['Supervisor','Horario','Duración']],
+                body: filasSup,
+                startY: 44,
+                margin: { left: MARGIN, right: MARGIN },
+                tableWidth: CONTENT_W,
+                styles: {
+                    fontSize: 9,
+                    cellPadding: { top:3, bottom:3, left:4, right:4 },
+                    lineColor: [220,220,220],
+                    lineWidth: 0.2,
+                    valign: 'middle',
+                    textColor: [40,40,40],
+                    fillColor: [255,255,255],
+                    minCellHeight: 8,
+                },
+                headStyles: {
+                    fillColor: VERDE,
+                    textColor: [255,255,255],
+                    fontStyle: 'bold',
+                    fontSize: 8.5,
+                    minCellHeight: 8,
+                },
+                alternateRowStyles: { fillColor: VERDE_L },
+                columnStyles: {
+                    0: { cellWidth: 'auto', fontStyle:'bold' },
+                    1: { cellWidth: 50, halign:'center', fontStyle:'bold' },
+                    2: { cellWidth: 35, halign:'center' },
+                }
+            });
+        }
+
+        // ── SECCIÓN NOVEDADES ────────────────────────────────────────────────
+        if (novedades && novedades.contenido && novedades.contenido.trim()) {
+            pdf.addPage();
+            
+            // Banda verde superior
+            pdf.setFillColor(...VERDE);
+            pdf.rect(0, 0, PAGE_W, 22, 'F');
+            pdf.setFont('helvetica','bold');
+            pdf.setFontSize(13);
+            pdf.setTextColor(255,255,255);
+            pdf.text('Terminal de Transportes de Ibagué', PAGE_W/2, 10, { align:'center' });
+            pdf.setFont('helvetica','normal');
+            pdf.setFontSize(9);
+            pdf.setTextColor(200, 230, 210);
+            pdf.text(fechaFmtCap, PAGE_W/2, 17, { align:'center' });
+
+            // Nombre de la sección
+            pdf.setFont('helvetica','bold');
+            pdf.setFontSize(10);
+            pdf.setTextColor(...VERDE);
+            pdf.text('NOVEDADES DEL DÍA', MARGIN, 32);
+            pdf.setDrawColor(...VERDE);
+            pdf.setLineWidth(0.4);
+            pdf.line(MARGIN, 35, PAGE_W - MARGIN, 35);
+            pdf.setLineWidth(0.2);
+
+            // Contenido de novedades
+            pdf.setFont('helvetica','normal');
+            pdf.setFontSize(10);
+            pdf.setTextColor(40,40,40);
+            
+            const lineas = pdf.splitTextToSize(novedades.contenido, CONTENT_W - 10);
+            pdf.text(lineas, MARGIN + 5, 45);
+        }
+
         ocultarSpinner();
         pdf.save('Turnos_' + fechaObj.toLocaleDateString('es-CO').replace(/\//g,'-') + '.pdf');
         mostrarAlerta('✅ PDF descargado correctamente', 'success');
@@ -2731,23 +2933,63 @@ async function exportarMesExcel() {
   const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
   const mesNombre = MESES[mes - 1];
 
+  // Función para formatear hora sin ceros iniciales
+  const formatoHora = (hora) => {
+    if (!hora) return '';
+    // Convertir "08:00" a "8" (solo hora sin minutos si son :00)
+    const [h, m] = hora.replace(/^0+/, '').split(':');
+    return m === '00' ? h : `${h}:${m}`;
+  };
+
   try {
     const primerDia = new Date(anio, mes - 1, 1).toISOString().split('T')[0];
     const ultimoDia = new Date(anio, mes, 0).toISOString().split('T')[0];
 
-    const response = await fetch(API_BASE + 'turnos.php?fecha_inicio=' + primerDia + '&fecha_fin=' + ultimoDia);
-    const data = await response.json();
+    const [resTurnos, resSupervisores, resNovedades] = await Promise.all([
+      fetch(API_BASE + 'turnos.php?fecha_inicio=' + primerDia + '&fecha_fin=' + ultimoDia),
+      fetch(API_BASE + 'supervisores_turno.php?fecha_inicio=' + primerDia + '&fecha_fin=' + ultimoDia),
+      fetch(API_BASE + 'novedades.php?fecha_inicio=' + primerDia + '&fecha_fin=' + ultimoDia)
+    ]);
+    const dataTurnos = await resTurnos.json();
+    const dataSupervisores = await resSupervisores.json();
+    const dataNovedades = await resNovedades.json();
 
-    if (!data.success || !data.data || data.data.length === 0) {
+    if (!dataTurnos.success || !dataTurnos.data || dataTurnos.data.length === 0) {
       mostrarAlerta('No hay turnos para exportar este mes', 'warning');
       return;
     }
 
-    const turnos = data.data.filter(t => t.estado !== 'cancelado');
+    const turnos = dataTurnos.data.filter(t => t.estado !== 'cancelado');
+    const supervisores = dataSupervisores.success ? dataSupervisores.data : [];
+    const novedades = dataNovedades.success ? dataNovedades.data : [];
+
+    // Generar lista de días del mes
+    const diasEnMes = new Date(anio, mes, 0).getDate();
+    const diasMes = Array.from({length: diasEnMes}, (_, i) => ({
+      fecha: anio + '-' + String(mes).padStart(2, '0') + '-' + String(i + 1).padStart(2, '0')
+    }));
+
+    // Combinar turnos normales y supervisores para la exportación
+    const todosLosRegistros = [...turnos];
+
+    // Agregar supervisores como registros especiales
+    supervisores.forEach(s => {
+      todosLosRegistros.push({
+        fecha: s.fecha,
+        tipo_especial: 'SUP',
+        trabajador: s.trabajador,
+        trabajador_id: s.trabajador_id,
+        hora_inicio: s.hora_inicio,
+        hora_fin: s.hora_fin,
+        estado: 'programado'
+      });
+    });
 
     // ── Hoja 1: Lista completa ordenada ──────────────────────────────────
-    turnos.sort((a, b) => {
+    todosLosRegistros.sort((a, b) => {
       if (a.fecha !== b.fecha) return a.fecha.localeCompare(b.fecha);
+      if (a.tipo_especial === 'SUP' && b.tipo_especial !== 'SUP') return -1;
+      if (a.tipo_especial !== 'SUP' && b.tipo_especial === 'SUP') return 1;
       return (a.numero_turno || 99) - (b.numero_turno || 99);
     });
 
@@ -2768,14 +3010,14 @@ async function exportarMesExcel() {
     const FILL_ALT = { fgColor: { rgb: 'F8F9FA' } };
 
     const ws1_data = [
-      ['Terminal de Transportes de Ibagué — Turnos ' + mesNombre + ' ' + anio, '', '', '', '', '', '', ''],
+      ['Terminal de Transportes de Ibagué — Turnos ' + mesNombre + ' ' + anio, '', '', '', '', '', ''],
       ['', '', '', '', '', '', '', ''],
-      ['Fecha', 'Día', 'Código', 'Turno', 'Horario', 'Trabajador', 'Cédula', 'Área']
+      ['Fecha', 'Día', 'Código', 'Turno', 'Horario', 'Trabajador', 'Área']
     ];
-    const merges1 = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 7 } }];
+    const merges1 = [{ s: { r: 0, c: 0 }, e: { r: 0, c: 6 } }];
 
     let fechaAnterior = '';
-    turnos.forEach((t, idx) => {
+    todosLosRegistros.forEach((t, idx) => {
       const fechaObj = new Date(t.fecha + 'T00:00:00');
       const dia = DIAS[fechaObj.getDay()];
       const orig = Number(t.numero_turno) || 0;
@@ -2791,11 +3033,10 @@ async function exportarMesExcel() {
         t.fecha !== fechaAnterior ? t.fecha : '',
         t.fecha !== fechaAnterior ? dia : '',
         codigo,
-        t.tipo_especial ? t.tipo_especial : (t.turno_nombre || ''),
-        t.tipo_especial ? '—' : ((t.hora_inicio||'').substring(0,5) + ' - ' + (t.hora_fin||'').substring(0,5)),
+        t.tipo_especial === 'SUP' ? 'SUPERVISIÓN' : (t.tipo_especial ? t.tipo_especial : (t.turno_nombre || '')),
+        t.tipo_especial === 'SUP' ? (formatoHora((t.hora_inicio||'').substring(0,5)) + ' - ' + formatoHora((t.hora_fin||'').substring(0,5))) : (t.tipo_especial ? '—' : ((t.hora_inicio||'').substring(0,5) + ' - ' + (t.hora_fin||'').substring(0,5))),
         t.trabajador || '',
-        t.cedula || '',
-        t.tipo_especial ? 'ESPECIAL' : (t.area || '')
+        t.tipo_especial === 'SUP' ? 'SUPERVISIÓN' : (t.tipo_especial ? 'ESPECIAL' : (t.area || ''))
       ]);
       fechaAnterior = t.fecha;
     });
@@ -2803,10 +3044,10 @@ async function exportarMesExcel() {
     const ws1 = XLSX.utils.aoa_to_sheet(ws1_data);
     ws1['!merges'] = merges1;
     ws1['!cols'] = [
-      { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 22 }, { wch: 16 }, { wch: 30 }, { wch: 14 }, { wch: 14 }
+      { wch: 12 }, { wch: 12 }, { wch: 10 }, { wch: 22 }, { wch: 16 }, { wch: 30 }, { wch: 14 }
     ];
 
-    const cols1 = ['A','B','C','D','E','F','G','H'];
+    const cols1 = ['A','B','C','D','E','F','G'];
     ws1_data.forEach((row, ri) => {
       cols1.forEach((col, ci) => {
         const addr = col + (ri + 1);
@@ -2838,13 +3079,26 @@ async function exportarMesExcel() {
     // ── Hoja 2: Grilla trabajador × día ─────────────────────────────────
     const resTrab = await fetch(API_BASE + 'trabajadores.php');
     const dataTrab = await resTrab.json();
-    const trabajadores = (dataTrab.success ? dataTrab.data : []).filter(t => t.activo).sort((a,b) => a.nombre.localeCompare(b.nombre));
+    let trabajadores = (dataTrab.success ? dataTrab.data : []).filter(t => t.activo);
 
-    const diasMes = [];
+    // Agregar supervisores que no estén en la lista de trabajadores
+    supervisores.forEach(s => {
+      if (!trabajadores.find(t => t.id === s.trabajador_id)) {
+        trabajadores.push({
+          id: s.trabajador_id,
+          nombre: s.trabajador,
+          activo: 1
+        });
+      }
+    });
+    
+    trabajadores = trabajadores.sort((a,b) => a.nombre.localeCompare(b.nombre));
+
+    const diasMesGrilla = [];
     const totalDias = new Date(anio, mes, 0).getDate();
     for (let d = 1; d <= totalDias; d++) {
       const dt = new Date(anio, mes - 1, d);
-      diasMes.push({ num: d, fecha: dt.toISOString().split('T')[0], dia: ['D','L','M','X','J','V','S'][dt.getDay()] });
+      diasMesGrilla.push({ num: d, fecha: dt.toISOString().split('T')[0], dia: ['D','L','M','X','J','V','S'][dt.getDay()] });
     }
 
     // Índice de turnos por trabajador y fecha
@@ -2857,7 +3111,20 @@ async function exportarMesExcel() {
       idx[tid][f].push(t);
     });
 
-    const hdrGrilla = ['Trabajador', ...diasMes.map(d => d.num + '\n' + d.dia)];
+    // Agregar supervisores al índice
+    supervisores.forEach(s => {
+      const tid = s.trabajador_id;
+      const f   = s.fecha;
+      if (!idx[tid]) idx[tid] = {};
+      if (!idx[tid][f]) idx[tid][f] = [];
+      idx[tid][f].push({
+        tipo_especial: 'SUP',
+        hora_inicio: s.hora_inicio,
+        hora_fin: s.hora_fin
+      });
+    });
+
+    const hdrGrilla = ['Trabajador', ...diasMesGrilla.map(d => d.num + '\n' + d.dia)];
     const ws2_data = [
       [mesNombre + ' ' + anio + ' — Vista mensual por trabajador', ...Array(totalDias).fill('')],
       hdrGrilla
@@ -2866,13 +3133,17 @@ async function exportarMesExcel() {
 
     trabajadores.forEach(trab => {
       const fila = [trab.nombre];
-      diasMes.forEach(d => {
+      diasMesGrilla.forEach(d => {
         const asigs = (idx[trab.id] && idx[trab.id][d.fecha]) || [];
         if (asigs.length === 0) {
           fila.push('');
         } else {
           const etiq = asigs.map(a => {
-            if (a.tipo_especial) return a.tipo_especial;
+            if (a.tipo_especial === 'SUP') {
+              return (formatoHora((a.hora_inicio||'').substring(0,5)) + '-' + formatoHora((a.hora_fin||'').substring(0,5)));
+            } else if (a.tipo_especial) {
+              return a.tipo_especial;
+            }
             const orig = Number(a.numero_turno) || 0;
             const base = orig === 4 ? 1 : orig === 5 ? 2 : orig;
             return orig >= 4 ? String(base) + (a.puesto_codigo||'') + 'L4' : String(base) + (a.puesto_codigo||'');
@@ -2880,12 +3151,15 @@ async function exportarMesExcel() {
           fila.push(etiq);
         }
       });
-      ws2_data.push(fila);
+      // Solo agregar filas que tengan al menos una asignación
+      if (fila.some((cell, i) => i > 0 && cell !== '')) {
+        ws2_data.push(fila);
+      }
     });
 
     const ws2 = XLSX.utils.aoa_to_sheet(ws2_data);
     ws2['!merges'] = merges2;
-    ws2['!cols'] = [{ wch: 28 }, ...Array(totalDias).fill({ wch: 7 })];
+    ws2['!cols'] = [{ wch: 28 }, ...Array(totalDias).fill({ wch: 12 })];
 
     const colsG = ['A', ...diasMes.map((_, i) => {
       const n = i + 1;
@@ -2918,6 +3192,7 @@ async function exportarMesExcel() {
             if (val.startsWith('1')) fill = FILL_T1;
             else if (val.startsWith('2')) fill = FILL_T2;
             else if (val.startsWith('3')) { fill = FILL_T3; fontColor = 'E0E0E0'; }
+            else if (val === 'SUP') { fill = { fgColor: { rgb: 'D4AF37' } }; fontColor = '212529'; }
             else if (['L','ADMM','ADMT','ADM'].includes(val)) fill = FILL_ESP;
             else if (esFin && !val) fill = { fgColor: { rgb: 'E8F5E9' } };
 
@@ -2932,12 +3207,49 @@ async function exportarMesExcel() {
 
     ws2['!rows'] = ws2_data.map((_, i) => ({ hpt: i <= 1 ? 20 : 14 }));
 
+    // ── Hoja 3: Novedades del mes ────────────────────────────────────────
+    const ws3_data = [
+      ['Terminal de Transportes de Ibagué — Novedades ' + mesNombre + ' ' + anio, '', ''],
+      ['', '', ''],
+      ['Fecha', 'Día', 'Novedades']
+    ];
+
+    // Crear mapa de novedades por fecha
+    const novedadesPorFecha = {};
+    if (novedades && Array.isArray(novedades)) {
+      novedades.forEach(n => {
+        if (n.fecha && n.contenido && n.contenido.trim()) {
+          novedadesPorFecha[n.fecha] = n.contenido.trim();
+        }
+      });
+    }
+
+    // Agregar filas para cada día del mes que tenga novedades
+    diasMes.forEach(d => {
+      if (novedadesPorFecha[d.fecha]) {
+        const fechaObj = new Date(d.fecha + 'T00:00:00');
+        const dia = DIAS[fechaObj.getDay()];
+        ws3_data.push([
+          d.fecha,
+          dia,
+          novedadesPorFecha[d.fecha]
+        ]);
+      }
+    });
+
+    const ws3 = XLSX.utils.aoa_to_sheet(ws3_data);
+    ws3['!cols'] = [{ wch: 12 }, { wch: 12 }, { wch: 80 }];
+    ws3['!rows'] = ws3_data.map((_, i) => ({ hpt: i <= 2 ? 20 : 60 })); // Más altura para el contenido
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws1, 'Lista Completa');
     XLSX.utils.book_append_sheet(wb, ws2, 'Vista Mensual');
+    if (ws3_data.length > 3) { // Solo agregar si hay novedades
+      XLSX.utils.book_append_sheet(wb, ws3, 'Novedades');
+    }
 
     XLSX.writeFile(wb, 'Turnos_' + mesNombre + '_' + anio + '.xlsx');
-    mostrarAlerta('✅ Excel mensual exportado (' + turnos.length + ' turnos, 2 hojas)', 'success');
+    mostrarAlerta('✅ Excel mensual exportado (' + turnos.length + ' turnos, ' + supervisores.length + ' supervisores, 2 hojas)', 'success');
 
   } catch (error) {
     console.error('Error exportando mes:', error);
@@ -2949,6 +3261,14 @@ async function exportarMesPDF() {
     const mes  = fechaCalendarioActual.getMonth() + 1;
     const anio = fechaCalendarioActual.getFullYear();
     const MESES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    
+    // Función para formatear hora sin ceros iniciales
+    const formatoHora = (hora) => {
+      if (!hora) return '';
+      // Convertir "08:00" a "8" (solo hora sin minutos si son :00)
+      const [h, m] = hora.replace(/^0+/, '').split(':');
+      return m === '00' ? h : `${h}:${m}`;
+    };
     const mesNombre = MESES[mes-1] + ' ' + anio;
 
     try {
@@ -2957,15 +3277,19 @@ async function exportarMesPDF() {
         const ultimoDia = new Date(anio, mes,   0).toISOString().split('T')[0];
         const diasEnMes = new Date(anio, mes, 0).getDate();
 
-        const [rTurnos, rEsp, rTrab] = await Promise.all([
+        const [rTurnos, rEsp, rTrab, rSupervisores, rNovedades] = await Promise.all([
             fetch(API_BASE + 'turnos.php?fecha_inicio=' + primerDia + '&fecha_fin=' + ultimoDia).then(r => r.json()),
             fetch(API_BASE + 'dias_especiales.php?fecha_inicio=' + primerDia + '&fecha_fin=' + ultimoDia).then(r => r.json()),
-            fetch(API_BASE + 'trabajadores.php').then(r => r.json())
+            fetch(API_BASE + 'trabajadores.php').then(r => r.json()),
+            fetch(API_BASE + 'supervisores_turno.php?fecha_inicio=' + primerDia + '&fecha_fin=' + ultimoDia).then(r => r.json()),
+            fetch(API_BASE + 'novedades.php?fecha_inicio=' + primerDia + '&fecha_fin=' + ultimoDia).then(r => r.json())
         ]);
 
         const turnos      = (rTurnos.success ? rTurnos.data : []).filter(t => t.estado !== 'cancelado');
         const especiales  = rEsp.success ? rEsp.data : [];
         const trabajadores = (rTrab.success ? rTrab.data : []).filter(t => t.activo);
+        const supervisores = (rSupervisores.success ? rSupervisores.data : []);
+        const novedades   = (rNovedades.success ? rNovedades.data : []);
 
         if (turnos.length === 0 && especiales.length === 0) {
             ocultarSpinner(); mostrarAlerta('No hay turnos para exportar este mes', 'warning'); return;
@@ -2990,6 +3314,15 @@ async function exportarMesPDF() {
             const dia = parseInt(e.fecha_inicio.split('-')[2]);
             if (!mapa[tid]) mapa[tid] = {};
             mapa[tid][dia] = { cod: e.tipo, estado: 'especial' };
+            trabIds.add(tid);
+        });
+        supervisores.forEach(s => {
+            const tid = s.trabajador_id;
+            const dia = parseInt(s.fecha.split('-')[2]);
+            if (!mapa[tid]) mapa[tid] = {};
+            const horaInicio = formatoHora((s.hora_inicio || '').substring(0, 5));
+            const horaFin = formatoHora((s.hora_fin || '').substring(0, 5));
+            mapa[tid][dia] = { cod: 'SUP', hora_inicio: horaInicio, hora_fin: horaFin, estado: 'programado' };
             trabIds.add(tid);
         });
 
@@ -3049,7 +3382,14 @@ async function exportarMesPDF() {
 
                 const body = trabChunk.map(trab => [
                     trab.nombre.split(' ').slice(0,3).join(' '),
-                    ...dChunk.map(d => { const e = mapa[trab.id]?.[d]; return e ? e.cod : ''; })
+                    ...dChunk.map(d => { 
+                        const e = mapa[trab.id]?.[d]; 
+                        if (!e) return '';
+                        if (e.cod === 'SUP') {
+                            return (e.hora_inicio || '') + '-' + (e.hora_fin || '');
+                        }
+                        return e.cod;
+                    })
                 ]);
 
                 const colStyles = { 0: { cellWidth: COL_NOMBRE, fontStyle:'bold', halign:'left' } };
@@ -3094,6 +3434,9 @@ async function exportarMesPDF() {
                         if (e.estado === 'no_presentado') {
                             data.cell.styles.textColor = [180,40,40];
                             data.cell.styles.fontStyle = 'bold';
+                        } else if (e.cod === 'SUP') {
+                            data.cell.styles.textColor = [184,134,11];
+                            data.cell.styles.fontStyle = 'bold';
                         } else if (['L','L8','LC'].includes(e.cod)) {
                             data.cell.styles.textColor = [2,91,45];
                             data.cell.styles.fontStyle = 'bold';
@@ -3111,6 +3454,78 @@ async function exportarMesPDF() {
                 pdf.setFontSize(6.5);
                 pdf.setTextColor(180,180,180);
                 pdf.text('Sistema de Gestión de Turnos — Terminal de Transportes de Ibagué', PAGE_W/2, PAGE_H - 4, { align:'center' });
+            }
+        }
+
+        // ── SECCIÓN NOVEDADES DEL MES ──────────────────────────────────────
+        if (novedades && Array.isArray(novedades) && novedades.length > 0) {
+            // Filtrar solo las que tienen contenido
+            const novedadesConContenido = novedades.filter(n => n.contenido && n.contenido.trim());
+            
+            if (novedadesConContenido.length > 0) {
+                pdf.addPage();
+                
+                // Banda verde superior
+                pdf.setFillColor(...VERDE);
+                pdf.rect(0, 0, PAGE_W, 16, 'F');
+                pdf.setFont('helvetica','bold');
+                pdf.setFontSize(11);
+                pdf.setTextColor(255,255,255);
+                pdf.text('Terminal de Transportes de Ibagué', MARGIN, 8);
+                pdf.setFont('helvetica','normal');
+                pdf.setFontSize(8);
+                pdf.setTextColor(200, 230, 210);
+                pdf.text('Novedades ' + mesNombre, MARGIN, 13);
+
+                // Título de la sección
+                pdf.setFont('helvetica','bold');
+                pdf.setFontSize(10);
+                pdf.setTextColor(...VERDE);
+                pdf.text('NOVEDADES DEL MES', MARGIN, 25);
+                pdf.setDrawColor(...VERDE);
+                pdf.setLineWidth(0.4);
+                pdf.line(MARGIN, 28, PAGE_W - MARGIN, 28);
+                pdf.setLineWidth(0.2);
+
+                // Contenido de novedades
+                pdf.setFont('helvetica','normal');
+                pdf.setFontSize(9);
+                pdf.setTextColor(40,40,40);
+                
+                let yPos = 35;
+                novedadesConContenido.forEach(nov => {
+                    const fechaObj = new Date(nov.fecha + 'T00:00:00');
+                    const fechaFmt = fechaObj.toLocaleDateString('es-CO', { weekday:'short', day:'numeric', month:'short' });
+                    
+                    // Fecha
+                    pdf.setFont('helvetica','bold');
+                    pdf.setFontSize(9);
+                    pdf.setTextColor(...VERDE);
+                    pdf.text(fechaFmt.charAt(0).toUpperCase() + fechaFmt.slice(1) + ':', MARGIN, yPos);
+                    
+                    // Contenido
+                    pdf.setFont('helvetica','normal');
+                    pdf.setFontSize(9);
+                    pdf.setTextColor(40,40,40);
+                    const lineas = pdf.splitTextToSize(nov.contenido, CONTENT_W - 40);
+                    pdf.text(lineas, MARGIN + 35, yPos);
+                    
+                    yPos += lineas.length * 5 + 8;
+                    
+                    // Nueva página si es necesario
+                    if (yPos > PAGE_H - 30) {
+                        pdf.addPage();
+                        yPos = 25;
+                        
+                        // Banda verde en nueva página
+                        pdf.setFillColor(...VERDE);
+                        pdf.rect(0, 0, PAGE_W, 16, 'F');
+                        pdf.setFont('helvetica','bold');
+                        pdf.setFontSize(11);
+                        pdf.setTextColor(255,255,255);
+                        pdf.text('Terminal de Transportes de Ibagué — Novedades ' + mesNombre, MARGIN, 10);
+                    }
+                });
             }
         }
 
@@ -3141,12 +3556,11 @@ async function exportarCalendarioExcel() {
       const turnos = data.data;
 
       let csv = '\uFEFF'; // BOM para Excel UTF-8
-        csv += 'Fecha,Trabajador,Cédula,Puesto,Área,Turno,Horario,Estado\n';
+      csv += 'Fecha,Trabajador,Puesto,Área,Turno,Horario,Estado\n';
         
         turnos.forEach(turno => {
             csv += `${turno.fecha},`;
             csv += `"${turno.trabajador}",`;
-            csv += `${turno.cedula},`;
             csv += `"${turno.puesto_codigo} - ${turno.puesto_nombre}",`;
             csv += `"${turno.area}",`;
             csv += `"${turno.turno_nombre}",`;
@@ -3273,11 +3687,12 @@ function abrirPopoverMensualDesdecelda(celda) {
     const trabId = Number(celda.getAttribute('data-trab-id-cel'));
     const fecha  = celda.getAttribute('data-fecha');
     const nombre = celda.getAttribute('data-nombre').replace(/&#39;/g, "'");
+    const cargo  = celda.getAttribute('data-cargo') || '';
     const raw    = celda.getAttribute('data-asigs') || '[]';
-    abrirPopoverMensual(celda, trabId, fecha, nombre, raw);
+    abrirPopoverMensual(celda, trabId, fecha, nombre, raw, cargo);
 }
 
-function abrirPopoverMensual(celda, trabId, fecha, nombre, asigsSafeStr) {
+function abrirPopoverMensual(celda, trabId, fecha, nombre, asigsSafeStr, cargo = '') {
     // Cerrar cualquier popover previo
     const prev = document.getElementById('popover-mensual');
     if (prev) prev.remove();
@@ -3329,20 +3744,19 @@ function abrirPopoverMensual(celda, trabId, fecha, nombre, asigsSafeStr) {
                 <span style="background:#f8d7da;color:#721c24;padding:1px 7px;border-radius:10px;font-size:0.75rem;font-weight:700;">INC</span>
                 <span style="font-size:0.8rem;color:#6c757d;margin-left:6px;">${a.descripcion || 'Incapacidad'}</span>
             </div>`;
-        } else if (a.tipo_especial && ['ADMM','ADMT','ADM'].includes(a.tipo_especial)) {
-            // Disponibilidades administrativas — vienen de dias_especiales, tienen id propio
-            const bgAdm = '#fde8d8', colAdm = '#7d3800';
+        } else if (a.tipo_especial === 'SUP') {
+            const horas = a.hora_inicio && a.hora_fin ? `${a.hora_inicio.substring(0,5)} → ${a.hora_fin.substring(0,5)}` : 'Horario no definido';
             itemsHtml += `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;">
                 <div style="display:flex;align-items:center;gap:6px;">
-                    <span style="background:${bgAdm};color:${colAdm};padding:1px 7px;border-radius:10px;font-size:0.75rem;font-weight:700;">${a.tipo_especial}</span>
-                    <span style="font-size:0.8rem;color:#6c757d;">Disponibilidad admin</span>
+                    <span style="background:#f3e8ff;color:#6b21a8;padding:1px 7px;border-radius:10px;font-size:0.75rem;font-weight:700;">SUP</span>
+                    <span style="font-size:0.8rem;color:#6c757d;">${horas}</span>
                 </div>
                 <div style="display:flex;gap:4px;">
-                    <button onclick="cambiarTurnoMensual(${trabId},'${fecha}','${nombre}',null,'',null,'especial','${a.tipo_especial}',${a.id||'null'})"
-                        style="background:#6c757d;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;">
-                        ✏️ Cambiar
+                    <button onclick="editarSupervisorTurno(${a.id})"
+                        style="background:#9c27b0;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;">
+                        ✏️ Editar
                     </button>
-                    <button onclick="eliminarDiaEspecialMensual(${trabId},'${fecha}','${a.tipo_especial}','${nombre}')"
+                    <button onclick="eliminarSupervisorTurno(${a.id},'${nombre.replace(/'/g, "\\'")}','${fecha}')"
                         style="background:#dc3545;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;">
                         🗑️
                     </button>
@@ -3377,6 +3791,8 @@ function abrirPopoverMensual(celda, trabId, fecha, nombre, asigsSafeStr) {
     const tieneLibre  = asigs.some(a => ['L','L8','LC'].includes(a.tipo_especial));
     const tieneTurno  = asigs.some(a => a.numero_turno);
     const tieneImpedimento = asigs.some(a => ['VAC','INC','SUS'].includes(a.tipo_especial));
+    const esSupervisor = String(cargo || '').toLowerCase() === 'supervisor';
+    const cargoSafe = (cargo || '').replace(/'/g, "\\'");
 
     let botonesAccion = '';
     if (!tieneLibre && !tieneImpedimento) {
@@ -3388,11 +3804,12 @@ function abrirPopoverMensual(celda, trabId, fecha, nombre, asigsSafeStr) {
         </button>`;
     }
     if (!tieneTurno && !tieneLibre && !tieneImpedimento) {
+        const label = esSupervisor ? '➕ Asignar turno supervisor aquí' : '➕ Asignar turno aquí';
         botonesAccion += `
-        <button onclick="asignarTurnoRapidoMensual(${trabId},'${fecha}','${nombre}')"
+        <button onclick="asignarTurnoRapidoMensual(${trabId},'${fecha}','${nombre}','${cargoSafe}')"
             style="width:100%;margin-top:6px;background:#0d6efd;color:white;border:none;border-radius:8px;
                    padding:7px;font-size:0.82rem;font-weight:600;cursor:pointer;">
-            ➕ Asignar turno aquí
+            ${label}
         </button>`;
     }
     const btnAgregar = botonesAccion;
@@ -3643,8 +4060,12 @@ async function cambiarTurnoMensual(trabId, fecha, nombre, turnoAsigId, puestoCod
                     method: 'POST',
                     headers: {'Content-Type':'application/json'},
                     body: JSON.stringify({
-                        trabajador_id: trabId, tipo: nuevoTurnoVal,
-                        fecha_inicio: fecha, fecha_fin: fecha,
+                        trabajador_id: trabId, 
+                        tipo: nuevoTurnoVal,
+                        fecha_inicio: fecha, 
+                        fecha_fin: fecha,
+                        horas_inicio: null,
+                        horas_fin: null,
                         descripcion: nuevoTurnoVal + ' asignado desde vista mensual',
                         estado: 'programado'
                     })
@@ -3680,8 +4101,117 @@ async function cambiarTurnoMensual(trabId, fecha, nombre, turnoAsigId, puestoCod
     };
 }
 
-async function asignarTurnoRapidoMensual(trabId, fecha, nombre) {
+async function asignarTurnoRapidoMensual(trabId, fecha, nombre, cargo = '') {
     document.getElementById('popover-mensual')?.remove();
+
+    const esSupervisor = String(cargo || '').toLowerCase() === 'supervisor';
+    if (esSupervisor) {
+        const overlay = document.createElement('div');
+        overlay.id = 'overlay-rapido';
+        overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;';
+
+        const pop = document.createElement('div');
+        pop.id = 'popover-rapido';
+        pop.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+            z-index:10000;background:white;border-radius:14px;padding:24px 28px;
+            box-shadow:0 12px 40px rgba(0,0,0,0.25);min-width:340px;`;
+
+        pop.innerHTML = `
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <div>
+                    <div style="font-weight:700;font-size:1rem;color:#1a1a2e;">Asignar turno supervisor</div>
+                    <div style="font-size:0.82rem;color:#6c757d;">${nombre} — ${fecha}</div>
+                </div>
+                <button id="btn-cancelar-sup-rapido" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#6c757d;line-height:1;">×</button>
+            </div>
+            <div style="margin-bottom:16px;color:#495057;font-size:0.9rem;">Los supervisores se asignan manualmente con horario. No se pueden asignar a puestos normales desde esta vista.</div>
+            <div style="display:grid;gap:12px;">
+                <div>
+                    <label style="display:block;font-size:0.82rem;font-weight:600;color:#495057;margin-bottom:4px;">Hora inicio</label>
+                    <input type="time" id="sup-hora-inicio-rapido" style="width:100%;padding:8px 10px;border:1px solid #dee2e6;border-radius:8px;font-size:0.9rem;">
+                </div>
+                <div>
+                    <label style="display:block;font-size:0.82rem;font-weight:600;color:#495057;margin-bottom:4px;">Hora fin</label>
+                    <input type="time" id="sup-hora-fin-rapido" style="width:100%;padding:8px 10px;border:1px solid #dee2e6;border-radius:8px;font-size:0.9rem;">
+                </div>
+                <div id="sup-horas-resumen-rapido" style="display:none;padding:10px 12px;border-radius:10px;background:#f3e8ff;color:#6b21a8;font-size:0.88rem;"></div>
+                <div id="sup-validacion-rapido" style="display:none;padding:10px 12px;border-radius:10px;font-size:0.88rem;"></div>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:20px;">
+                <button id="btn-asignar-sup-rapido" style="flex:1;background:#0d6efd;color:white;border:none;border-radius:8px;padding:10px 0;font-weight:700;cursor:pointer;">Guardar supervisor</button>
+                <button id="btn-cancelar-sup-rapido-2" style="flex:1;background:#6c757d;color:white;border:none;border-radius:8px;padding:10px 0;font-weight:700;cursor:pointer;">Cancelar</button>
+            </div>
+        `;
+
+        document.body.appendChild(overlay);
+        document.body.appendChild(pop);
+
+        const hi = pop.querySelector('#sup-hora-inicio-rapido');
+        const hf = pop.querySelector('#sup-hora-fin-rapido');
+        const resumen = pop.querySelector('#sup-horas-resumen-rapido');
+        const validacion = pop.querySelector('#sup-validacion-rapido');
+        const btnGuardar = pop.querySelector('#btn-asignar-sup-rapido');
+        const cerrar = () => { pop.remove(); overlay.remove(); };
+
+        const actualizarResumen = () => {
+            if (!hi.value || !hf.value) {
+                resumen.style.display = 'none';
+                return;
+            }
+            const [h1, m1] = hi.value.split(':').map(Number);
+            const [h2, m2] = hf.value.split(':').map(Number);
+            let minutos = (h2 * 60 + m2) - (h1 * 60 + m1);
+            if (minutos < 0) minutos += 24 * 60;
+            const hrs = Math.floor(minutos / 60);
+            const mins = minutos % 60;
+            resumen.innerHTML = `<i class="fas fa-clock" style="margin-right:6px;"></i>Horario: <strong>${hi.value} → ${hf.value}</strong> · Duración: <strong>${hrs}h${mins > 0 ? ' ' + mins + 'min' : ''}</strong>`;
+            resumen.style.display = '';
+        };
+
+        [hi, hf].forEach(el => el.addEventListener('change', actualizarResumen));
+        pop.querySelector('#btn-cancelar-sup-rapido')?.addEventListener('click', cerrar);
+        pop.querySelector('#btn-cancelar-sup-rapido-2')?.addEventListener('click', cerrar);
+
+        btnGuardar.addEventListener('click', async () => {
+            validacion.style.display = 'none';
+            if (!hi.value || !hf.value) {
+                validacion.style.display = '';
+                validacion.style.background = '#fff3cd';
+                validacion.style.color = '#856404';
+                validacion.textContent = 'Ingresa la hora de entrada y salida del supervisor.';
+                return;
+            }
+            btnGuardar.disabled = true;
+            btnGuardar.textContent = 'Guardando...';
+            try {
+                const res = await fetch(API_BASE + 'supervisores_turno.php', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ trabajador_id: trabId, fecha, hora_inicio: hi.value, hora_fin: hf.value, usuario_id: 1 })
+                });
+                const r = await res.json();
+                if (r.success) {
+                    mostrarAlerta('✅ Turno supervisor guardado', 'success');
+                    cerrar();
+                    recargarFilaMensual(trabId);
+                } else {
+                    validacion.style.display = '';
+                    validacion.style.background = '#f8d7da';
+                    validacion.style.color = '#721c24';
+                    validacion.textContent = r.message || 'Error al guardar turno supervisor.';
+                }
+            } catch (e) {
+                validacion.style.display = '';
+                validacion.style.background = '#f8d7da';
+                validacion.style.color = '#721c24';
+                validacion.textContent = 'Error de conexión.';
+            } finally {
+                btnGuardar.disabled = false;
+                btnGuardar.textContent = 'Guardar supervisor';
+            }
+        });
+        return;
+    }
 
     mostrarSpinner('Cargando opciones...');
     let puestos = [], turnosConf = [];
@@ -3825,7 +4355,16 @@ async function agregarDiaLibreMensual(trabId, fecha, nombre) {
         const res = await fetch(API_BASE + 'dias_especiales.php', {
             method: 'POST',
             headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ trabajador_id: trabId, tipo: 'L', fecha_inicio: fecha, fecha_fin: null, descripcion: '', estado: 'programado' })
+            body: JSON.stringify({ 
+                trabajador_id: trabId, 
+                tipo: 'L', 
+                fecha_inicio: fecha, 
+                fecha_fin: null,
+                horas_inicio: null,
+                horas_fin: null,
+                descripcion: '', 
+                estado: 'programado' 
+            })
         });
         const r = await res.json();
         ocultarSpinner();
@@ -3874,7 +4413,16 @@ async function cambiarDiaLibreMensual(trabId, fechaActual, nombre) {
             const addRes = await fetch(API_BASE + 'dias_especiales.php', {
                 method: 'POST',
                 headers: {'Content-Type':'application/json'},
-                body: JSON.stringify({ trabajador_id: trabId, tipo: 'L', fecha_inicio: nuevaFecha, fecha_fin: null, descripcion: '', estado: 'programado' })
+                body: JSON.stringify({ 
+                    trabajador_id: trabId, 
+                    tipo: 'L', 
+                    fecha_inicio: nuevaFecha, 
+                    fecha_fin: null,
+                    horas_inicio: null,
+                    horas_fin: null,
+                    descripcion: '', 
+                    estado: 'programado' 
+                })
             });
             const r = await addRes.json();
             ocultarSpinner();
@@ -4634,6 +5182,292 @@ async function guardarEdicionIncapacidad(e) {
   }
 }
 
+async function nuevaIncapacidad() {
+  const modalOverlay = document.getElementById('modal-overlay');
+  const modalTitulo = document.getElementById('modal-titulo');
+  const modalBody = document.getElementById('modal-body');
+
+  modalTitulo.textContent = 'Nueva Incapacidad';
+  modalBody.innerHTML = '<p>Cargando trabajadores...</p>';
+  modalOverlay.classList.add('active');
+
+  try {
+    const res = await fetch(API_BASE + 'trabajadores.php');
+    const data = await res.json();
+    const trabajadores = data.success ? (data.data || []).filter(t => t.activo) : [];
+
+    if (trabajadores.length === 0) {
+      modalBody.innerHTML = '<p class="info-box">No hay trabajadores activos para registrar una incapacidad.</p>';
+      return;
+    }
+
+    const opciones = trabajadores.map(t => `<option value="${t.id}">${t.nombre} — ${t.cedula || 'N/D'}</option>`).join('');
+    const hoy = new Date().toISOString().split('T')[0];
+
+    modalBody.innerHTML = `
+      <form id="form-nueva-incapacidad">
+        <div class="form-group">
+          <label for="incapacidad-trabajador-select">Trabajador <span class="required">*</span></label>
+          <select id="incapacidad-trabajador-select" required style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;">
+            <option value="">Seleccione...</option>
+            ${opciones}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="incapacidad-tipo">Tipo de incapacidad <span class="required">*</span></label>
+          <select id="incapacidad-tipo" required style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;">
+            <option value="">Seleccione...</option>
+            <option value="EG">Enfermedad General</option>
+            <option value="AT">Accidente de Trabajo</option>
+            <option value="EL">Enfermedad Laboral</option>
+            <option value="LM">Licencia de Maternidad</option>
+            <option value="LP">Licencia de Paternidad</option>
+            <option value="CIR">Cirugía</option>
+          </select>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="incapacidad-fecha-inicio">Fecha inicio <span class="required">*</span></label>
+            <input type="date" id="incapacidad-fecha-inicio" required value="${hoy}" style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;">
+          </div>
+          <div class="form-group">
+            <label for="incapacidad-fecha-fin">Fecha fin <span class="required">*</span></label>
+            <input type="date" id="incapacidad-fecha-fin" required value="${hoy}" style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="incapacidad-descripcion">Descripción</label>
+          <textarea id="incapacidad-descripcion" rows="3" style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;"></textarea>
+        </div>
+        <div class="form-group">
+          <label for="incapacidad-eps">EPS</label>
+          <input type="text" id="incapacidad-eps" style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;">
+        </div>
+        <div class="form-group" style="display:flex;align-items:center;gap:10px;">
+          <label style="display:flex;align-items:center;gap:8px;font-weight:600;">
+            <input type="checkbox" id="genera-restriccion-checkbox"> Generar restricción relacionada
+          </label>
+        </div>
+        <div id="panel-restriccion-generada" style="display:none;border:1px solid #dee2e6;border-radius:10px;padding:12px;background:#f8f9fa;">
+          <div class="form-group">
+            <label for="tipo-restriccion-generada">Tipo de restricción</label>
+            <select id="tipo-restriccion-generada" style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;">
+              <option value="">Seleccione...</option>
+              <option value="no_fuerza_fisica">No fuerza física</option>
+              <option value="no_turno_noche">No turno noche</option>
+              <option value="movilidad_limitada">Movilidad limitada</option>
+              <option value="problema_visual">Problema visual</option>
+              <option value="puesto_especifico">Puesto específico</option>
+            </select>
+          </div>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="restriccion-fecha-fin">Fecha fin restricción</label>
+              <input type="date" id="restriccion-fecha-fin" style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;">
+            </div>
+            <div class="form-group" style="display:flex;align-items:center;gap:10px;">
+              <label style="display:flex;align-items:center;gap:8px;font-weight:600;">
+                <input type="checkbox" id="restriccion-permanente"> Permanente
+              </label>
+            </div>
+          </div>
+        </div>
+        <div class="form-actions" style="margin-top:1rem;">
+          <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar</button>
+          <button type="button" class="btn btn-outline" onclick="cerrarModal()"><i class="fas fa-times"></i> Cancelar</button>
+        </div>
+      </form>
+    `;
+
+    const checkbox = document.getElementById('genera-restriccion-checkbox');
+    const panel = document.getElementById('panel-restriccion-generada');
+    const permanente = document.getElementById('restriccion-permanente');
+    const restrFin = document.getElementById('restriccion-fecha-fin');
+
+    checkbox.addEventListener('change', function() {
+      panel.style.display = this.checked ? '' : 'none';
+    });
+    permanente.addEventListener('change', function() {
+      restrFin.disabled = this.checked;
+      if (this.checked) restrFin.value = '';
+    });
+
+    document.getElementById('form-nueva-incapacidad').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const trabajador_id = document.getElementById('incapacidad-trabajador-select').value;
+      const tipo = document.getElementById('incapacidad-tipo').value;
+      const fecha_inicio = document.getElementById('incapacidad-fecha-inicio').value;
+      const fecha_fin = document.getElementById('incapacidad-fecha-fin').value;
+      const datos = {
+        trabajador_id,
+        tipo,
+        fecha_inicio,
+        fecha_fin,
+        descripcion: document.getElementById('incapacidad-descripcion').value.trim() || null,
+        eps: document.getElementById('incapacidad-eps').value.trim() || null,
+        genera_restriccion: checkbox.checked,
+        tipo_restriccion_generada: checkbox.checked ? document.getElementById('tipo-restriccion-generada').value : null,
+        restriccion_permanente: permanente.checked,
+        fecha_fin_restriccion: checkbox.checked && !permanente.checked ? document.getElementById('restriccion-fecha-fin').value || null : null
+      };
+
+      if (!trabajador_id || !tipo || !fecha_inicio || !fecha_fin) {
+        mostrarAlerta('Completa todos los campos requeridos', 'warning');
+        return;
+      }
+
+      if (checkbox.checked && !datos.tipo_restriccion_generada) {
+        mostrarAlerta('Selecciona el tipo de restricción generada', 'warning');
+        return;
+      }
+
+      try {
+        const response = await fetch(API_BASE + 'incapacidades.php', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(datos)
+        });
+        const result = await response.json();
+        if (result.success) {
+          mostrarAlerta('✅ Incapacidad registrada correctamente', 'success');
+          cerrarModal();
+          cargarTablaIncapacidades();
+          cargarEstadisticasDashboard();
+        } else {
+          mostrarAlerta('Error: ' + (result.message || 'No se pudo guardar'), 'danger');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        mostrarAlerta('Error al guardar incapacidad', 'danger');
+      }
+    });
+  } catch (error) {
+    console.error('Error:', error);
+    modalBody.innerHTML = '<p class="alert alert-danger">Error al cargar trabajadores</p>';
+  }
+}
+
+async function nuevoDiaEspecial() {
+  const modalOverlay = document.getElementById('modal-overlay');
+  const modalTitulo = document.getElementById('modal-titulo');
+  const modalBody = document.getElementById('modal-body');
+
+  modalTitulo.textContent = 'Nuevo Día Especial';
+  modalBody.innerHTML = '<p>Cargando trabajadores...</p>';
+  modalOverlay.classList.add('active');
+
+  try {
+    const res = await fetch(API_BASE + 'trabajadores.php');
+    const data = await res.json();
+    const trabajadores = data.success ? (data.data || []).filter(t => t.activo) : [];
+
+    if (trabajadores.length === 0) {
+      modalBody.innerHTML = '<p class="info-box">No hay trabajadores activos para registrar un día especial.</p>';
+      return;
+    }
+
+    const opciones = trabajadores.map(t => `<option value="${t.id}">${t.nombre} — ${t.cedula || 'N/D'}</option>`).join('');
+    const hoy = new Date().toISOString().split('T')[0];
+
+    modalBody.innerHTML = `
+      <form id="form-nuevo-dia-especial">
+        <div class="form-group">
+          <label for="dia-especial-trabajador">Trabajador <span class="required">*</span></label>
+          <select id="dia-especial-trabajador" required style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;">
+            <option value="">Seleccione...</option>
+            ${opciones}
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="dia-especial-tipo">Tipo de día especial <span class="required">*</span></label>
+          <select id="dia-especial-tipo" required style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;">
+            <option value="">Seleccione...</option>
+            <option value="LC">LC — Libre cumpleaños</option>
+            <option value="VAC">VAC — Vacaciones</option>
+            <option value="SUS">SUS — Suspensión</option>
+          </select>
+        </div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="dia-especial-fecha-inicio">Fecha inicio <span class="required">*</span></label>
+            <input type="date" id="dia-especial-fecha-inicio" required value="${hoy}" style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;">
+          </div>
+          <div class="form-group">
+            <label for="dia-especial-fecha-fin">Fecha fin</label>
+            <input type="date" id="dia-especial-fecha-fin" value="${hoy}" style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;">
+          </div>
+        </div>
+        <div id="panel-horas-dia-especial" style="display:none; border:1px solid #dee2e6; border-radius:10px; padding:12px; background:#f8f9fa; margin-bottom:1rem;">
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="dia-especial-horas-inicio">Hora inicio</label>
+              <input type="time" id="dia-especial-horas-inicio" style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;">
+            </div>
+            <div class="form-group">
+              <label for="dia-especial-horas-fin">Hora fin</label>
+              <input type="time" id="dia-especial-horas-fin" style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;">
+            </div>
+          </div>
+          <p style="margin:0;font-size:0.85rem;color:#6c757d;">Complete las horas solo para tipos de jornada parcial.</p>
+        </div>
+        <div class="form-group">
+          <label for="dia-especial-descripcion">Descripción</label>
+          <textarea id="dia-especial-descripcion" rows="3" style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;"></textarea>
+        </div>
+        <div class="form-actions" style="margin-top:1rem;">
+          <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar</button>
+          <button type="button" class="btn btn-outline" onclick="cerrarModal()"><i class="fas fa-times"></i> Cancelar</button>
+        </div>
+      </form>
+    `;
+
+    const tipoSelect = document.getElementById('dia-especial-tipo');
+    const panelHoras = document.getElementById('panel-horas-dia-especial');
+    tipoSelect.addEventListener('change', function() {
+      panelHoras.style.display = ['SUP','ADMM','ADMT','ADM'].includes(this.value) ? '' : 'none';
+    });
+
+    document.getElementById('form-nuevo-dia-especial').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const trabajador_id = document.getElementById('dia-especial-trabajador').value;
+      const tipo = document.getElementById('dia-especial-tipo').value;
+      const fecha_inicio = document.getElementById('dia-especial-fecha-inicio').value;
+      const fecha_fin = document.getElementById('dia-especial-fecha-fin').value || null;
+      const horas_inicio = document.getElementById('dia-especial-horas-inicio').value || null;
+      const horas_fin = document.getElementById('dia-especial-horas-fin').value || null;
+      const descripcion = document.getElementById('dia-especial-descripcion').value.trim() || null;
+
+      if (!trabajador_id || !tipo || !fecha_inicio) {
+        mostrarAlerta('Completa todos los campos requeridos', 'warning');
+        return;
+      }
+
+      try {
+        const response = await fetch(API_BASE + 'dias_especiales.php', {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({ trabajador_id, tipo, fecha_inicio, fecha_fin, horas_inicio, horas_fin, descripcion })
+        });
+        const result = await response.json();
+        if (result.success) {
+          mostrarAlerta('✅ Día especial registrado correctamente', 'success');
+          cerrarModal();
+          cargarTablaDiasEspeciales();
+          cargarEstadisticasDashboard();
+        } else {
+          mostrarAlerta('Error: ' + (result.message || 'No se pudo guardar'), 'danger');
+        }
+      } catch (error) {
+        console.error('Error:', error);
+        mostrarAlerta('Error al guardar el día especial', 'danger');
+      }
+    });
+  } catch (error) {
+    console.error('Error:', error);
+    modalBody.innerHTML = '<p class="alert alert-danger">Error al cargar trabajadores</p>';
+  }
+}
+
 async function eliminarIncapacidad(id) {
   const okIncap = await confirmarAccion({ titulo: 'Eliminar incapacidad', mensaje: '¿Eliminar este registro de incapacidad? Esta acción no se puede deshacer.', textoBtn: 'Eliminar', tipoBtn: 'danger', icono: 'fa-file-medical' });
     if (!okIncap) {
@@ -4798,6 +5632,82 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 });
 
+// ── Asignar supervisor desde vista diaria ───────────────────
+// Cargar supervisores disponibles en el select de la vista diaria
+async function cargarSupervisoresDisponiblesDiaria(fecha) {
+    const select = document.getElementById('sel-supervisor-diaria');
+    if (!select) return;
+    
+    try {
+        const res = await fetch(API_BASE + 'trabajadores.php');
+        const data = await res.json();
+        
+        if (!data.success || !data.data) return;
+        
+        // Filtrar solo supervisores activos
+        const supervisores = data.data
+            .filter(t => t.activo && String(t.cargo || '').toLowerCase() === 'supervisor')
+            .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' }));
+        
+        select.innerHTML = '<option value="">Seleccionar...</option>';
+        supervisores.forEach(s => {
+            const opt = document.createElement('option');
+            opt.value = s.id;
+            opt.textContent = s.nombre + ' (' + (s.cedula || 'sin cédula') + ')';
+            select.appendChild(opt);
+        });
+    } catch(e) {
+        console.error('Error cargando supervisores:', e);
+    }
+}
+
+// Agregar supervisor desde el formulario de la vista diaria
+async function agregarSupervisorDiaria(fecha) {
+    const select = document.getElementById('sel-supervisor-diaria');
+    const hi = document.getElementById('sup-hora-inicio-diaria');
+    const hf = document.getElementById('sup-hora-fin-diaria');
+    
+    if (!select.value || !hi.value || !hf.value) {
+        mostrarAlerta('⚠️ Completa todos los campos: supervisor, hora entrada y salida', 'warning');
+        return;
+    }
+    
+    mostrarSpinner('Guardando supervisor...');
+    
+    try {
+        const res = await fetch(API_BASE + 'supervisores_turno.php', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                action: 'crear',
+                trabajador_id: select.value,
+                fecha: fecha,
+                hora_inicio: hi.value + ':00',
+                hora_fin: hf.value + ':00'
+            })
+        });
+        
+        const r = await res.json();
+        ocultarSpinner();
+        
+        if (r.success) {
+            mostrarAlerta('✅ Supervisor asignado correctamente', 'success');
+            // Limpiar formulario
+            select.value = '';
+            hi.value = '';
+            hf.value = '';
+            // Recargar vista
+            cargarVistaDiaria();
+        } else {
+            mostrarAlerta('❌ Error: ' + (r.message || 'No se pudo guardar'), 'danger');
+        }
+    } catch(e) {
+        ocultarSpinner();
+        mostrarAlerta('Error de conexión', 'danger');
+        console.error(e);
+    }
+}
+
 
 // ══════════════════════════════════════════════════════════════
 // SUPERVISORES — editar y eliminar desde vista diaria
@@ -4910,4 +5820,625 @@ async function eliminarSupervisorTurno(id, nombre, fecha) {
             mostrarAlerta('❌ ' + (r.message||'Error'), 'danger');
         }
     } catch(e) { ocultarSpinner(); mostrarAlerta('Error de conexión', 'danger'); }
+}
+
+
+// ══════════════════════════════════════════════════════════════
+// GESTIÓN DE TRABAJADORES
+// ══════════════════════════════════════════════════════════════
+
+async function cargarTablaTrabajadores() {
+    const tabla = document.getElementById('tabla-trabajadores');
+    if (!tabla) return;
+
+    const parent = tabla.parentElement || document.body;
+    if (!document.getElementById('trabajadores-filter-container')) {
+        const div = document.createElement('div');
+        div.id = 'trabajadores-filter-container';
+        div.style.cssText = 'margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;';
+        div.innerHTML = `
+            <div style="position:relative;flex:1;min-width:200px;">
+                <i class="fas fa-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#adb5bd;font-size:0.85rem;"></i>
+                <input type="text" id="buscar-trabajador" placeholder="Buscar por nombre o cédula..."
+                    style="width:100%;padding:8px 8px 8px 32px;border:1px solid #ced4da;border-radius:6px;font-size:0.9rem;box-sizing:border-box;">
+            </div>
+            <select id="filter-trabajadores" class="filter-select" style="padding:8px;border:1px solid #ced4da;border-radius:6px;">
+                <option value="all">Todos</option>
+                <option value="activos" selected>Activos</option>
+                <option value="inactivos">Inactivos</option>
+            </select>
+            <span id="trabajadores-count" style="font-size:0.85rem;color:#6c757d;white-space:nowrap;"></span>`;
+        parent.insertBefore(div, tabla);
+        document.getElementById('buscar-trabajador').addEventListener('input', filtrarTablaTrabajadores);
+        document.getElementById('filter-trabajadores').addEventListener('change', filtrarTablaTrabajadores);
+    }
+
+    try {
+        const res  = await fetch(API_BASE + 'trabajadores.php?incluir_inactivos=1');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data)) {
+            tabla.dataset.trabajadores = JSON.stringify(data.data);
+            filtrarTablaTrabajadores();
+        } else {
+            tabla.innerHTML = '<p class="info-box">No hay trabajadores registrados.</p>';
+        }
+    } catch(e) {
+        tabla.innerHTML = '<p class="alert alert-danger">Error al cargar trabajadores</p>';
+    }
+}
+
+function filtrarTablaTrabajadores() {
+    const tabla = document.getElementById('tabla-trabajadores');
+    if (!tabla || !tabla.dataset.trabajadores) return;
+
+    const todos    = JSON.parse(tabla.dataset.trabajadores);
+    const filtro   = document.getElementById('filter-trabajadores')?.value || 'all';
+    const busqueda = (document.getElementById('buscar-trabajador')?.value || '').toLowerCase().trim();
+
+    let lista = todos.slice();
+    if (filtro === 'activos')   lista = lista.filter(t => t.activo == 1 || t.activo === true);
+    if (filtro === 'inactivos') lista = lista.filter(t => t.activo == 0 || t.activo === false);
+    if (busqueda) lista = lista.filter(t =>
+        (t.nombre||'').toLowerCase().includes(busqueda) || (t.cedula||'').includes(busqueda)
+    );
+
+    const counter = document.getElementById('trabajadores-count');
+    if (counter) counter.textContent = (busqueda || filtro !== 'all')
+        ? lista.length + ' de ' + todos.length + ' trabajadores'
+        : lista.length + ' trabajadores';
+
+    if (lista.length === 0) {
+        tabla.innerHTML = busqueda
+            ? '<p class="info-box">No se encontraron resultados para "<strong>' + busqueda + '</strong>".</p>'
+            : '<p class="info-box">No hay trabajadores registrados.</p>';
+        return;
+    }
+
+    const resalt = (txt, q) => {
+        if (!q || !txt) return txt || '';
+        return txt.replace(new RegExp('(' + q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + ')','gi'),
+            '<mark style="background:#fff3cd;padding:0 2px;border-radius:2px;">$1</mark>');
+    };
+
+    let html = '<table><thead><tr style="background:linear-gradient(135deg,var(--terminal) 0%,#027433 100%);color:white;">';
+    html += '<th>Nombre</th><th>Cédula</th><th>Cargo</th><th>Teléfono</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>';
+    lista.forEach(t => {
+        const activo = t.activo == 1 || t.activo === true;
+        const cargo  = t.cargo === 'Supervisor'
+            ? '<span style="background:#f3e8ff;color:#6b21a8;padding:2px 8px;border-radius:4px;font-size:0.78rem;font-weight:700;">Supervisor</span>'
+            : '<span style="background:#e8f5e9;color:#1b5e20;padding:2px 8px;border-radius:4px;font-size:0.78rem;">Aux. Operativo</span>';
+        const nom = t.nombre.replace(/'/g,"\\'");
+        html += '<tr>';
+        html += '<td>' + resalt(t.nombre, busqueda) + '</td>';
+        html += '<td>' + resalt(String(t.cedula), busqueda) + '</td>';
+        html += '<td>' + (t.cargo ? cargo : '-') + '</td>';
+        html += '<td>' + (t.telefono || '-') + '</td>';
+        html += '<td><span class="puesto-status ' + (activo?'status-ok':'status-empty') + '">' + (activo?'Activo':'Inactivo') + '</span></td>';
+        html += '<td>';
+        html += '<button class="btn btn-sm btn-secondary" onclick="editarTrabajador(' + t.id + ')" title="Editar"><i class="fas fa-edit"></i></button> ';
+        if (activo) {
+            html += '<button class="btn btn-sm btn-outline" onclick="desactivarTrabajador(' + t.id + ',\'' + nom + '\')" title="Desactivar"><i class="fas fa-ban"></i></button> ';
+        } else {
+            html += '<button class="btn btn-sm btn-primary" onclick="activarTrabajador(' + t.id + ')" title="Activar"><i class="fas fa-check"></i></button> ';
+        }
+        html += '<button class="btn btn-sm btn-danger" onclick="eliminarTrabajador(' + t.id + ',\'' + nom + '\')" title="Eliminar"><i class="fas fa-trash"></i></button>';
+        html += '</td></tr>';
+    });
+    html += '</tbody></table>';
+    tabla.innerHTML = html;
+}
+
+function nuevoTrabajador() {
+    const modalOverlay = document.getElementById('modal-overlay');
+    const modalTitulo  = document.getElementById('modal-titulo');
+    const modalBody    = document.getElementById('modal-body');
+    modalTitulo.textContent = 'Nuevo Trabajador';
+    modalBody.innerHTML = `
+        <form id="form-nuevo-trabajador">
+            <div class="form-group">
+                <label for="nombre-trabajador">Nombre Completo <span class="required">*</span></label>
+                <input type="text" id="nombre-trabajador" required placeholder="Ej: Juan Pérez García">
+            </div>
+            <div class="form-group">
+                <label for="cedula-trabajador">Cédula <span class="required">*</span></label>
+                <input type="text" id="cedula-trabajador" required placeholder="Ej: 1234567890" pattern="[0-9]{1,}">
+            </div>
+            <div class="form-group">
+                <label for="cargo-trabajador">Cargo <span class="required">*</span></label>
+                <select id="cargo-trabajador" required style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;font-size:0.9rem;">
+                    <option value="Auxiliar Operativo" selected>Auxiliar Operativo</option>
+                    <option value="Supervisor">Supervisor</option>
+                </select>
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="telefono-trabajador">Teléfono</label>
+                    <input type="tel" id="telefono-trabajador" placeholder="Ej: 3001234567" maxlength="10">
+                </div>
+                <div class="form-group">
+                    <label for="email-trabajador">Email</label>
+                    <input type="email" id="email-trabajador" placeholder="Ej: juan@correo.com">
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="fecha-ingreso-trabajador">Fecha de Ingreso <span class="required">*</span></label>
+                <input type="date" id="fecha-ingreso-trabajador" required value="${new Date().toISOString().split('T')[0]}">
+            </div>
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar</button>
+                <button type="button" class="btn btn-outline" onclick="cerrarModal()"><i class="fas fa-times"></i> Cancelar</button>
+            </div>
+        </form>`;
+    modalOverlay.style.display = 'flex';
+    document.getElementById('form-nuevo-trabajador').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const nombre = document.getElementById('nombre-trabajador').value.trim();
+        const cedula = document.getElementById('cedula-trabajador').value.trim();
+        if (!/^[0-9]+$/.test(cedula)) { mostrarAlerta('La cédula solo debe contener números','danger'); return; }
+        const datos = {
+            nombre, cedula,
+            cargo:         document.getElementById('cargo-trabajador').value,
+            telefono:      document.getElementById('telefono-trabajador').value.trim() || null,
+            email:         document.getElementById('email-trabajador').value.trim() || null,
+            fecha_ingreso: document.getElementById('fecha-ingreso-trabajador').value
+        };
+        try {
+            const res  = await fetch(API_BASE + 'trabajadores.php', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(datos) });
+            const data = await res.json();
+            if (data.success) {
+                mostrarAlerta('✅ Trabajador creado correctamente','success');
+                cerrarModal();
+                cargarTablaTrabajadores();
+            } else {
+                mostrarAlerta('Error: ' + (data.message||'No se pudo guardar'),'danger');
+            }
+        } catch(err) { mostrarAlerta('Error de conexión','danger'); }
+    });
+}
+
+async function editarTrabajador(id) {
+    const modalOverlay = document.getElementById('modal-overlay');
+    const modalTitulo  = document.getElementById('modal-titulo');
+    const modalBody    = document.getElementById('modal-body');
+    try {
+        const res  = await fetch(API_BASE + 'trabajadores.php?id=' + id);
+        const data = await res.json();
+        if (!data.success || !data.data) { mostrarAlerta('No se pudo cargar el trabajador','danger'); return; }
+        const t = data.data;
+        modalTitulo.textContent = 'Editar Trabajador';
+        modalBody.innerHTML = `
+            <form id="form-editar-trabajador">
+                <input type="hidden" id="edit-trab-id" value="${t.id}">
+                <div class="form-group">
+                    <label>Nombre Completo <span class="required">*</span></label>
+                    <input type="text" id="edit-nombre-trabajador" required value="${t.nombre}">
+                </div>
+                <div class="form-group">
+                    <label>Cédula <span class="required">*</span></label>
+                    <input type="text" id="edit-cedula-trabajador" required value="${t.cedula}">
+                </div>
+                <div class="form-group">
+                    <label>Cargo</label>
+                    <select id="edit-cargo-trabajador" style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;font-size:0.9rem;">
+                        <option value="Auxiliar Operativo" ${(!t.cargo || t.cargo==='Auxiliar Operativo')?'selected':''}>Auxiliar Operativo</option>
+                        <option value="Supervisor" ${t.cargo==='Supervisor'?'selected':''}>Supervisor</option>
+                    </select>
+                </div>
+                <div class="form-grid">
+                    <div class="form-group">
+                        <label>Teléfono</label>
+                        <input type="tel" id="edit-telefono-trabajador" value="${t.telefono||''}">
+                    </div>
+                    <div class="form-group">
+                        <label>Email</label>
+                        <input type="email" id="edit-email-trabajador" value="${t.email||''}">
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar Cambios</button>
+                    <button type="button" class="btn btn-outline" onclick="cerrarModal()"><i class="fas fa-times"></i> Cancelar</button>
+                </div>
+            </form>`;
+        modalOverlay.style.display = 'flex';
+        document.getElementById('form-editar-trabajador').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const datos = {
+                nombre:   document.getElementById('edit-nombre-trabajador').value,
+                cedula:   document.getElementById('edit-cedula-trabajador').value,
+                cargo:    document.getElementById('edit-cargo-trabajador').value,
+                telefono: document.getElementById('edit-telefono-trabajador').value || null,
+                email:    document.getElementById('edit-email-trabajador').value || null
+            };
+            try {
+                const res  = await fetch(API_BASE + 'trabajadores.php?id=' + id, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify(datos) });
+                const data = await res.json();
+                if (data.success) { mostrarAlerta('✅ Trabajador actualizado','success'); cerrarModal(); cargarTablaTrabajadores(); }
+                else mostrarAlerta('Error: ' + (data.message||'No se pudo actualizar'),'danger');
+            } catch(err) { mostrarAlerta('Error de conexión','danger'); }
+        });
+    } catch(e) { mostrarAlerta('Error al cargar trabajador','danger'); }
+}
+
+async function eliminarTrabajador(id, nombre) {
+    const ok = await confirmarAccion({ titulo:'Eliminar trabajador', mensaje:'¿Eliminar a <strong>'+nombre+'</strong>? Esta acción no se puede deshacer.', textoBtn:'Eliminar', tipoBtn:'danger', icono:'fa-user-times' });
+    if (!ok) return;
+    try {
+        const res  = await fetch(API_BASE + 'trabajadores.php?id=' + id, { method:'DELETE' });
+        const data = await res.json();
+        if (data.success) { mostrarAlerta('✅ Trabajador eliminado','success'); cargarTablaTrabajadores(); }
+        else mostrarAlerta('Error: ' + (data.message||'No se pudo eliminar'),'danger');
+    } catch(e) { mostrarAlerta('Error de conexión','danger'); }
+}
+
+async function desactivarTrabajador(id, nombre) {
+    const ok = await confirmarAccion({ titulo:'Desactivar trabajador', mensaje:'¿Desactivar a <strong>'+nombre+'</strong>? No aparecerá en asignaciones futuras.', textoBtn:'Desactivar', tipoBtn:'warning', icono:'fa-ban' });
+    if (!ok) return;
+    try {
+        const res  = await fetch(API_BASE + 'trabajadores.php?id=' + id, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({activo:false}) });
+        const data = await res.json();
+        if (data.success) { mostrarAlerta('✅ Trabajador desactivado','success'); cargarTablaTrabajadores(); }
+        else mostrarAlerta('Error: ' + (data.message||'No se pudo desactivar'),'danger');
+    } catch(e) { mostrarAlerta('Error de conexión','danger'); }
+}
+
+async function activarTrabajador(id) {
+    try {
+        const res  = await fetch(API_BASE + 'trabajadores.php?id=' + id, { method:'PUT', headers:{'Content-Type':'application/json'}, body:JSON.stringify({activo:true}) });
+        const data = await res.json();
+        if (data.success) { mostrarAlerta('✅ Trabajador activado','success'); cargarTablaTrabajadores(); }
+        else mostrarAlerta('Error: ' + (data.message||'No se pudo activar'),'danger');
+    } catch(e) { mostrarAlerta('Error de conexión','danger'); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// GESTIÓN DE RESTRICCIONES
+// ══════════════════════════════════════════════════════════════
+
+async function cargarTablaRestricciones() {
+    const tabla = document.getElementById('tabla-restricciones');
+    if (!tabla) return;
+    try {
+        const [resTrab, resRestr] = await Promise.all([
+            fetch(API_BASE + 'trabajadores.php').then(r => r.json()),
+            fetch(API_BASE + 'trabajadores.php?action=restricciones').then(r => r.json())
+        ]);
+        const trabajadores = resTrab.success ? resTrab.data.filter(t => t.activo) : [];
+        const restricciones = resRestr.success ? (resRestr.data || []) : [];
+
+        if (restricciones.length === 0) {
+            tabla.innerHTML = '<p class="info-box">No hay restricciones registradas.</p>';
+            return;
+        }
+        let html = '<table><thead><tr style="background:linear-gradient(135deg,var(--terminal) 0%,#027433 100%);color:white;">';
+        html += '<th>Trabajador</th><th>Tipo</th><th>Descripción</th><th>Vigencia</th><th>Acciones</th></tr></thead><tbody>';
+        restricciones.forEach(r => {
+            html += '<tr>';
+            html += '<td>' + (r.trabajador_nombre || r.nombre || '-') + '</td>';
+            html += '<td><span style="background:#f8d7da;color:#721c24;padding:2px 8px;border-radius:4px;font-size:0.82rem;font-weight:600;">' + (r.tipo_restriccion || r.tipo || '-') + '</span></td>';
+            html += '<td>' + (r.descripcion || '-') + '</td>';
+            html += '<td>' + (r.fecha_inicio || '-') + (r.fecha_fin ? ' al ' + r.fecha_fin : ' (indefinida)') + '</td>';
+            html += '<td><button class="btn btn-sm btn-danger" onclick="eliminarRestriccion(' + r.id + ')"><i class="fas fa-trash"></i></button></td>';
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+        tabla.innerHTML = html;
+    } catch(e) {
+        tabla.innerHTML = '<p class="alert alert-danger">Error al cargar restricciones</p>';
+    }
+}
+
+function cambiarTabRestricciones(tab) {
+    const btnLista = document.getElementById('tab-restr-lista');
+    const btnMatriz = document.getElementById('tab-restr-matriz');
+    const panelLista = document.getElementById('panel-restr-lista');
+    const panelMatriz = document.getElementById('panel-restr-matriz');
+    if (!btnLista || !btnMatriz || !panelLista || !panelMatriz) return;
+
+    const esLista = tab === 'lista';
+    panelLista.style.display = esLista ? '' : 'none';
+    panelMatriz.style.display = esLista ? 'none' : '';
+
+    btnLista.style.borderBottomColor = esLista ? 'var(--terminal)' : 'transparent';
+    btnLista.style.color = esLista ? 'var(--terminal)' : '#6c757d';
+    btnLista.style.fontWeight = esLista ? '700' : '600';
+
+    btnMatriz.style.borderBottomColor = esLista ? 'transparent' : 'var(--terminal)';
+    btnMatriz.style.color = esLista ? '#6c757d' : 'var(--terminal)';
+    btnMatriz.style.fontWeight = esLista ? '600' : '700';
+
+    if (esLista) {
+        cargarTablaRestricciones();
+    } else {
+        cargarMatrizPuestos();
+    }
+}
+
+async function cargarMatrizPuestos() {
+    const cont = document.getElementById('matriz-puestos-container');
+    if (!cont) return;
+    cont.innerHTML = '<div class="dash-loading"><i class="fas fa-spinner fa-spin"></i> Cargando matriz...</div>';
+
+    try {
+        const [resTrab, resRestr] = await Promise.all([
+            fetch(API_BASE + 'trabajadores.php').then(r => r.json()),
+            fetch(API_BASE + 'trabajadores.php?action=restricciones').then(r => r.json())
+        ]);
+        const trabajadores = resTrab.success ? (resTrab.data || []).filter(t => t.activo) : [];
+        const restricciones = resRestr.success ? (resRestr.data || []) : [];
+
+        if (trabajadores.length === 0) {
+            cont.innerHTML = '<p class="info-box">No hay trabajadores activos para mostrar la matriz.</p>';
+            return;
+        }
+
+        const tipos = ['no_fuerza_fisica', 'no_turno_noche', 'movilidad_limitada', 'problema_visual', 'puesto_especifico'];
+        const etiquetas = {
+            no_fuerza_fisica: 'No fuerza física',
+            no_turno_noche: 'No turno noche',
+            movilidad_limitada: 'Movilidad limitada',
+            problema_visual: 'Problema visual',
+            puesto_especifico: 'Puesto específico'
+        };
+
+        const restrPorTrab = {};
+        restricciones.forEach(r => {
+            if (!restrPorTrab[r.trabajador_id]) restrPorTrab[r.trabajador_id] = [];
+            restrPorTrab[r.trabajador_id].push(r);
+        });
+
+        let html = '<div style="overflow:auto;">';
+        html += '<table><thead><tr style="background:linear-gradient(135deg,var(--terminal) 0%,#027433 100%);color:white;">';
+        html += '<th>Trabajador</th>';
+        tipos.forEach(tipo => html += `<th>${etiquetas[tipo]}</th>`);
+        html += '<th>Acciones</th></tr></thead><tbody>';
+
+        trabajadores.forEach(t => {
+            const restrs = restrPorTrab[t.id] || [];
+            html += '<tr>';
+            html += '<td>' + t.nombre + ' <span style="color:#6c757d;font-size:0.85rem;">(' + (t.cedula||'-') + ')</span></td>';
+            tipos.forEach(tipo => {
+                const restr = restrs.find(r => (r.tipo_restriccion || r.tipo) === tipo);
+                if (restr) {
+                    html += '<td style="text-align:center;"><span style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:999px;background:#f8d7da;color:#721c24;font-size:0.82rem;">Bloqueado</span></td>';
+                } else {
+                    html += '<td style="text-align:center;"><span style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:999px;background:#d4edda;color:#155724;font-size:0.82rem;">Permitido</span></td>';
+                }
+            });
+            html += `<td style="text-align:center;"><button class="btn btn-sm btn-secondary" onclick="verRestriccionesTrabajador(${t.id})"><i class="fas fa-eye"></i></button></td>`;
+            html += '</tr>';
+        });
+
+        html += '</tbody></table></div>';
+        cont.innerHTML = html;
+    } catch (error) {
+        cont.innerHTML = '<p class="alert alert-danger">Error al cargar matriz de restricciones</p>';
+    }
+}
+
+async function verRestriccionesTrabajador(trabajadorId) {
+    const modalOverlay = document.getElementById('modal-overlay');
+    const modalTitulo = document.getElementById('modal-titulo');
+    const modalBody = document.getElementById('modal-body');
+
+    modalTitulo.textContent = 'Restricciones del trabajador';
+    modalBody.innerHTML = '<p>Cargando datos...</p>';
+    modalOverlay.classList.add('active');
+
+    try {
+        const res = await fetch(API_BASE + 'trabajadores.php?id=' + trabajadorId);
+        const data = await res.json();
+        if (!data.success || !data.data) {
+            modalBody.innerHTML = '<p class="alert alert-danger">No se pudo cargar la información del trabajador.</p>';
+            return;
+        }
+
+        const t = data.data;
+        const restrs = Array.isArray(t.restricciones) ? t.restricciones : [];
+        const rows = restrs.length > 0
+            ? restrs.map(r => `<div class="restriccion-item"><strong>${r.tipo_restriccion || r.tipo}</strong><span>${r.descripcion || '-'}</span><small>${r.fecha_inicio || '-'}${r.fecha_fin ? ' al ' + r.fecha_fin : ''}</small></div>`).join('')
+            : '<p class="info-box">No tiene restricciones activas.</p>';
+
+        modalBody.innerHTML = `
+            <div style="margin-bottom:1rem;">
+                <p style="margin:0 0 8px;font-weight:700;">${t.nombre} — ${t.cedula || 'sin cédula'}</p>
+                <p style="margin:0;color:#6c757d;">Área: ${t.area || 'N/D'} · Cargo: ${t.cargo || 'N/D'}</p>
+            </div>
+            <div style="margin-bottom:1rem;">${rows}</div>
+            <div style="display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;">
+                <button class="btn btn-primary" onclick="nuevaRestriccionModal(${t.id})"><i class="fas fa-plus"></i> Agregar restricción</button>
+                <button class="btn btn-outline" onclick="cerrarModal()"><i class="fas fa-times"></i> Cerrar</button>
+            </div>
+        `;
+    } catch (error) {
+        modalBody.innerHTML = '<p class="alert alert-danger">Error al cargar restricciones del trabajador.</p>';
+    }
+}
+
+function nuevaRestriccionModal(trabajadorId) {
+    const modalOverlay = document.getElementById('modal-overlay');
+    const modalTitulo = document.getElementById('modal-titulo');
+    const modalBody = document.getElementById('modal-body');
+    modalTitulo.textContent = 'Agregar restricción';
+
+    modalBody.innerHTML = `
+        <form id="form-nueva-restriccion">
+            <input type="hidden" id="restriccion-trabajador-id" value="${trabajadorId}">
+            <div class="form-group">
+                <label for="restriccion-tipo-select">Tipo de restricción <span class="required">*</span></label>
+                <select id="restriccion-tipo-select" required style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;">
+                    <option value="">Seleccione...</option>
+                    <option value="no_fuerza_fisica">No fuerza física</option>
+                    <option value="no_turno_noche">No turno noche</option>
+                    <option value="movilidad_limitada">Movilidad limitada</option>
+                    <option value="problema_visual">Problema visual</option>
+                    <option value="puesto_especifico">Puesto específico</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label for="restriccion-descripcion">Descripción</label>
+                <textarea id="restriccion-descripcion" rows="3" style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;"></textarea>
+            </div>
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="restriccion-fecha-inicio">Fecha inicio <span class="required">*</span></label>
+                    <input type="date" id="restriccion-fecha-inicio" required style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;">
+                </div>
+                <div class="form-group">
+                    <label for="restriccion-fecha-fin">Fecha fin</label>
+                    <input type="date" id="restriccion-fecha-fin" style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;">
+                </div>
+            </div>
+            <div class="form-actions" style="margin-top:1rem;">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Guardar</button>
+                <button type="button" class="btn btn-outline" onclick="cerrarModal()"><i class="fas fa-times"></i> Cancelar</button>
+            </div>
+        </form>
+    `;
+    modalOverlay.style.display = 'flex';
+    document.getElementById('form-nueva-restriccion').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const trabajador_id = document.getElementById('restriccion-trabajador-id').value;
+        const tipo = document.getElementById('restriccion-tipo-select').value;
+        const descripcion = document.getElementById('restriccion-descripcion').value.trim();
+        const fecha_inicio = document.getElementById('restriccion-fecha-inicio').value;
+        const fecha_fin = document.getElementById('restriccion-fecha-fin').value || null;
+        if (!trabajador_id || !tipo || !fecha_inicio) {
+            mostrarAlerta('Completa los campos obligatorios','warning');
+            return;
+        }
+        await guardarNuevaRestriccion({ trabajador_id, tipo_restriccion: tipo, descripcion, fecha_inicio, fecha_fin });
+        cerrarModal();
+        cargarTablaRestricciones();
+        cargarMatrizPuestos();
+    });
+}
+
+async function eliminarRestriccion(id) {
+    const ok = await confirmarAccion({ titulo:'Eliminar restricción', mensaje:'¿Eliminar esta restricción?', textoBtn:'Eliminar', tipoBtn:'danger', icono:'fa-trash' });
+    if (!ok) return;
+    try {
+        const res  = await fetch(API_BASE + 'trabajadores.php?action=restriccion&id=' + id, { method:'DELETE' });
+        const data = await res.json();
+        if (data.success) { mostrarAlerta('✅ Restricción eliminada','success'); cargarTablaRestricciones(); }
+        else mostrarAlerta('Error: ' + (data.message || 'No se pudo eliminar'), 'danger');
+    } catch(e) { mostrarAlerta('Error de conexión','danger'); }
+}
+
+async function agregarRestriccionDesdeSeccion() {
+    const trabId = document.getElementById('restriccion-trabajador-select')?.value;
+    const tipo   = document.getElementById('restriccion-tipo-select')?.value;
+    const desc   = document.getElementById('restriccion-descripcion')?.value?.trim() || '';
+    const fi     = document.getElementById('restriccion-fecha-inicio')?.value;
+    const ff     = document.getElementById('restriccion-fecha-fin')?.value || null;
+    if (!trabId || !tipo || !fi) { mostrarAlerta('Completa los campos obligatorios','warning'); return; }
+    await guardarNuevaRestriccion({ trabajador_id: trabId, tipo_restriccion: tipo, descripcion: desc, fecha_inicio: fi, fecha_fin: ff });
+}
+
+async function guardarNuevaRestriccion(datos) {
+    try {
+        const res  = await fetch(API_BASE + 'trabajadores.php?action=restriccion', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(datos) });
+        const data = await res.json();
+        if (data.success) { mostrarAlerta('✅ Restricción guardada','success'); cargarTablaRestricciones(); }
+        else mostrarAlerta('Error: ' + (data.message || 'No se pudo guardar'),'danger');
+    } catch(e) { mostrarAlerta('Error de conexión','danger'); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// GESTIÓN DE INCAPACIDADES
+// ══════════════════════════════════════════════════════════════
+
+async function cargarTablaIncapacidades() {
+    const tabla = document.getElementById('tabla-incapacidades');
+    if (!tabla) return;
+    try {
+        const res  = await fetch(API_BASE + 'incapacidades.php');
+        const data = await res.json();
+        if (!data.success || !data.data || data.data.length === 0) {
+            tabla.innerHTML = '<p class="info-box">No hay incapacidades registradas.</p>';
+            return;
+        }
+        let html = '<table><thead><tr style="background:linear-gradient(135deg,var(--terminal) 0%,#027433 100%);color:white;">';
+        html += '<th>Trabajador</th><th>Tipo</th><th>Inicio</th><th>Fin</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>';
+        data.data.forEach(inc => {
+            const estadoColor = inc.estado === 'activa' ? '#d4edda' : '#f8d7da';
+            const estadoTxt   = inc.estado === 'activa' ? '#155724' : '#721c24';
+            html += '<tr>';
+            html += '<td>' + (inc.trabajador || inc.trabajador_nombre || '-') + '</td>';
+            html += '<td>' + (inc.tipo || inc.tipo_incapacidad || '-') + '</td>';
+            html += '<td>' + (inc.fecha_inicio || '-') + '</td>';
+            html += '<td>' + (inc.fecha_fin || 'Indefinida') + '</td>';
+            html += '<td><span style="background:' + estadoColor + ';color:' + estadoTxt + ';padding:2px 8px;border-radius:4px;font-size:0.82rem;font-weight:600;">' + (inc.estado || '-') + '</span></td>';
+            html += '<td><button class="btn btn-sm btn-secondary" onclick="editarIncapacidad(' + inc.id + ')"><i class="fas fa-edit"></i></button> ';
+            html += '<button class="btn btn-sm btn-danger" onclick="eliminarIncapacidad(' + inc.id + ')"><i class="fas fa-trash"></i></button></td>';
+            html += '</tr>';
+        });
+        html += '</tbody></table>';
+        tabla.innerHTML = html;
+    } catch(e) {
+        tabla.innerHTML = '<p class="alert alert-danger">Error al cargar incapacidades</p>';
+    }
+}
+
+async function eliminarIncapacidad(id) {
+    const ok = await confirmarAccion({ titulo:'Eliminar incapacidad', mensaje:'¿Eliminar esta incapacidad?', textoBtn:'Eliminar', tipoBtn:'danger', icono:'fa-trash' });
+    if (!ok) return;
+    try {
+        const res  = await fetch(API_BASE + 'incapacidades.php?id=' + id, { method:'DELETE' });
+        const data = await res.json();
+        if (data.success) { mostrarAlerta('✅ Incapacidad eliminada','success'); cargarTablaIncapacidades(); }
+        else mostrarAlerta('Error: ' + (data.message || 'No se pudo eliminar'),'danger');
+    } catch(e) { mostrarAlerta('Error de conexión','danger'); }
+}
+
+// ══════════════════════════════════════════════════════════════
+// GESTIÓN DE DÍAS ESPECIALES
+// ══════════════════════════════════════════════════════════════
+
+async function cargarTablaDiasEspeciales() {
+    const tabla = document.getElementById('tabla-dias-especiales');
+    if (!tabla) return;
+    try {
+        const res  = await fetch(API_BASE + 'dias_especiales.php?excluir_tipos=L,L8,LC');
+        const data = await res.json();
+        if (!data.success || !data.data || data.data.length === 0) {
+            tabla.innerHTML = '<p class="info-box">No hay días especiales registrados.</p>';
+            return;
+        }
+        const colores = { L:'#cce5ff', L8:'#cce5ff', LC:'#b8daff', VAC:'#d4edda', SUS:'#fff3cd', ADMM:'#fde8d8', ADMT:'#fde8d8', ADM:'#fde8d8', INC:'#f8d7da' };
+        const textos  = { L:'#004085', L8:'#004085', LC:'#003580', VAC:'#155724', SUS:'#856404', ADMM:'#7d3800', ADMT:'#7d3800', ADM:'#7d3800', INC:'#721c24' };
+        let html = '<table><thead><tr style="background:linear-gradient(135deg,var(--terminal) 0%,#027433 100%);color:white;">';
+        html += '<th>Trabajador</th><th>Tipo</th><th>Fecha inicio</th><th>Fecha fin</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>';
+        data.data.forEach(d => {
+            const bg  = colores[d.tipo] || '#e9ecef';
+            const col = textos[d.tipo]  || '#495057';
+            html += '<tr>';
+            html += '<td>' + (d.trabajador || '-') + '</td>';
+            html += '<td><span style="background:' + bg + ';color:' + col + ';padding:2px 8px;border-radius:4px;font-size:0.82rem;font-weight:700;">' + (d.tipo||'-') + '</span></td>';
+            html += '<td>' + (d.fecha_inicio||'-') + '</td>';
+            html += '<td>' + (d.fecha_fin||'—') + '</td>';
+            html += '<td>' + (d.estado||'-') + '</td>';
+            html += '<td>';
+            html += '<button class="btn btn-sm btn-danger" onclick="eliminarDiaEspecial(' + d.id + ',\'' + (d.tipo||'') + '\')"><i class="fas fa-trash"></i></button>';
+            html += '</td></tr>';
+        });
+        html += '</tbody></table>';
+        tabla.innerHTML = html;
+    } catch(e) {
+        tabla.innerHTML = '<p class="alert alert-danger">Error al cargar días especiales</p>';
+    }
+}
+
+async function eliminarDiaEspecial(id, tipo) {
+    const ok = await confirmarAccion({ titulo:'Eliminar día especial', mensaje:'¿Eliminar este registro de <strong>' + tipo + '</strong>?', textoBtn:'Eliminar', tipoBtn:'danger', icono:'fa-trash' });
+    if (!ok) return;
+    try {
+        const res  = await fetch(API_BASE + 'dias_especiales.php', { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ action:'eliminar', id }) });
+        const data = await res.json();
+        if (data.success) { mostrarAlerta('✅ Eliminado correctamente','success'); cargarTablaDiasEspeciales(); }
+        else mostrarAlerta('Error: ' + (data.message||'No se pudo eliminar'),'danger');
+    } catch(e) { mostrarAlerta('Error de conexión','danger'); }
+}
+
+function editarDiaEspecial(id) {
+    mostrarAlerta('Para editar un día especial usa el formulario de nuevo día especial o la vista mensual del calendario.','info');
 }

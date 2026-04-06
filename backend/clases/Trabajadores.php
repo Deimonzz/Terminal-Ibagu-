@@ -175,6 +175,29 @@ class Trabajadores {
         $stmt->execute([':id' => $trabajador_id]);
         return $stmt->fetchAll();
     }
+
+    public function obtenerListaRestricciones($filtros = []) {
+        $sql = "SELECT rt.*, t.nombre as trabajador_nombre, t.cedula
+                FROM restricciones_trabajador rt
+                INNER JOIN trabajadores t ON rt.trabajador_id = t.id
+                WHERE rt.activa = true";
+        $params = [];
+
+        if (!empty($filtros['trabajador_id'])) {
+            $sql .= " AND rt.trabajador_id = :trabajador_id";
+            $params[':trabajador_id'] = $filtros['trabajador_id'];
+        }
+
+        if (!empty($filtros['tipo'])) {
+            $sql .= " AND rt.tipo_restriccion = :tipo";
+            $params[':tipo'] = $filtros['tipo'];
+        }
+
+        $sql .= " ORDER BY rt.fecha_inicio DESC";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        return $stmt->fetchAll();
+    }
     
     public function agregarRestriccion($datos) {
         $sql = "INSERT INTO restricciones_trabajador 
@@ -304,7 +327,8 @@ class Trabajadores {
                     AND rt.activa = true 
                     AND :fecha1 >= rt.fecha_inicio
                     AND (:fecha2 <= rt.fecha_fin OR rt.fecha_fin IS NULL)
-                WHERE t.activo = true";
+                WHERE t.activo = true
+                AND LOWER(COALESCE(t.cargo, '')) != 'supervisor'";
         
         $params = [
             ':fecha1' => $fecha,
@@ -384,6 +408,7 @@ class Trabajadores {
         $sql = "SELECT DISTINCT t.id, t.nombre
                 FROM trabajadores t
                 WHERE t.activo = true
+                AND LOWER(COALESCE(t.cargo, '')) != 'supervisor'
                 AND t.id NOT IN (
                     -- Excluir si ya tiene un L4 ese día
                     SELECT ta.trabajador_id FROM turnos_asignados ta

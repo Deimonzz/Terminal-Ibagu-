@@ -20,12 +20,13 @@ try {
                 $resultado = $dias->obtenerDisponibles($_GET['fecha'], $_GET['horario'] ?? null);
             } else {
                 $filtros = [
-                    'fecha' => $_GET['fecha'] ?? null,
-                    'tipo' => $_GET['tipo'] ?? null,
-                    'mes' => $_GET['mes'] ?? null,
-                    'trabajador_id' => $_GET['trabajador_id'] ?? null,
-                    'fecha_inicio' => $_GET['fecha_inicio'] ?? null,
-                    'fecha_fin'    => $_GET['fecha_fin'] ?? null
+                    'fecha'          => $_GET['fecha']          ?? null,
+                    'tipo'           => $_GET['tipo']           ?? null,
+                    'mes'            => $_GET['mes']            ?? null,
+                    'trabajador_id'  => $_GET['trabajador_id']  ?? null,
+                    'fecha_inicio'   => $_GET['fecha_inicio']   ?? null,
+                    'fecha_fin'      => $_GET['fecha_fin']      ?? null,
+                    'excluir_tipos'  => $_GET['excluir_tipos']  ?? null
                     ];
                     $resultado = $dias->obtener($filtros);
             }

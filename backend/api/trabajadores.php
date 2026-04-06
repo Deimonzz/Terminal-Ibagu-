@@ -13,6 +13,8 @@ try {
                 $resultado = $trabajadores->obtenerPorId($_GET['id']);
             } elseif (!empty($_GET['disponibles'])) {
                 $resultado = $trabajadores->obtenerDisponibles($_GET['puesto_id'], $_GET['turno_id'], $_GET['fecha']);
+            } elseif (!empty($_GET['action']) && $_GET['action'] === 'restricciones') {
+                $resultado = $trabajadores->obtenerListaRestricciones();
             } else {
                 $filtros = [
                     'area' => $_GET['area'] ?? null,
@@ -30,7 +32,7 @@ try {
         case 'POST':
             $datos = json_decode(file_get_contents('php://input'), true);
 
-            if ($path === 'restriccion') {
+            if (!empty($_GET['action']) && $_GET['action'] === 'restriccion') {
                 $resultado = $trabajadores->agregarRestriccion($datos);
             } else {
                 $resultado = $trabajadores->crear($datos);
@@ -62,7 +64,7 @@ try {
             break;
         
         case 'DELETE':
-            if ($path === 'restriccion'){
+            if (!empty($_GET['action']) && $_GET['action'] === 'restriccion'){
                 $resultado = $trabajadores->eliminarRestriccion($_GET['id']);
             } else {
                 $resultado = $trabajadores->desactivar($_GET['id']);
