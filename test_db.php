@@ -1,6 +1,6 @@
 <?php
 // test_db.php - Archivo temporal para probar conexión
-require_once 'tu_archivo_de_conexion.php'; // Cambia por el nombre de tu archivo
+require_once 'config/database.php'; // Cambia por el nombre de tu archivo
 
 try {
     $db = Database::getInstance()->getConnection();
