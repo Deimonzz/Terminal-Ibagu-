@@ -2,11 +2,11 @@
 // test_conexion.php - Diagnóstico completo
 
 // Copia tu configuración aquí temporalmente
-$host = 'dpg-xxxxx.oregon-postgres.render.com';  // Tu host de Render
+$host = 'dpg-d7keg17avr4c73c8au2g-a';  // Tu host de Render
 $port = '5432';
 $dbname = 'gestion_turnos_vxle';
 $user = 'gestion_turnos_vxle_user';
-$password = 'LA_CONTRASEÑA_QUE_TE_DIO_RENDER';  // ¡Cámbiala!
+$password = 'mB1w3VK1c8NHwr500RzPOlr34sw1cb4g';  // ¡Cámbiala!
 
 echo "<h2>Diagnóstico de conexión a PostgreSQL en Render</h2>";
 
