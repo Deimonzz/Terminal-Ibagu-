@@ -70,9 +70,9 @@ class DiasEspeciales {
     
     public function crear($datos) {
         // Validar solapamiento según el tipo
-        if (in_array($datos['tipo'], ['LC', 'L', 'L8', 'VAC', 'SUS'])) {
+        if (in_array($datos['tipo'], ['LC', 'L', 'L8', 'VAC', 'SUS', 'ADM', 'ADMM', 'ADMT'])) {
             $validacion = $this->validarSolapamiento($datos['trabajador_id'], $datos['fecha_inicio'], 
-                                                     $datos['fecha_fin'] ?? $datos['fecha_inicio']);
+                                                     $datos['fecha_fin'] ?? $datos['fecha_inicio'], $datos['tipo']);
             if (!$validacion['valido']) {
                 return [
                     'success' => false,
@@ -83,6 +83,20 @@ class DiasEspeciales {
         
         try {
             $this->db->beginTransaction();
+            
+            // Si es un tipo de disponibilidad (ADM/ADMM/ADMT), eliminar cualquier otro de estos tipos ese día
+            if (in_array($datos['tipo'], ['ADM', 'ADMM', 'ADMT'])) {
+                $sql_delete = "DELETE FROM dias_especiales 
+                               WHERE trabajador_id = :trabajador_id 
+                               AND tipo IN ('ADM', 'ADMM', 'ADMT')
+                               AND :fecha_inicio BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
+                               AND estado IN ('programado', 'activo')";
+                $stmt_delete = $this->db->prepare($sql_delete);
+                $stmt_delete->execute([
+                    ':trabajador_id' => $datos['trabajador_id'],
+                    ':fecha_inicio' => $datos['fecha_inicio']
+                ]);
+            }
             
             $sql = "INSERT INTO dias_especiales 
                     (trabajador_id, tipo, fecha_inicio, fecha_fin, horas_inicio, horas_fin, descripcion, estado) 
@@ -215,7 +229,7 @@ class DiasEspeciales {
     
     //Validar solapamiento
     
-    private function validarSolapamiento($trabajador_id, $fecha_inicio, $fecha_fin) {
+    private function validarSolapamiento($trabajador_id, $fecha_inicio, $fecha_fin, $tipo) {
         // Garantizar que fecha_fin sea >= fecha_inicio
         if ($fecha_fin === null) {
             $fecha_fin = $fecha_inicio;
@@ -226,9 +240,29 @@ class DiasEspeciales {
             $fecha_fin = $temp;
         }
         
-        // Determinar qué tipos NO pueden solaparse (basado en el tipo actual)
-        // Accedemos al tipo desde el contexto - necesitamos pasarlo como parámetro
-        // Por ahora, retornamos siempre válido ya que queremos permitir solapamientos
+        // Para tipos ADM, ADMM, ADMT: no permitir duplicados del mismo tipo en la misma fecha
+        if (in_array($tipo, ['ADM', 'ADMM', 'ADMT'])) {
+            $sql = "SELECT COUNT(*) as count FROM dias_especiales 
+                    WHERE trabajador_id = :trabajador_id 
+                    AND tipo = :tipo 
+                    AND estado IN ('programado', 'activo')
+                    AND :fecha_inicio BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([
+                ':trabajador_id' => $trabajador_id,
+                ':tipo' => $tipo,
+                ':fecha_inicio' => $fecha_inicio
+            ]);
+            $result = $stmt->fetch();
+            if ($result['count'] > 0) {
+                return [
+                    'valido' => false,
+                    'mensaje' => "Ya existe un día especial de tipo {$tipo} para este trabajador en la fecha {$fecha_inicio}."
+                ];
+            }
+        }
+        
+        // Para otros tipos, por ahora permitir solapamientos
         return ['valido' => true];
     }
     

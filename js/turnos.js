@@ -3762,6 +3762,24 @@ function abrirPopoverMensual(celda, trabId, fecha, nombre, asigsSafeStr, cargo =
                     </button>
                 </div>
             </div>`;
+        } else if (['ADM','ADMM','ADMT'].includes(a.tipo_especial)) {
+            const tipoLabel = a.tipo_especial === 'ADM' ? 'Disponible Día Completo' : a.tipo_especial === 'ADMM' ? 'Disponible Mañana' : 'Disponible Tarde';
+            itemsHtml += `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <span style="background:#fde8d8;color:#7d3800;padding:1px 7px;border-radius:10px;font-size:0.75rem;font-weight:700;">${a.tipo_especial}</span>
+                    <span style="font-size:0.8rem;color:#6c757d;">${tipoLabel}</span>
+                </div>
+                <div style="display:flex;gap:4px;">
+                    <button onclick="cambiarDisponibilidadMensual(${trabId},'${fecha}','${nombre}','${a.tipo_especial}')"
+                        style="background:#6c757d;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;">
+                        ✏️ Cambiar
+                    </button>
+                    <button onclick="eliminarDiaEspecialMensual(${trabId},'${fecha}','${a.tipo_especial}','${nombre}')"
+                        style="background:#dc3545;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;">
+                        🗑️
+                    </button>
+                </div>
+            </div>`;
         } else if (a.numero_turno) {
             const origNum = Number(a.numero_turno);
             const esL4 = [4,5,9,10].includes(origNum);
@@ -3775,10 +3793,16 @@ function abrirPopoverMensual(celda, trabId, fecha, nombre, asigsSafeStr, cargo =
                     <span style="background:${bgT};color:${colT};padding:1px 7px;border-radius:10px;font-size:0.75rem;font-weight:700;">${etiqueta}</span>
                     <span style="font-size:0.8rem;color:#6c757d;">${nombreT}</span>
                 </div>
-                <button onclick="cambiarTurnoMensual(${trabId},'${fecha}','${nombre}',${a.id},'${a.puesto_codigo||''}',${origNum},'normal',null,null)"
-                    style="background:#6c757d;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;">
-                    ✏️ Cambiar
-                </button>
+                <div style="display:flex;gap:4px;">
+                    <button onclick="cambiarTurnoMensual(${trabId},'${fecha}','${nombre}',${a.id},'${a.puesto_codigo||''}',${origNum},'normal',null,null)"
+                        style="background:#6c757d;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;">
+                        ✏️ Cambiar
+                    </button>
+                    <button onclick="eliminarTurnoMensual(${trabId},'${fecha}','${nombre}',${a.id})"
+                        style="background:#dc3545;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;">
+                        🗑️
+                    </button>
+                </div>
             </div>`;
         }
     });
@@ -3878,6 +3902,78 @@ async function eliminarDiaEspecialMensual(trabId, fecha, tipo, nombre) {
     } catch(e) { ocultarSpinner(); mostrarAlerta('Error de conexión', 'danger'); }
 }
 
+async function cambiarDisponibilidadMensual(trabId, fecha, nombre, tipoActual) {
+    document.getElementById('popover-mensual')?.remove();
+    document.getElementById('overlay-disponibilidad-mensual')?.remove();
+    document.getElementById('popover-disponibilidad-mensual')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'overlay-disponibilidad-mensual';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9998;';
+    const pop = document.createElement('div');
+    pop.id = 'popover-disponibilidad-mensual';
+    pop.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+        z-index:9999;background:white;border-radius:14px;padding:24px 28px;
+        box-shadow:0 12px 40px rgba(0,0,0,0.25);min-width:340px;`;
+    pop.innerHTML = `
+        <div style="font-size:1.3rem;text-align:center;margin-bottom:8px;">✏️</div>
+        <div style="font-weight:700;font-size:1rem;text-align:center;margin-bottom:4px;">Cambiar disponibilidad</div>
+        <div style="font-size:0.82rem;color:#6c757d;text-align:center;margin-bottom:18px;">${nombre} — ${fecha}</div>
+        <label style="font-size:0.82rem;font-weight:600;color:#495057;">Tipo de disponibilidad</label>
+        <select id="sel-nuevo-tipo-disponibilidad" style="width:100%;padding:7px 10px;border:1px solid #dee2e6;border-radius:8px;margin-bottom:18px;margin-top:4px;font-size:0.88rem;">
+            <option value="ADMM" ${tipoActual === 'ADMM' ? 'selected' : ''}>ADMM — Disponible Mañana</option>
+            <option value="ADMT" ${tipoActual === 'ADMT' ? 'selected' : ''}>ADMT — Disponible Tarde</option>
+            <option value="ADM" ${tipoActual === 'ADM' ? 'selected' : ''}>ADM — Disponible Día Completo</option>
+        </select>
+        <div style="display:flex;gap:8px;">
+            <button id="btn-guardar-cambio-disponibilidad" style="flex:1;background:#025B2D;color:white;border:none;border-radius:8px;padding:9px;font-weight:600;cursor:pointer;">Guardar cambio</button>
+            <button id="btn-cancelar-cambio-disponibilidad" style="background:#6c757d;color:white;border:none;border-radius:8px;padding:9px 16px;cursor:pointer;">Cancelar</button>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    document.body.appendChild(pop);
+
+    const cerrarDisponibilidad = () => { pop.remove(); overlay.remove(); };
+    overlay.addEventListener('click', e => { if (e.target === overlay) cerrarDisponibilidad(); });
+    pop.querySelector('#btn-cancelar-cambio-disponibilidad')?.addEventListener('click', cerrarDisponibilidad);
+
+    pop.querySelector('#btn-guardar-cambio-disponibilidad').onclick = async () => {
+        const nuevoTipo = pop.querySelector('#sel-nuevo-tipo-disponibilidad').value;
+        if (nuevoTipo === tipoActual) { pop.remove(); overlay.remove(); return; }
+        pop.remove(); overlay.remove();
+        mostrarSpinner('Guardando cambio...');
+        try {
+            // Eliminar el actual
+            await fetch(API_BASE + 'dias_especiales.php', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({ action: 'eliminar', trabajador_id: trabId, fecha: fecha, tipo: tipoActual })
+            });
+            // Crear el nuevo
+            const res = await fetch(API_BASE + 'dias_especiales.php', {
+                method: 'POST',
+                headers: {'Content-Type':'application/json'},
+                body: JSON.stringify({
+                    trabajador_id: trabId,
+                    tipo: nuevoTipo,
+                    fecha_inicio: fecha,
+                    fecha_fin: fecha,
+                    descripcion: nuevoTipo + ' asignado desde vista mensual',
+                    estado: 'programado'
+                })
+            });
+            const r = await res.json();
+            ocultarSpinner();
+            if (r.success) {
+                mostrarAlerta('✅ Disponibilidad cambiada a ' + nuevoTipo, 'success');
+                recargarFilaMensual(trabId);
+            } else {
+                mostrarAlerta('❌ Error: ' + (r.message || 'No se pudo guardar'), 'danger');
+            }
+        } catch(e) { ocultarSpinner(); mostrarAlerta('Error de conexión', 'danger'); }
+    };
+}
+
 async function cambiarTurnoMensual(trabId, fecha, nombre, turnoAsigId, puestoCodigo, numTurnoActual, tipoOrigen='normal', tipoEspecialActual=null, diaEspecialId=null) {
     document.getElementById('popover-mensual')?.remove();
 
@@ -3959,11 +4055,16 @@ async function cambiarTurnoMensual(trabId, fecha, nombre, turnoAsigId, puestoCod
     optsTurnos += `<option value="ADM"  data-tipo="especial">ADM — Disponible Día Completo</option>`;
     optsTurnos += '</optgroup>';
 
+    document.getElementById('overlay-cambio-turno')?.remove();
+    document.getElementById('popover-cambio-turno')?.remove();
+
     const overlay = document.createElement('div');
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;';
+    overlay.id = 'overlay-cambio-turno';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9998;';
     const pop = document.createElement('div');
+    pop.id = 'popover-cambio-turno';
     pop.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-        z-index:10000;background:white;border-radius:14px;padding:24px 28px;
+        z-index:9999;background:white;border-radius:14px;padding:24px 28px;
         box-shadow:0 12px 40px rgba(0,0,0,0.25);min-width:340px;`;
     pop.innerHTML = `
         <div style="font-size:1.3rem;text-align:center;margin-bottom:8px;">✏️</div>
@@ -3977,12 +4078,15 @@ async function cambiarTurnoMensual(trabId, fecha, nombre, turnoAsigId, puestoCod
         </div>
         <div style="display:flex;gap:8px;">
             <button id="btn-guardar-cambio-turno" style="flex:1;background:#025B2D;color:white;border:none;border-radius:8px;padding:9px;font-weight:600;cursor:pointer;">Guardar cambio</button>
-            <button onclick="this.closest('div[style*=transform]').remove();document.querySelector('div[style*=rgba]').remove();"
-                style="background:#6c757d;color:white;border:none;border-radius:8px;padding:9px 16px;cursor:pointer;">Cancelar</button>
+            <button id="btn-cancelar-cambio-turno" style="background:#6c757d;color:white;border:none;border-radius:8px;padding:9px 16px;cursor:pointer;">Cancelar</button>
         </div>
     `;
     document.body.appendChild(overlay);
     document.body.appendChild(pop);
+
+    const cerrarCambioTurno = () => { pop.remove(); overlay.remove(); };
+    overlay.addEventListener('click', e => { if (e.target === overlay) cerrarCambioTurno(); });
+    pop.querySelector('#btn-cancelar-cambio-turno')?.addEventListener('click', cerrarCambioTurno);
 
     // Datos de puestos L4 para filtrar dinámicamente
     const PUESTOS_L4_CODIGOS = new Set(['F5','F15','D2','D1','F11']);
@@ -4055,6 +4159,14 @@ async function cambiarTurnoMensual(trabId, fecha, nombre, turnoAsigId, puestoCod
 
             // PASO 2: Crear el nuevo turno/especial
             if (esDestEspecial) {
+                // Verificar si ya existe este tipo especial ese día
+                const checkRes = await fetch(API_BASE + 'dias_especiales.php?fecha_inicio=' + fecha + '&fecha_fin=' + fecha + '&trabajador_id=' + trabId);
+                const checkData = await checkRes.json();
+                if (checkData.success && checkData.data.some(de => de.tipo === nuevoTurnoVal)) {
+                    ocultarSpinner();
+                    mostrarAlerta('❌ Ya tiene ' + nuevoTurnoVal + ' asignado ese día', 'danger');
+                    return;
+                }
                 // Nuevo es ADMM/ADMT/ADM → crear en dias_especiales
                 const resEsp = await fetch(API_BASE + 'dias_especiales.php', {
                     method: 'POST',
@@ -4106,6 +4218,8 @@ async function asignarTurnoRapidoMensual(trabId, fecha, nombre, cargo = '') {
 
     const esSupervisor = String(cargo || '').toLowerCase() === 'supervisor';
     if (esSupervisor) {
+        document.getElementById('overlay-rapido')?.remove();
+        document.getElementById('popover-rapido')?.remove();
         const overlay = document.createElement('div');
         overlay.id = 'overlay-rapido';
         overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;';
@@ -4152,6 +4266,7 @@ async function asignarTurnoRapidoMensual(trabId, fecha, nombre, cargo = '') {
         const validacion = pop.querySelector('#sup-validacion-rapido');
         const btnGuardar = pop.querySelector('#btn-asignar-sup-rapido');
         const cerrar = () => { pop.remove(); overlay.remove(); };
+        overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(); });
 
         const actualizarResumen = () => {
             if (!hi.value || !hf.value) {
@@ -4253,9 +4368,13 @@ async function asignarTurnoRapidoMensual(trabId, fecha, nombre, cargo = '') {
     optsTurnos += `<option value="ADM"  data-tipo="especial">ADM — Disponible Día Completo</option>`;
     optsTurnos += '</optgroup>';
 
+    document.getElementById('overlay-rapido-normal')?.remove();
+    document.getElementById('popover-rapido-normal')?.remove();
     const overlay = document.createElement('div');
+    overlay.id = 'overlay-rapido-normal';
     overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;';
     const pop = document.createElement('div');
+    pop.id = 'popover-rapido-normal';
     pop.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
         z-index:10000;background:white;border-radius:14px;padding:24px 28px;
         box-shadow:0 12px 40px rgba(0,0,0,0.25);min-width:340px;`;
@@ -4271,12 +4390,14 @@ async function asignarTurnoRapidoMensual(trabId, fecha, nombre, cargo = '') {
         </div>
         <div style="display:flex;gap:8px;">
             <button id="btn-asignar-rapido" style="flex:1;background:#0d6efd;color:white;border:none;border-radius:8px;padding:9px;font-weight:600;cursor:pointer;">Asignar</button>
-            <button onclick="this.closest('div[style*=transform]').remove();document.querySelector('div[style*=rgba]').remove();"
-                style="background:#6c757d;color:white;border:none;border-radius:8px;padding:9px 16px;cursor:pointer;">Cancelar</button>
+            <button id="btn-cancelar-rapido-normal" style="background:#6c757d;color:white;border:none;border-radius:8px;padding:9px 16px;cursor:pointer;">Cancelar</button>
         </div>
     `;
     document.body.appendChild(overlay);
     document.body.appendChild(pop);
+    const cerrarRapidoNormal = () => { pop.remove(); overlay.remove(); };
+    overlay.addEventListener('click', e => { if (e.target === overlay) cerrarRapidoNormal(); });
+    pop.querySelector('#btn-cancelar-rapido-normal')?.addEventListener('click', cerrarRapidoNormal);
 
     // Listener dinámico para filtrar puestos según turno seleccionado
     const PUESTOS_L4_R = new Set(['F5','F15','D2','D1','F11']);
@@ -4316,6 +4437,14 @@ async function asignarTurnoRapidoMensual(trabId, fecha, nombre, cargo = '') {
         try {
             let res, r;
             if (tipoTurno === 'especial' || ['ADMM','ADMT','ADM'].includes(turnoId)) {
+                // Verificar si ya existe este tipo especial ese día
+                const checkRes = await fetch(API_BASE + 'dias_especiales.php?fecha_inicio=' + fecha + '&fecha_fin=' + fecha + '&trabajador_id=' + trabId);
+                const checkData = await checkRes.json();
+                if (checkData.success && checkData.data.some(de => de.tipo === turnoId)) {
+                    ocultarSpinner();
+                    mostrarAlerta('❌ Ya tiene ' + turnoId + ' asignado ese día', 'danger');
+                    return;
+                }
                 // ADMM/ADMT/ADM van a dias_especiales
                 res = await fetch(API_BASE + 'dias_especiales.php', {
                     method: 'POST',
@@ -4451,6 +4580,32 @@ async function eliminarDiaLibreMensual(trabId, fecha, nombre) {
         ocultarSpinner();
         if (r.success) {
             mostrarAlerta('✅ Día libre eliminado', 'success');
+            recargarFilaMensual(trabId);
+        } else {
+            mostrarAlerta('Error: ' + r.message, 'danger');
+        }
+    } catch(e) { ocultarSpinner(); mostrarAlerta('Error de conexión', 'danger'); }
+}
+
+async function eliminarTurnoMensual(trabId, fecha, nombre, turnoId) {
+    document.getElementById('popover-mensual')?.remove();
+    const ok = await confirmarAccion({
+        titulo:   'Eliminar turno',
+        mensaje:  `¿Eliminar el turno de <b>${nombre}</b> el <b>${fecha}</b>?`,
+        textoBtn: 'Eliminar', tipoBtn: 'danger', icono: 'fa-trash'
+    });
+    if (!ok) return;
+    mostrarSpinner('Eliminando turno...');
+    try {
+        const res = await fetch(API_BASE + 'turnos.php', {
+            method: 'POST',
+            headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({ action: 'cancelar', id: turnoId })
+        });
+        const r = await res.json();
+        ocultarSpinner();
+        if (r.success) {
+            mostrarAlerta('✅ Turno eliminado', 'success');
             recargarFilaMensual(trabId);
         } else {
             mostrarAlerta('Error: ' + r.message, 'danger');
@@ -4777,15 +4932,17 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
   modalOverlay.classList.add('active');
 
   try {
-    // Cargar trabajadores, turnos del día y puestos en paralelo
-    const [resTodos, resDia, resPuestos] = await Promise.all([
+    // Cargar trabajadores, turnos del día, días libres y puestos en paralelo
+    const [resTodos, resDia, resPuestos, resDiasEsp] = await Promise.all([
       fetch(API_BASE + 'trabajadores.php'),
       fetch(API_BASE + 'turnos.php?fecha=' + fecha),
-      fetch(API_BASE + 'turnos.php?action=puestos')
+      fetch(API_BASE + 'turnos.php?action=puestos'),
+      fetch(API_BASE + 'dias_especiales.php?fecha=' + fecha)
     ]);
     const dataTodos   = await resTodos.json();
     const dataDia     = await resDia.json();
     const dataPuestos = await resPuestos.json();
+    const dataDiasEsp = await resDiasEsp.json();
 
     if (!dataTodos.success) {
       modalBody.innerHTML = '<p class="alert alert-danger">Error cargando trabajadores</p>';
@@ -4797,11 +4954,18 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
     const turnosHoy   = dataDia.success ? dataDia.data.filter(t => t.estado !== 'cancelado' && t.id != turnoId) : [];
     turnosHoy.forEach(t => conTurnoHoy.add(Number(t.trabajador_id)));
 
-    const todos = (dataTodos.data || []).filter(t => t.activo);
+    // Construir set de trabajadores con día libre ese día
+    const conDiaLibreHoy = new Set();
+    const diasLibre = dataDiasEsp.success ? dataDiasEsp.data.filter(d => d.estado !== 'cancelado') : [];
+    diasLibre.forEach(d => conDiaLibreHoy.add(Number(d.trabajador_id)));
 
-    // Separar: sin turno hoy (disponibles) y con turno hoy
-    const disponibles = todos.filter(t => !conTurnoHoy.has(t.id));
+    const todosActivos = (dataTodos.data || []).filter(t => t.activo);
+    const todos = todosActivos.filter(t => String(t.cargo || '').toLowerCase() !== 'supervisor');
+
+    // Separar en tres categorías
+    const disponibles = todos.filter(t => !conTurnoHoy.has(t.id) && !conDiaLibreHoy.has(t.id));
     const ocupados    = todos.filter(t => conTurnoHoy.has(t.id));
+    const conLibre    = todos.filter(t => conDiaLibreHoy.has(t.id));
 
     // Construir opciones con separadores
     let opciones = '<option value="">Seleccione trabajador...</option>';
@@ -4826,6 +4990,39 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
       });
       opciones += '</optgroup>';
     }
+
+    if (conLibre.length > 0) {
+      opciones += '<optgroup label="🏖️ Con día libre este día">';
+      conLibre.forEach(t => {
+        const diaLibre = diasLibre.find(d => Number(d.trabajador_id) === t.id);
+        const tipoLibre = diaLibre ? diaLibre.tipo : 'L';
+        opciones += `<option value="${t.id}" ${t.id == trabajadorActualId ? 'selected' : ''}>${t.nombre} — ${t.cedula} (${tipoLibre})</option>`;
+      });
+      opciones += '</optgroup>';
+    }
+
+    // Panel informativo con estadísticas
+    const panelEstadisticas = `
+      <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:12px;margin-bottom:16px;font-size:0.85rem;">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
+          <div style="text-align:center;padding:8px;background:white;border-radius:6px;border-left:4px solid #28a745;">
+            <div style="font-size:1.8rem;font-weight:700;color:#28a745;">${disponibles.length}</div>
+            <div style="font-size:0.75rem;color:#6c757d;margin-top:2px;">✅ DISPONIBLES</div>
+            <div style="font-size:0.7rem;color:#999;margin-top:2px;">Sin turno ni día libre</div>
+          </div>
+          <div style="text-align:center;padding:8px;background:white;border-radius:6px;border-left:4px solid #dc3545;">
+            <div style="font-size:1.8rem;font-weight:700;color:#dc3545;">${ocupados.length}</div>
+            <div style="font-size:0.75rem;color:#6c757d;margin-top:2px;">⚠️ CON TURNO</div>
+            <div style="font-size:0.7rem;color:#999;margin-top:2px;">Ya asignados hoy</div>
+          </div>
+          <div style="text-align:center;padding:8px;background:white;border-radius:6px;border-left:4px solid #ffc107;">
+            <div style="font-size:1.8rem;font-weight:700;color:#ffc107;">${conLibre.length}</div>
+            <div style="font-size:0.75rem;color:#6c757d;margin-top:2px;">🏖️ DÍA LIBRE</div>
+            <div style="font-size:0.7rem;color:#999;margin-top:2px;">Día libre programado</div>
+          </div>
+        </div>
+      </div>
+    `;
 
     // Sección L4 si el puesto tiene esa opción para este turno
     const numNormActual = [4,9].includes(Number(numeroTurno)) ? 1 : [5,10].includes(Number(numeroTurno)) ? 2 : Number(numeroTurno);
@@ -4882,11 +5079,12 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
         </div>
         ${seccionMover}
         ${seccionL4}
-        <div class="form-group" style="margin-top:10px;">
-          <label for="nuevo-trabajador-select">Trabajador <span class="required">*</span></label>
+        ${panelEstadisticas}
+        <div class="form-group">
+          <label for="nuevo-trabajador-select">Selecciona un trabajador <span class="required">*</span></label>
           <select id="nuevo-trabajador-select" required style="width:100%;">${opciones}</select>
           <small style="color:#6c757d;margin-top:4px;display:block;">
-            Los trabajadores marcados con ⚠️ ya tienen asignación ese día.
+            Elige entre los disponibles, o revisa quién tiene turno/día libre.
           </small>
         </div>
         <div id="aviso-conflicto" style="display:none;" class="alert alert-warning">
@@ -4899,15 +5097,25 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
       </form>
     `;
 
-    // Mostrar aviso de conflicto al seleccionar alguien ocupado
+    // Mostrar aviso de conflicto al seleccionar alguien ocupado o con día libre
     document.getElementById('nuevo-trabajador-select').addEventListener('change', function() {
       const selId = Number(this.value);
       const aviso = document.getElementById('aviso-conflicto');
-      aviso.style.display = conTurnoHoy.has(selId) ? 'block' : 'none';
+      const tieneConflicto = conTurnoHoy.has(selId) || conDiaLibreHoy.has(selId);
+      
+      if (tieneConflicto) {
+        const tipoConflicto = conTurnoHoy.has(selId) ? 'turno' : 'día libre';
+        aviso.innerHTML = `<i class="fas fa-exclamation-triangle"></i> <strong>Atención:</strong> Este trabajador ya tiene ${tipoConflicto} el <strong>${fecha}</strong>.`;
+        aviso.style.display = 'block';
+      } else {
+        aviso.style.display = 'none';
+      }
     });
 
     // Disparar al cargar si el actual ya tiene conflicto
-    if (conTurnoHoy.has(Number(trabajadorActualId))) {
+    if (conTurnoHoy.has(Number(trabajadorActualId)) || conDiaLibreHoy.has(Number(trabajadorActualId))) {
+      const tipoConflicto = conTurnoHoy.has(Number(trabajadorActualId)) ? 'turno' : 'día libre';
+      document.getElementById('aviso-conflicto').innerHTML = `<i class="fas fa-exclamation-triangle"></i> <strong>Atención:</strong> Este trabajador ya tiene ${tipoConflicto} el <strong>${fecha}</strong>.`;
       document.getElementById('aviso-conflicto').style.display = 'block';
     }
 
@@ -6398,17 +6606,20 @@ async function cargarTablaDiasEspeciales() {
     const tabla = document.getElementById('tabla-dias-especiales');
     if (!tabla) return;
     try {
-        const res  = await fetch(API_BASE + 'dias_especiales.php?excluir_tipos=L,L8,LC');
+        const res  = await fetch(API_BASE + 'dias_especiales.php?excluir_tipos=L,L8,LC,ADM,ADMM,ADMT');
         const data = await res.json();
-        if (!data.success || !data.data || data.data.length === 0) {
+        const registros = (data.success && Array.isArray(data.data))
+            ? data.data.filter(d => !['ADM','ADMM','ADMT','L','L8','LC'].includes(String(d.tipo || '').toUpperCase()))
+            : [];
+        if (registros.length === 0) {
             tabla.innerHTML = '<p class="info-box">No hay días especiales registrados.</p>';
             return;
         }
-        const colores = { L:'#cce5ff', L8:'#cce5ff', LC:'#b8daff', VAC:'#d4edda', SUS:'#fff3cd', ADMM:'#fde8d8', ADMT:'#fde8d8', ADM:'#fde8d8', INC:'#f8d7da' };
-        const textos  = { L:'#004085', L8:'#004085', LC:'#003580', VAC:'#155724', SUS:'#856404', ADMM:'#7d3800', ADMT:'#7d3800', ADM:'#7d3800', INC:'#721c24' };
+        const colores = { VAC:'#d4edda', SUS:'#fff3cd', INC:'#f8d7da' };
+        const textos  = { VAC:'#155724', SUS:'#856404', INC:'#721c24' };
         let html = '<table><thead><tr style="background:linear-gradient(135deg,var(--terminal) 0%,#027433 100%);color:white;">';
         html += '<th>Trabajador</th><th>Tipo</th><th>Fecha inicio</th><th>Fecha fin</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>';
-        data.data.forEach(d => {
+        registros.forEach(d => {
             const bg  = colores[d.tipo] || '#e9ecef';
             const col = textos[d.tipo]  || '#495057';
             html += '<tr>';
