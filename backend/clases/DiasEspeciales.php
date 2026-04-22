@@ -294,15 +294,15 @@ class DiasEspeciales {
             $sql_activo = "UPDATE dias_especiales 
                           SET estado = 'activo' 
                           WHERE estado = 'programado' 
-                          AND fecha_inicio <= CURDATE()
-                          AND COALESCE(fecha_fin, fecha_inicio) >= CURDATE()";
+                          AND fecha_inicio <= " . Database::currentDate() . "
+                          AND COALESCE(fecha_fin, fecha_inicio) >= " . Database::currentDate();
             $this->db->prepare($sql_activo)->execute();
             
             // Cambiar a 'finalizado' los días que terminaron
             $sql_finalizado = "UPDATE dias_especiales 
                               SET estado = 'finalizado' 
                               WHERE estado = 'activo' 
-                              AND COALESCE(fecha_fin, fecha_inicio) < CURDATE()";
+                              AND COALESCE(fecha_fin, fecha_inicio) < " . Database::currentDate();
             $this->db->prepare($sql_finalizado)->execute();
             
             return true;
@@ -371,7 +371,7 @@ class DiasEspeciales {
     
     public function impideAsignacion($trabajador_id, $fecha) {
         // Verificar días especiales
-        $sqlEspeciales = "SELECT COUNT(*) as count, GROUP_CONCAT(tipo SEPARATOR ', ') as tipos
+        $sqlEspeciales = "SELECT COUNT(*) as count, " . Database::groupConcat('tipo', ', ') . " as tipos
                 FROM dias_especiales 
                 WHERE trabajador_id = :trabajador_id
                 AND tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS')

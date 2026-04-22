@@ -5,7 +5,7 @@ header('Content-Type: application/json');
 try {
     // 1. Resumen general
     $anio = date('Y');
-    $res = $pdo->query("SELECT COUNT(*) AS visitasAnio FROM visitas WHERE YEAR(fecha_inicio) = $anio");
+    $res = $pdo->query("SELECT COUNT(*) AS visitasAnio FROM visitas WHERE " . Database::year('fecha_inicio') . " = $anio");
     $visitasAnio = $res->fetch()['visitasAnio'] ?? 0;
 
     $res = $pdo->query("SELECT COUNT(*) AS pendientes FROM evaluaciones WHERE estado = 'NO CUMPLE'");
@@ -22,7 +22,7 @@ try {
         SELECT e.id, e.observacion AS descripcion, e.plazo AS fecha_limite, r.nombre AS responsable, e.estado
         FROM evaluaciones e
         LEFT JOIN responsables r ON e.responsable = r.id
-        WHERE e.estado = 'NO CUMPLE' AND e.plazo IS NOT NULL AND e.plazo >= CURDATE()
+        WHERE e.estado = 'NO CUMPLE' AND e.plazo IS NOT NULL AND e.plazo >= " . Database::currentDate() . "
         ORDER BY e.plazo ASC
         LIMIT 5
     ")->fetchAll(PDO::FETCH_ASSOC);

@@ -2,12 +2,12 @@
 ini_set('display_errors', 1);
 error_reporting(E_ALL);
 
-require __DIR__ . "../../config/db.php";  // tu conexión PDO
+require __DIR__ . '/../config/db.php';  // tu conexión PDO
 
 use PHPMailer\PHPMailer\PHPMailer;
 use PHPMailer\PHPMailer\Exception;
 
-require __DIR__ . '../../vendor/autoload.php'; // Ajusta la ruta si tu vendor está en otro lado
+require __DIR__ . '/../vendor/autoload.php'; // Ajusta la ruta si tu vendor está en otro lado
 
 // ✅ Función para enviar correo
 function enviarCorreo($destino, $asunto, $mensaje) {
@@ -44,7 +44,7 @@ function enviarCorreo($destino, $asunto, $mensaje) {
 // ✅ Función: buscar evaluaciones próximas a vencerse (30 o 15 días)
 function notificarVencimientos($pdo) {
     $sql = "SELECT e.id, e.plazo, e.estado, r.nombre, r.correo,
-                   DATEDIFF(e.plazo, CURDATE()) AS dias_restantes
+                   " . Database::dateDiff('e.plazo', Database::currentDate()) . " AS dias_restantes
             FROM evaluaciones e
             JOIN responsables r ON e.responsable = r.id
             WHERE e.estado != 'CUMPLE' AND e.plazo IS NOT NULL";

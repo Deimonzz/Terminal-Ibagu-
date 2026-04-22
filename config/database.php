@@ -64,6 +64,35 @@ class Database {
 
     private function __clone() {}
     public function __wakeup() {}
+
+    public static function groupConcat($column, $separator = ', ') {
+        if (DB_DRIVER === 'pgsql') {
+            return "STRING_AGG($column, '$separator')";
+        }
+        return "GROUP_CONCAT($column SEPARATOR '$separator')";
+    }
+
+    public static function currentDate() {
+        return DB_DRIVER === 'pgsql' ? 'CURRENT_DATE' : 'CURDATE()';
+    }
+
+    public static function year($column) {
+        return DB_DRIVER === 'pgsql' ? "EXTRACT(YEAR FROM $column)" : "YEAR($column)";
+    }
+
+    public static function dateDiff($date1, $date2) {
+        if (DB_DRIVER === 'pgsql') {
+            return "($date1 - $date2)";
+        }
+        return "DATEDIFF($date1, $date2)";
+    }
+
+    public static function ifNull($column, $default) {
+        if (DB_DRIVER === 'pgsql') {
+            return "COALESCE($column, '$default')";
+        }
+        return "IFNULL($column, '$default')";
+    }
 }
 
 // Headers para API REST

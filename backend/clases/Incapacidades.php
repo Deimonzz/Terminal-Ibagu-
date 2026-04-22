@@ -38,7 +38,7 @@ class Incapacidades {
         }
         
         if (!empty($filtros['activas'])) {
-            $sql .= " AND i.estado = 'activa' AND i.fecha_fin >= CURDATE()";
+            $sql .= " AND i.estado = 'activa' AND i.fecha_fin >= " . Database::currentDate();
         }
 
         if (!empty($filtros['fecha_inicio']) && !empty($filtros['fecha_fin'])) {
@@ -275,7 +275,7 @@ class Incapacidades {
     private function cancelarTurnosEnRango($trabajador_id, $fecha_inicio, $fecha_fin) {
         $sql = "UPDATE turnos_asignados 
                 SET estado = 'cancelado', 
-                    observaciones = CONCAT(IFNULL(observaciones, ''), ' - Cancelado por incapacidad')
+                    observaciones = CONCAT(" . Database::ifNull('observaciones', '') . ", ' - Cancelado por incapacidad')
                 WHERE trabajador_id = :trabajador_id 
                 AND fecha BETWEEN :fecha_inicio AND :fecha_fin
                 AND estado IN ('programado', 'activo')";
@@ -297,7 +297,7 @@ class Incapacidades {
             $sql = "UPDATE incapacidades 
                     SET estado = 'finalizada'
                     WHERE estado = 'activa'
-                    AND fecha_fin < CURDATE()";
+                    AND fecha_fin < " . Database::currentDate();
             $stmt = $this->db->prepare($sql);
             $stmt->execute();
             return $stmt->rowCount();

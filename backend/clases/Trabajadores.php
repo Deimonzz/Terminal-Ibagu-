@@ -10,11 +10,11 @@ class Trabajadores {
     
     public function obtenerTodos($filtros = []) {
         $sql = "SELECT t.*, 
-                GROUP_CONCAT(DISTINCT rt.tipo_restriccion SEPARATOR ', ') as restricciones
+                " . Database::groupConcat('rt.tipo_restriccion', ', ') . " as restricciones
                 FROM trabajadores t
                 LEFT JOIN restricciones_trabajador rt ON t.id = rt.trabajador_id 
                     AND rt.activa = true 
-                    AND (rt.fecha_fin IS NULL OR rt.fecha_fin >= CURDATE())";
+                    AND (rt.fecha_fin IS NULL OR rt.fecha_fin >= " . Database::currentDate() . ")";
 
         // Por defecto solo activos, pero se puede incluir inactivos mediante filtro
         if (empty($filtros['incluir_inactivos'])) {
@@ -168,7 +168,7 @@ class Trabajadores {
         $sql = "SELECT * FROM restricciones_trabajador 
                 WHERE trabajador_id = :id 
                 AND activa = true 
-                AND (fecha_fin IS NULL OR fecha_fin >= CURDATE())
+                AND (fecha_fin IS NULL OR fecha_fin >= " . Database::currentDate() . ")
                 ORDER BY fecha_inicio DESC";
         
         $stmt = $this->db->prepare($sql);
@@ -321,7 +321,7 @@ class Trabajadores {
         $turno = $stmtTurno->fetch();
         
         $sql = "SELECT DISTINCT t.*, 
-                GROUP_CONCAT(DISTINCT rt.tipo_restriccion SEPARATOR ', ') as restricciones
+                " . Database::groupConcat('DISTINCT rt.tipo_restriccion', ', ') . " as restricciones
                 FROM trabajadores t
                 LEFT JOIN restricciones_trabajador rt ON t.id = rt.trabajador_id 
                     AND rt.activa = true 
