@@ -122,7 +122,7 @@ class TurnosAsignados {
         }
         
         // 2. Verificar incapacidad activa
-        $sql = "SELECT COUNT(*) as count, GROUP_CONCAT(tipo SEPARATOR ', ') as tipos
+        $sql = "SELECT COUNT(*) as count, " . Database::groupConcat('tipo', ', ') . " as tipos
                 FROM incapacidades 
                 WHERE trabajador_id = :trabajador_id
                 AND :fecha BETWEEN fecha_inicio AND fecha_fin
@@ -136,7 +136,7 @@ class TurnosAsignados {
         }
         
         // 3. Verificar días especiales
-        $sql = "SELECT COUNT(*) as count, GROUP_CONCAT(tipo SEPARATOR ', ') as tipos
+        $sql = "SELECT COUNT(*) as count, " . Database::groupConcat('tipo', ', ') . " as tipos
                 FROM dias_especiales 
                 WHERE trabajador_id = :trabajador_id
                 AND tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS')
@@ -420,7 +420,7 @@ class TurnosAsignados {
     public function cancelar($id, $motivo = null, $usuario_id = null) {
         $sql = "UPDATE turnos_asignados SET 
                 estado = 'cancelado',
-                observaciones = CONCAT(COALESCE(observaciones, ''), ' | Cancelado: ', :motivo)
+                observaciones = " . (DB_DRIVER === 'pgsql' ? "COALESCE(observaciones, '') || ' | Cancelado: ' || :motivo" : "CONCAT(COALESCE(observaciones, ''), ' | Cancelado: ', :motivo)") . "
                 WHERE id = :id";
         
         $stmt = $this->db->prepare($sql);

@@ -270,9 +270,13 @@ class DiasEspeciales {
     //Cancelar turnos en rango
     
     private function cancelarTurnos($trabajador_id, $fecha_inicio, $fecha_fin) {
+        $concat_expr = DB_DRIVER === 'pgsql'
+            ? "COALESCE(observaciones, '') || ' | Cancelado por día especial'"
+            : "CONCAT(COALESCE(observaciones, ''), ' | Cancelado por día especial')";
+        
         $sql = "UPDATE turnos_asignados SET 
                 estado = 'cancelado',
-                observaciones = CONCAT(COALESCE(observaciones, ''), ' | Cancelado por día especial')
+                observaciones = $concat_expr
                 WHERE trabajador_id = :trabajador_id
                 AND fecha BETWEEN :fecha_inicio AND :fecha_fin
                 AND estado IN ('programado', 'activo')";

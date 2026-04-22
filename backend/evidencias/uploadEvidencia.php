@@ -34,7 +34,7 @@ if (empty($eval_ids)) $eval_ids = [$evaluacion_id];
 
 try {
     $pdo->beginTransaction();
-    $stmtIns = $pdo->prepare("INSERT INTO evidencias_cumplimiento (evaluacion_id, archivo, uploaded_at) VALUES (?, ?, NOW())");
+    $stmtIns = $pdo->prepare("INSERT INTO evidencias_cumplimiento (evaluacion_id, archivo, uploaded_at) VALUES (?, ?, " . Database::now() . ")");
     $stmtUpd = $pdo->prepare("UPDATE evaluaciones SET estado = 'CUMPLE' WHERE id = ?");
 
     foreach ($eval_ids as $id) {

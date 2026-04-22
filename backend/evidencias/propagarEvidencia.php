@@ -20,7 +20,7 @@ try {
 
     $insert = $pdo->prepare("
         INSERT INTO evidencias_cumplimiento (evaluacion_id, archivo, uploaded_at)
-        VALUES (?, ?, NOW())
+        VALUES (?, ?, " . Database::now() . ")
     ");
 
     $update = $pdo->prepare("

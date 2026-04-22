@@ -112,7 +112,7 @@ class CambiosTurno {
             $sql = "UPDATE cambios_turno SET 
                     estado = 'aprobado',
                     aprobado_por = :aprobado_por,
-                    fecha_aprobacion = NOW()
+                    fecha_aprobacion = " . Database::now() . "
                     WHERE id = :id";
             
             $stmt = $this->db->prepare($sql);
@@ -217,7 +217,7 @@ class CambiosTurno {
         // Simplemente cambiar el trabajador asignado
         $sql = "UPDATE turnos_asignados SET 
                 trabajador_id = :reemplazo_id,
-                observaciones = CONCAT(COALESCE(observaciones, ''), ' | Cobertura por: ', :solicitante_id)
+                observaciones = " . (DB_DRIVER === 'pgsql' ? "COALESCE(observaciones, '') || ' | Cobertura por: ' || :solicitante_id" : "CONCAT(COALESCE(observaciones, ''), ' | Cobertura por: ', :solicitante_id)") . "
                 WHERE id = :turno_id";
         
         $stmt = $this->db->prepare($sql);
@@ -235,7 +235,7 @@ class CambiosTurno {
         // Cancelar turno original y crear uno nuevo si hay reemplazo
         $sql = "UPDATE turnos_asignados SET 
                 estado = 'cancelado',
-                observaciones = CONCAT(COALESCE(observaciones, ''), ' | Cambio de emergencia: ', :motivo)
+                observaciones = " . (DB_DRIVER === 'pgsql' ? "COALESCE(observaciones, '') || ' | Cambio de emergencia: ' || :motivo" : "CONCAT(COALESCE(observaciones, ''), ' | Cambio de emergencia: ', :motivo)") . "
                 WHERE id = :turno_id";
         
         $stmt = $this->db->prepare($sql);

@@ -66,10 +66,13 @@ class Database {
     public function __wakeup() {}
 
     public static function groupConcat($column, $separator = ', ') {
+        // Remover DISTINCT si está presente en el parámetro
+        $column = str_replace('DISTINCT ', '', $column);
+        
         if (DB_DRIVER === 'pgsql') {
-            return "STRING_AGG($column, '$separator')";
+            return "STRING_AGG(CAST($column AS VARCHAR), '$separator')";
         }
-        return "GROUP_CONCAT($column SEPARATOR '$separator')";
+        return "GROUP_CONCAT(DISTINCT $column SEPARATOR '$separator')";
     }
 
     public static function currentDate() {
@@ -82,7 +85,7 @@ class Database {
 
     public static function dateDiff($date1, $date2) {
         if (DB_DRIVER === 'pgsql') {
-            return "($date1 - $date2)";
+            return "(($date1)::date - ($date2)::date)";
         }
         return "DATEDIFF($date1, $date2)";
     }
@@ -92,6 +95,17 @@ class Database {
             return "COALESCE($column, '$default')";
         }
         return "IFNULL($column, '$default')";
+    }
+
+    public static function concat(...$parts) {
+        if (DB_DRIVER === 'pgsql') {
+            return implode(" || ", $parts);
+        }
+        return "CONCAT(" . implode(", ", $parts) . ")";
+    }
+
+    public static function now() {
+        return DB_DRIVER === 'pgsql' ? 'CURRENT_TIMESTAMP' : 'NOW()';
     }
 }
 

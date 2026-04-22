@@ -273,9 +273,17 @@ class Incapacidades {
     //Cancelar turnos en rango de fechas
     
     private function cancelarTurnosEnRango($trabajador_id, $fecha_inicio, $fecha_fin) {
+        $observaciones_expr = DB_DRIVER === 'pgsql' 
+            ? "COALESCE(observaciones, '')" 
+            : "IFNULL(observaciones, '')";
+        
+        $concat_expr = DB_DRIVER === 'pgsql'
+            ? "$observaciones_expr || ' - Cancelado por incapacidad'"
+            : "CONCAT($observaciones_expr, ' - Cancelado por incapacidad')";
+        
         $sql = "UPDATE turnos_asignados 
                 SET estado = 'cancelado', 
-                    observaciones = CONCAT(" . Database::ifNull('observaciones', '') . ", ' - Cancelado por incapacidad')
+                    observaciones = $concat_expr
                 WHERE trabajador_id = :trabajador_id 
                 AND fecha BETWEEN :fecha_inicio AND :fecha_fin
                 AND estado IN ('programado', 'activo')";
