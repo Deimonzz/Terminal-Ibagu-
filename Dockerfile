@@ -3,18 +3,18 @@ FROM php:8.2-apache
 
 # 2. Instalar extensiones necesarias (INCLUYENDO POSTGRESQL)
 RUN apt-get update && apt-get install -y \
-        libpq-dev \        # Necesario para PostgreSQL
-        libzip-dev \
-        zip \
-        unzip \
-        git \
-        curl \
+    libpq-dev \
+    libzip-dev \
+    zip \
+    unzip \
+    git \
+    curl \
     && docker-php-ext-install \
-        pdo \
-        pdo_mysql \        # Para MySQL (tu entorno local)
-        pdo_pgsql \        # ¡PARA POSTGRESQL EN RENDER!
-        mysqli \
-        zip
+    pdo \
+    pdo_mysql \
+    pdo_pgsql \
+    mysqli \
+    zip
 
 # 3. Instalar Composer (si usas dependencias)
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
