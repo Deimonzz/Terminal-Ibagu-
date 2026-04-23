@@ -15,16 +15,18 @@ class AsignacionAutomatica {
     }
 
     public function asignarMesCompleto($mes, $anio, $opciones = []) {
-        $diasMes       = cal_days_in_month(CAL_GREGORIAN, $mes, $anio);
+        // Calcular días del mes (alternativa a cal_days_in_month)
+        $diasMes = (int)date('t', mktime(0, 0, 0, $mes, 1, $anio));
         $asignaciones  = [];
         $errores       = [];
         $libresAsignados = [];
         $libresErrores   = [];
 
         // ── Datos base ──────────────────────────────────────────
-        $trabajadoresActivos = $this->db->query(
+        $stmt = $this->db->query(
             "SELECT id, nombre FROM trabajadores WHERE activo = true ORDER BY nombre"
-        )->fetchAll();
+        );
+        $trabajadoresActivos = $stmt->fetchAll();
 
         $puestos = $this->obtenerPuestos();
 
@@ -53,22 +55,17 @@ class AsignacionAutomatica {
         // Puestos nocturnos
         $puestosNocturnos = ['V1','V2','C','D3','F6','F11'];
 
-        // Máximo libres permitidos el mismo día para garantizar cobertura
+        // Máximo libres permitidos el mismo día
         $MAX_LIBRES_DIA = 4;
 
         try {
             // ════════════════════════════════════════════════════
             // PASO 1 — DÍAS LIBRES
-            // Reglas:
-            //   · 1 libre por trabajador por semana
-            //   · Solo lunes a viernes (NO sábado/domingo)
-            //   · Mínimo 6 días de diferencia con su libre anterior
-            //   · Máximo MAX_LIBRES_DIA trabajadores libres el mismo día
             // ════════════════════════════════════════════════════
 
-            // Calcular semanas del mes
             $semanas = $this->calcularSemanas($mes, $anio);
 
+            // Preparar consultas (adaptadas para PostgreSQL)
             $stmtChkLibreSemana = $this->db->prepare(
                 "SELECT COUNT(*) as cnt FROM dias_especiales
                  WHERE trabajador_id = ? AND tipo IN ('L','L8','LC','VAC','SUS')
@@ -93,38 +90,32 @@ class AsignacionAutomatica {
 
             foreach ($semanas as $semana) {
                 foreach ($trabajadoresActivos as $trab) {
-                    // ¿Ya tiene libre esta semana?
                     $stmtChkLibreSemana->execute([$trab['id'], $semana['lunes'], $semana['domingo']]);
-                    if ((int)$stmtChkLibreSemana->fetch(PDO::FETCH_ASSOC)['cnt'] > 0) continue;
+                    $row = $stmtChkLibreSemana->fetch(PDO::FETCH_ASSOC);
+                    if ((int)$row['cnt'] > 0) continue;
 
-                    // Último libre (para calcular separación mínima de 6 días)
                     $stmtUltimoLibre->execute([$trab['id'], $semana['lunes']]);
                     $rowUltimo     = $stmtUltimoLibre->fetch(PDO::FETCH_ASSOC);
                     $tsUltimoLibre = $rowUltimo ? strtotime($rowUltimo['fecha_inicio']) : null;
 
-                    // Candidatos: lunes a viernes de la semana dentro del mes
-                    // Ordenados por carga ascendente (el día con menos libres primero)
                     $candidatos = [];
                     for ($d = 0; $d <= 6; $d++) {
                         $ts       = strtotime($semana['lunes']) + $d * 86400;
-                        $dow      = (int)date('N', $ts); // 1=lun, 7=dom
+                        $dow      = (int)date('N', $ts);
                         $fechaDia = date('Y-m-d', $ts);
 
-                        // Solo lunes a viernes
                         if ($dow > 5) continue;
-                        // Solo dentro del mes
                         if ((int)date('n', $ts) != (int)$mes) continue;
-                        // Respetar separación mínima de 6 días
                         if ($tsUltimoLibre && ($ts - $tsUltimoLibre) < (6 * 86400)) continue;
 
                         $stmtCargaDia->execute([$fechaDia]);
-                        $carga = (int)$stmtCargaDia->fetch(PDO::FETCH_ASSOC)['cnt'];
+                        $rowCarga = $stmtCargaDia->fetch(PDO::FETCH_ASSOC);
+                        $carga = (int)$rowCarga['cnt'];
                         if ($carga < $MAX_LIBRES_DIA) {
                             $candidatos[] = ['fecha' => $fechaDia, 'carga' => $carga];
                         }
                     }
 
-                    // Fallback 1: ignorar separación mínima pero respetar límite de carga
                     if (empty($candidatos)) {
                         for ($d = 0; $d <= 6; $d++) {
                             $ts       = strtotime($semana['lunes']) + $d * 86400;
@@ -133,14 +124,14 @@ class AsignacionAutomatica {
                             if ($dow > 5) continue;
                             if ((int)date('n', $ts) != (int)$mes) continue;
                             $stmtCargaDia->execute([$fechaDia]);
-                            $carga = (int)$stmtCargaDia->fetch(PDO::FETCH_ASSOC)['cnt'];
+                            $rowCarga = $stmtCargaDia->fetch(PDO::FETCH_ASSOC);
+                            $carga = (int)$rowCarga['cnt'];
                             if ($carga < $MAX_LIBRES_DIA) {
                                 $candidatos[] = ['fecha' => $fechaDia, 'carga' => $carga];
                             }
                         }
                     }
 
-                    // Fallback 2: cualquier día entre semana aunque supere el límite
                     if (empty($candidatos)) {
                         for ($d = 0; $d <= 6; $d++) {
                             $ts       = strtotime($semana['lunes']) + $d * 86400;
@@ -149,7 +140,8 @@ class AsignacionAutomatica {
                             if ($dow > 5) continue;
                             if ((int)date('n', $ts) != (int)$mes) continue;
                             $stmtCargaDia->execute([$fechaDia]);
-                            $carga = (int)$stmtCargaDia->fetch(PDO::FETCH_ASSOC)['cnt'];
+                            $rowCarga = $stmtCargaDia->fetch(PDO::FETCH_ASSOC);
+                            $carga = (int)$rowCarga['cnt'];
                             $candidatos[] = ['fecha' => $fechaDia, 'carga' => $carga];
                         }
                     }
@@ -159,8 +151,9 @@ class AsignacionAutomatica {
                         continue;
                     }
 
-                    // Elegir el de menor carga
-                    usort($candidatos, fn($a,$b) => $a['carga'] - $b['carga']);
+                    usort($candidatos, function($a, $b) {
+                        return $a['carga'] - $b['carga'];
+                    });
                     $mejorDia = $candidatos[0]['fecha'];
 
                     try {
@@ -174,10 +167,6 @@ class AsignacionAutomatica {
 
             // ════════════════════════════════════════════════════
             // PASO 2 — TURNOS L4
-            // Reglas:
-            //   · 1 L4 por trabajador por semana
-            //   · Solo lunes a viernes
-            //   · El trabajador debe estar disponible ese día
             // ════════════════════════════════════════════════════
 
             $stmtChkL4Trab = $this->db->prepare(
@@ -195,14 +184,14 @@ class AsignacionAutomatica {
             foreach ($semanas as $semana) {
                 foreach ($trabajadoresActivos as $trab) {
                     $stmtChkL4Trab->execute([$trab['id'], $semana['lunes'], $semana['domingo']]);
-                    if ((int)$stmtChkL4Trab->fetch(PDO::FETCH_ASSOC)['cnt'] > 0) continue;
+                    $rowChk = $stmtChkL4Trab->fetch(PDO::FETCH_ASSOC);
+                    if ((int)$rowChk['cnt'] > 0) continue;
 
-                    // Días disponibles entre semana
                     $diasSemana = [];
                     for ($d = 0; $d <= 6; $d++) {
                         $ts  = strtotime($semana['lunes']) + $d * 86400;
                         $dow = (int)date('N', $ts);
-                        if ($dow > 5) continue; // solo lun-vie
+                        if ($dow > 5) continue;
                         if ((int)date('n', $ts) != (int)$mes) continue;
                         $diasSemana[] = date('Y-m-d', $ts);
                     }
@@ -218,12 +207,15 @@ class AsignacionAutomatica {
                             $turnoIdL4 = $puestosL4Map[$puesto['codigo']] ?? 9;
 
                             $stmtChkL4Puesto->execute([$puesto['id'], $turnoIdL4, $fechaL4]);
-                            if ((int)$stmtChkL4Puesto->fetch(PDO::FETCH_ASSOC)['cnt'] > 0) continue;
+                            $rowPuesto = $stmtChkL4Puesto->fetch(PDO::FETCH_ASSOC);
+                            if ((int)$rowPuesto['cnt'] > 0) continue;
 
                             $disponibles = $this->trabajadores->obtenerDisponibles(
                                 $puesto['id'], $turnoIdL4, $fechaL4
                             );
-                            $disponible = array_filter($disponibles, fn($t) => $t['id'] == $trab['id']);
+                            $disponible = array_filter($disponibles, function($t) use ($trab) {
+                                return $t['id'] == $trab['id'];
+                            });
                             if (empty($disponible)) continue;
 
                             $resultado = $this->turnosAsignados->asignar([
@@ -250,7 +242,6 @@ class AsignacionAutomatica {
 
             // ════════════════════════════════════════════════════
             // PASO 3 — TURNOS NORMALES (T1, T2, T3)
-            // Los días libres ya están en BD → obtenerDisponibles los respeta
             // ════════════════════════════════════════════════════
 
             $stmtOcupPuesto = $this->db->prepare(
@@ -276,19 +267,21 @@ class AsignacionAutomatica {
                         $turnoIdReal  = $turnoIdPorNumero[$turno] ?? $turno;
                         $codigoPuesto = strtoupper($puesto['codigo']);
 
-                        // Si el puesto tiene L4 ese día, no asignar el turno normal que sustituye
                         if (isset($puestosL4Turno[$codigoPuesto]) && $puestosL4Turno[$codigoPuesto] == $turno) {
                             $stmtTieneL4->execute([':pid'=>$puesto['id'],':fecha'=>$fecha]);
-                            if ((int)$stmtTieneL4->fetch(PDO::FETCH_ASSOC)['cnt'] > 0) continue;
+                            $rowL4 = $stmtTieneL4->fetch(PDO::FETCH_ASSOC);
+                            if ((int)$rowL4['cnt'] > 0) continue;
                         }
 
                         $stmtOcupPuesto->execute([':pid'=>$puesto['id'],':nturno'=>$turno,':fecha'=>$fecha]);
-                        if ((int)$stmtOcupPuesto->fetch(PDO::FETCH_ASSOC)['cnt'] > 0) continue;
+                        $rowOcup = $stmtOcupPuesto->fetch(PDO::FETCH_ASSOC);
+                        if ((int)$rowOcup['cnt'] > 0) continue;
 
                         $disponibles = $this->trabajadores->obtenerDisponibles($puesto['id'], $turnoIdReal, $fecha);
 
                         if (count($disponibles) > 0) {
-                            $sel = $disponibles[array_rand($disponibles)];
+                            $randomIndex = array_rand($disponibles);
+                            $sel = $disponibles[$randomIndex];
                             $resultado = $this->turnosAsignados->asignar([
                                 'trabajador_id'     => $sel['id'],
                                 'puesto_trabajo_id' => $puesto['id'],
@@ -325,14 +318,21 @@ class AsignacionAutomatica {
     }
 
     private function calcularSemanas($mes, $anio) {
-        $diasMes = cal_days_in_month(CAL_GREGORIAN, $mes, $anio);
+        $diasMes = (int)date('t', mktime(0, 0, 0, $mes, 1, $anio));
         $semanas = [];
         for ($dia = 1; $dia <= $diasMes; $dia++) {
             $ts  = mktime(0,0,0,$mes,$dia,$anio);
             $dow = (int)date('N', $ts);
             $lunesTs  = $ts - ($dow - 1) * 86400;
             $lunesStr = date('Y-m-d', $lunesTs);
-            if (!in_array($lunesStr, array_column($semanas,'lunes'))) {
+            $encontrado = false;
+            foreach ($semanas as $sem) {
+                if ($sem['lunes'] === $lunesStr) {
+                    $encontrado = true;
+                    break;
+                }
+            }
+            if (!$encontrado) {
                 $semanas[] = [
                     'lunes'   => $lunesStr,
                     'domingo' => date('Y-m-d', $lunesTs + 6 * 86400)
