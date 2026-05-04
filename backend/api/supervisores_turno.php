@@ -20,8 +20,9 @@ try {
         $id    = $_GET['id']    ?? null;
         $fecha = $_GET['fecha'] ?? null;
 
-        $fechaInicio = $_GET['fecha_inicio'] ?? null;
-        $fechaFin    = $_GET['fecha_fin']    ?? null;
+        $fechaInicio   = $_GET['fecha_inicio'] ?? null;
+        $fechaFin      = $_GET['fecha_fin']    ?? null;
+        $trabajadorId  = $_GET['trabajador_id'] ?? null;
 
         if ($id) {
             // Obtener uno por id
@@ -36,14 +37,21 @@ try {
             sendJson(['success' => true, 'data' => $row ?: null]);
         } elseif ($fechaInicio && $fechaFin) {
             // Rango de fechas (para grilla mensual)
-            $stmt = $db->prepare(
+            $query = 
                 "SELECT st.*, t.nombre as trabajador, t.cedula
                  FROM supervisores_turno st
                  INNER JOIN trabajadores t ON t.id = st.trabajador_id
-                 WHERE st.fecha BETWEEN :fi AND :ff
-                 ORDER BY st.fecha ASC, st.hora_inicio ASC"
-            );
-            $stmt->execute([':fi' => $fechaInicio, ':ff' => $fechaFin]);
+                 WHERE st.fecha BETWEEN :fi AND :ff";
+            if ($trabajadorId) {
+                $query .= " AND st.trabajador_id = :tid";
+            }
+            $query .= " ORDER BY st.fecha ASC, st.hora_inicio ASC";
+            $stmt = $db->prepare($query);
+            $params = [':fi' => $fechaInicio, ':ff' => $fechaFin];
+            if ($trabajadorId) {
+                $params[':tid'] = $trabajadorId;
+            }
+            $stmt->execute($params);
             sendJson(['success' => true, 'data' => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
         } elseif ($fecha) {
             // Un día específico (para vista diaria)

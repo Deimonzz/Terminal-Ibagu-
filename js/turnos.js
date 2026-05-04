@@ -4630,10 +4630,11 @@ async function recargarFilaMensual(trabId) {
 
     try {
         // Cargar solo datos del trabajador afectado
-        const [rT, rDE, rI] = await Promise.all([
+        const [rT, rDE, rI, rS] = await Promise.all([
             fetch(`${API_BASE}turnos.php?fecha_inicio=${primerDia}&fecha_fin=${ultimoDia}&trabajador_id=${trabId}`).then(r=>r.json()),
             fetch(`${API_BASE}dias_especiales.php?fecha_inicio=${primerDia}&fecha_fin=${ultimoDia}&trabajador_id=${trabId}`).then(r=>r.json()),
-            fetch(`${API_BASE}incapacidades.php?fecha_inicio=${primerDia}&fecha_fin=${ultimoDia}&trabajador_id=${trabId}`).then(r=>r.json())
+            fetch(`${API_BASE}incapacidades.php?fecha_inicio=${primerDia}&fecha_fin=${ultimoDia}&trabajador_id=${trabId}`).then(r=>r.json()),
+            fetch(`${API_BASE}supervisores_turno.php?fecha_inicio=${primerDia}&fecha_fin=${ultimoDia}&trabajador_id=${trabId}`).then(r=>r.json())
         ]);
 
         // Reconstruir índice solo para este trabajador
@@ -4664,6 +4665,23 @@ async function recargarFilaMensual(trabId) {
                     idx[f].push({ tipo_especial: 'INC', descripcion: inc.tipo_incapacidad||'Incapacidad', estado: 'activa', trabajador_id: trabId });
             }
         });
+        if (rS.success && rS.data) rS.data
+            .filter(s => String(s.trabajador_id) === String(trabId))
+            .forEach(s => {
+                const f = s.fecha;
+                if (!idx[f]) idx[f] = [];
+                if (!idx[f].some(x => x.tipo_especial === 'SUP')) {
+                    idx[f].push({
+                        id: s.id || null,
+                        tipo_especial: 'SUP',
+                        descripcion: s.descripcion || '',
+                        estado: s.estado || 'programado',
+                        trabajador_id: trabId,
+                        hora_inicio: s.hora_inicio || null,
+                        hora_fin: s.hora_fin || null
+                    });
+                }
+            });
 
         // Actualizar cada celda de la fila en el DOM
         const fila = document.querySelector(`tr[data-trab-id="${trabId}"]`);
@@ -4702,7 +4720,8 @@ function renderCeldaMensual(asigs, trabId, fecha, nombre) {
         'INC':  { bg:'#f8d7da',  color:'#721c24' },
         'ADMM': { bg:'#fde8d8',  color:'#7d3800' },
         'ADMT': { bg:'#fde8d8',  color:'#7d3800' },
-        'ADM':  { bg:'#fde8d8',  color:'#7d3800' }
+        'ADM':  { bg:'#fde8d8',  color:'#7d3800' },
+        'SUP':  { bg:'#f3e8ff',  color:'#6b21a8' }
     };
 
     return asigs.map(a => {
@@ -4710,7 +4729,13 @@ function renderCeldaMensual(asigs, trabId, fecha, nombre) {
         if (a.tipo_especial) {
             const cfg   = COLORES[a.tipo_especial] || { bg:'#e9ecef', color:'#495057' };
             const esAuto = a.tipo_especial === 'L' && (a.descripcion||'').startsWith('AUTO:');
-            etiqueta = esAuto ? 'L⚡' : a.tipo_especial;
+            if (a.tipo_especial === 'SUP') {
+                etiqueta = (a.hora_inicio && a.hora_fin)
+                    ? `${(a.hora_inicio||'').substring(0,5)}-${(a.hora_fin||'').substring(0,5)}`
+                    : 'SUP';
+            } else {
+                etiqueta = esAuto ? 'L⚡' : a.tipo_especial;
+            }
             bg    = esAuto ? '#fd7e14' : cfg.bg;
             color = esAuto ? 'white'   : cfg.color;
         } else {
@@ -6322,10 +6347,15 @@ async function cargarTablaRestricciones() {
         let html = '<table><thead><tr style="background:linear-gradient(135deg,var(--terminal) 0%,#027433 100%);color:white;">';
         html += '<th>Trabajador</th><th>Tipo</th><th>Descripción</th><th>Vigencia</th><th>Acciones</th></tr></thead><tbody>';
         restricciones.forEach(r => {
+            const tipo = r.tipo_restriccion || r.tipo || '-';
+            let descripcion = r.descripcion || '-';
+            if (tipo === 'puesto_especifico' && (r.puesto_codigo || r.puesto_nombre)) {
+                descripcion = 'No puede asignarse a ' + (r.puesto_codigo ? r.puesto_codigo : r.puesto_nombre) + (r.descripcion ? ' – ' + r.descripcion : '');
+            }
             html += '<tr>';
             html += '<td>' + (r.trabajador_nombre || r.nombre || '-') + '</td>';
-            html += '<td><span style="background:#f8d7da;color:#721c24;padding:2px 8px;border-radius:4px;font-size:0.82rem;font-weight:600;">' + (r.tipo_restriccion || r.tipo || '-') + '</span></td>';
-            html += '<td>' + (r.descripcion || '-') + '</td>';
+            html += '<td><span style="background:#f8d7da;color:#721c24;padding:2px 8px;border-radius:4px;font-size:0.82rem;font-weight:600;">' + tipo + '</span></td>';
+            html += '<td>' + descripcion + '</td>';
             html += '<td>' + (r.fecha_inicio || '-') + (r.fecha_fin ? ' al ' + r.fecha_fin : ' (indefinida)') + '</td>';
             html += '<td><button class="btn btn-sm btn-danger" onclick="eliminarRestriccion(' + r.id + ')"><i class="fas fa-trash"></i></button></td>';
             html += '</tr>';
@@ -6445,7 +6475,17 @@ async function verRestriccionesTrabajador(trabajadorId) {
         const t = data.data;
         const restrs = Array.isArray(t.restricciones) ? t.restricciones : [];
         const rows = restrs.length > 0
-            ? restrs.map(r => `<div class="restriccion-item"><strong>${r.tipo_restriccion || r.tipo}</strong><span>${r.descripcion || '-'}</span><small>${r.fecha_inicio || '-'}${r.fecha_fin ? ' al ' + r.fecha_fin : ''}</small></div>`).join('')
+            ? restrs.map(r => {
+                let descripcion = r.descripcion || '-';
+                if ((r.tipo_restriccion || r.tipo) === 'puesto_especifico') {
+                    const puesto = r.puesto_codigo ? `${r.puesto_codigo} - ${r.puesto_nombre || ''}`.trim() : null;
+                    descripcion = puesto ? `No puede asignarse a ${puesto}` : descripcion;
+                    if (r.descripcion) {
+                        descripcion += ` · ${r.descripcion}`;
+                    }
+                }
+                return `<div class="restriccion-item"><strong>${r.tipo_restriccion || r.tipo}</strong><span>${descripcion}</span><small>${r.fecha_inicio || '-'}${r.fecha_fin ? ' al ' + r.fecha_fin : ''}</small></div>`;
+            }).join('')
             : '<p class="info-box">No tiene restricciones activas.</p>';
 
         modalBody.innerHTML = `
@@ -6484,6 +6524,12 @@ function nuevaRestriccionModal(trabajadorId) {
                     <option value="puesto_especifico">Puesto específico</option>
                 </select>
             </div>
+            <div class="form-group" id="restriccion-puesto-group" style="display:none;">
+                <label for="restriccion-puesto-select">Puesto no asignable <span class="required">*</span></label>
+                <select id="restriccion-puesto-select" style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;">
+                    <option value="">Cargando puestos...</option>
+                </select>
+            </div>
             <div class="form-group">
                 <label for="restriccion-descripcion">Descripción</label>
                 <textarea id="restriccion-descripcion" rows="3" style="width:100%;padding:8px 12px;border:1px solid #dee2e6;border-radius:8px;"></textarea>
@@ -6505,18 +6551,50 @@ function nuevaRestriccionModal(trabajadorId) {
         </form>
     `;
     modalOverlay.style.display = 'flex';
+
+    const tipoSelect = document.getElementById('restriccion-tipo-select');
+    const puestoGroup = document.getElementById('restriccion-puesto-group');
+    const puestoSelect = document.getElementById('restriccion-puesto-select');
+
+    async function actualizarSelectorPuesto() {
+        if (tipoSelect.value !== 'puesto_especifico') {
+            puestoGroup.style.display = 'none';
+            puestoSelect.removeAttribute('required');
+            return;
+        }
+        puestoGroup.style.display = 'block';
+        puestoSelect.setAttribute('required', 'required');
+
+        try {
+            const res = await fetch(API_BASE + 'turnos.php?action=puestos');
+            const data = await res.json();
+            const puestos = data.success ? data.data : [];
+            puestoSelect.innerHTML = '<option value="">Seleccione un puesto</option>' + puestos.map(p => `<option value="${p.id}">${p.codigo} - ${p.nombre}</option>`).join('');
+        } catch (e) {
+            puestoSelect.innerHTML = '<option value="">No se pudieron cargar los puestos</option>';
+        }
+    }
+
+    tipoSelect.addEventListener('change', actualizarSelectorPuesto);
+    actualizarSelectorPuesto();
+
     document.getElementById('form-nueva-restriccion').addEventListener('submit', async function(e) {
         e.preventDefault();
         const trabajador_id = document.getElementById('restriccion-trabajador-id').value;
         const tipo = document.getElementById('restriccion-tipo-select').value;
         const descripcion = document.getElementById('restriccion-descripcion').value.trim();
+        const puesto_trabajo_id = document.getElementById('restriccion-puesto-select').value || null;
         const fecha_inicio = document.getElementById('restriccion-fecha-inicio').value;
         const fecha_fin = document.getElementById('restriccion-fecha-fin').value || null;
         if (!trabajador_id || !tipo || !fecha_inicio) {
             mostrarAlerta('Completa los campos obligatorios','warning');
             return;
         }
-        await guardarNuevaRestriccion({ trabajador_id, tipo_restriccion: tipo, descripcion, fecha_inicio, fecha_fin });
+        if (tipo === 'puesto_especifico' && !puesto_trabajo_id) {
+            mostrarAlerta('Selecciona el puesto específico','warning');
+            return;
+        }
+        await guardarNuevaRestriccion({ trabajador_id, tipo_restriccion: tipo, puesto_trabajo_id, descripcion, fecha_inicio, fecha_fin });
         cerrarModal();
         cargarTablaRestricciones();
         cargarMatrizPuestos();

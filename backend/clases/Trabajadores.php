@@ -165,11 +165,12 @@ class Trabajadores {
     }
     
     public function obtenerRestricciones($trabajador_id) {
-        $sql = "SELECT * FROM restricciones_trabajador 
-                WHERE trabajador_id = :id 
-                AND activa = true 
-                AND (fecha_fin IS NULL OR fecha_fin >= " . Database::currentDate() . ")
-                ORDER BY fecha_inicio DESC";
+        $sql = "SELECT rt.*, pt.codigo AS puesto_codigo, pt.nombre AS puesto_nombre FROM restricciones_trabajador rt
+                LEFT JOIN puestos_trabajo pt ON rt.puesto_trabajo_id = pt.id
+                WHERE rt.trabajador_id = :id 
+                AND rt.activa = true 
+                AND (rt.fecha_fin IS NULL OR rt.fecha_fin >= " . Database::currentDate() . ")
+                ORDER BY rt.fecha_inicio DESC";
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':id' => $trabajador_id]);
@@ -177,9 +178,11 @@ class Trabajadores {
     }
 
     public function obtenerListaRestricciones($filtros = []) {
-        $sql = "SELECT rt.*, t.nombre as trabajador_nombre, t.cedula
+        $sql = "SELECT rt.*, t.nombre as trabajador_nombre, t.cedula,
+                pt.id AS puesto_trabajo_id, pt.codigo AS puesto_codigo, pt.nombre AS puesto_nombre
                 FROM restricciones_trabajador rt
                 INNER JOIN trabajadores t ON rt.trabajador_id = t.id
+                LEFT JOIN puestos_trabajo pt ON rt.puesto_trabajo_id = pt.id
                 WHERE rt.activa = true";
         $params = [];
 
@@ -201,14 +204,15 @@ class Trabajadores {
     
     public function agregarRestriccion($datos) {
         $sql = "INSERT INTO restricciones_trabajador 
-                (trabajador_id, tipo_restriccion, descripcion, fecha_inicio, fecha_fin, documento_soporte) 
-                VALUES (:trabajador_id, :tipo, :descripcion, :fecha_inicio, :fecha_fin, :documento)";
+                (trabajador_id, tipo_restriccion, puesto_trabajo_id, descripcion, fecha_inicio, fecha_fin, documento_soporte) 
+                VALUES (:trabajador_id, :tipo, :puesto_id, :descripcion, :fecha_inicio, :fecha_fin, :documento)";
         
         try {
             $stmt = $this->db->prepare($sql);
             $stmt->execute([
                 ':trabajador_id' => $datos['trabajador_id'],
                 ':tipo' => $datos['tipo_restriccion'],
+                ':puesto_id' => $datos['puesto_trabajo_id'] ?? null,
                 ':descripcion' => $datos['descripcion'] ?? null,
                 ':fecha_inicio' => $datos['fecha_inicio'],
                 ':fecha_fin' => $datos['fecha_fin'] ?? null,
@@ -231,6 +235,7 @@ class Trabajadores {
     public function actualizarRestriccion($id, $datos) {
         $sql = "UPDATE restricciones_trabajador SET 
                 tipo_restriccion = :tipo,
+                puesto_trabajo_id = :puesto_id,
                 descripcion = :descripcion,
                 fecha_inicio = :fecha_inicio,
                 fecha_fin = :fecha_fin,
@@ -242,6 +247,7 @@ class Trabajadores {
             $stmt->execute([
                 ':id' => $id,
                 ':tipo' => $datos['tipo_restriccion'],
+                ':puesto_id' => $datos['puesto_trabajo_id'] ?? null,
                 ':descripcion' => $datos['descripcion'] ?? null,
                 ':fecha_inicio' => $datos['fecha_inicio'],
                 ':fecha_fin' => $datos['fecha_fin'] ?? null,
@@ -393,6 +399,20 @@ class Trabajadores {
             $params[':fecha10'] = $fecha;
             $params[':fecha11'] = $fecha;
         }
+
+        if ($puesto) {
+            $sql .= " AND t.id NOT IN (
+                SELECT trabajador_id FROM restricciones_trabajador 
+                WHERE tipo_restriccion = 'puesto_especifico'
+                AND activa = true
+                AND puesto_trabajo_id = :puesto_id
+                AND :fecha12 >= fecha_inicio
+                AND (:fecha13 <= fecha_fin OR fecha_fin IS NULL)
+            )";
+            $params[':puesto_id'] = $puesto_id;
+            $params[':fecha12'] = $fecha;
+            $params[':fecha13'] = $fecha;
+        }
         
         $sql .= " GROUP BY t.id ORDER BY t.nombre ASC";
         
@@ -428,15 +448,33 @@ class Trabajadores {
                     WHERE tipo IN ('LC','L','L8','VAC','SUS')
                     AND :fecha3 BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                     AND estado IN ('programado','activo')
-                )
+                )";
+        if (!empty($puesto_id)) {
+            $sql .= "
+                AND t.id NOT IN (
+                    SELECT trabajador_id FROM restricciones_trabajador
+                    WHERE tipo_restriccion = 'puesto_especifico'
+                    AND activa = true
+                    AND puesto_trabajo_id = :puesto_id_l4
+                    AND :fecha4 >= fecha_inicio
+                    AND (:fecha5 <= fecha_fin OR fecha_fin IS NULL)
+                )";
+        }
+        $sql .= "
                 ORDER BY t.nombre";
 
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([
+        $params = [
             ':fecha1' => $fecha,
             ':fecha2' => $fecha,
             ':fecha3' => $fecha
-        ]);
+        ];
+        if (!empty($puesto_id)) {
+            $params[':puesto_id_l4'] = $puesto_id;
+            $params[':fecha4'] = $fecha;
+            $params[':fecha5'] = $fecha;
+        }
+        $stmt->execute($params);
         return $stmt->fetchAll();
     }
 }

@@ -24,7 +24,7 @@ class AsignacionAutomatica {
 
         // ── Datos base ──────────────────────────────────────────
         $stmt = $this->db->query(
-            "SELECT id, nombre FROM trabajadores WHERE activo = true ORDER BY nombre"
+            "SELECT id, nombre FROM trabajadores WHERE activo = true AND LOWER(COALESCE(cargo, '')) != 'supervisor' ORDER BY nombre"
         );
         $trabajadoresActivos = $stmt->fetchAll();
 
