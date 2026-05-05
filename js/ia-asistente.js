@@ -4,12 +4,24 @@ const IA_HISTORIAL = [];
 let iaAbierto = false;
 
 function toggleChat() {
+    console.log('toggleChat called');
     iaAbierto = !iaAbierto;
     const panel = document.getElementById('ia-chat-panel');
-    panel.classList.toggle('open', iaAbierto);
+    console.log('panel:', panel);
+    if (!panel) return;
     if (iaAbierto) {
-        document.getElementById('ia-badge').style.display = 'none';
-        setTimeout(() => document.getElementById('ia-input').focus(), 300);
+        panel.classList.add('open');
+    } else {
+        panel.classList.remove('open');
+    }
+    console.log('iaAbierto:', iaAbierto);
+    if (iaAbierto) {
+        const badge = document.getElementById('ia-badge');
+        if (badge) badge.style.display = 'none';
+        setTimeout(() => {
+            const input = document.getElementById('ia-input');
+            if (input) input.focus();
+        }, 300);
     }
 }
 
@@ -41,6 +53,8 @@ function agregarMensaje(texto, esUsuario) {
         bubble.textContent = texto;
     } else {
         bubble.innerHTML = formatearMarkdown(texto);
+        // Agregar botones de acción si la respuesta los sugiere
+        agregarBotonesAccion(bubble, texto);
     }
     div.appendChild(bubble);
     container.appendChild(div);
@@ -48,17 +62,172 @@ function agregarMensaje(texto, esUsuario) {
     return bubble;
 }
 
+function agregarBotonesAccion(bubble, texto) {
+    // Detectar sugerencias de acción en el texto
+    const acciones = [];
+
+    if (texto.includes('asignar') || texto.includes('Asignar')) {
+        acciones.push({ texto: '📝 Ver interfaz de asignación', accion: () => window.location.href = '#asignar-turnos' });
+    }
+
+    if (texto.includes('reporte') || texto.includes('Reporte') || texto.includes('📊')) {
+        acciones.push({ texto: '📊 Generar reporte completo', accion: () => enviarMensajeIA_direct('Genera un reporte detallado del estado actual') });
+    }
+
+    if (texto.includes('equidad') || texto.includes('Equidad') || texto.includes('⚖️')) {
+        acciones.push({ texto: '⚖️ Análisis detallado de equidad', accion: () => enviarMensajeIA_direct('Realiza un análisis completo de equidad en turnos') });
+    }
+
+    if (texto.includes('predicción') || texto.includes('Predicción') || texto.includes('🔮')) {
+        acciones.push({ texto: '🔮 Ver predicciones semana', accion: () => enviarMensajeIA_direct('Predice problemas de cobertura para los próximos 7 días') });
+    }
+
+    if (acciones.length > 0) {
+        const botonesDiv = document.createElement('div');
+        botonesDiv.className = 'ia-action-buttons';
+        acciones.forEach(accion => {
+            const btn = document.createElement('button');
+            btn.className = 'ia-action-btn';
+            btn.textContent = accion.texto;
+            btn.onclick = accion.accion;
+            botonesDiv.appendChild(btn);
+        });
+        bubble.appendChild(botonesDiv);
+    }
+}
+
+function enviarMensajeIA_direct(texto) {
+    document.getElementById('ia-input').value = texto;
+    enviarMensajeIA();
+}
+
 function formatearMarkdown(texto) {
+    // Mejorar el formateo con más elementos visuales
     return texto
+        // Headers con mejor styling
+        .replace(/^### (.+)$/gm, '<div class="ia-header-3"><i class="fas fa-info-circle"></i> $1</div>')
+        .replace(/^## (.+)$/gm, '<div class="ia-header-2"><i class="fas fa-chart-line"></i> $1</div>')
+        .replace(/^# (.+)$/gm, '<div class="ia-header-1"><i class="fas fa-star"></i> $1</div>')
+
+        // Texto enfatizado
+        .replace(/\*\*\*(.+?)\*\*\*/g, '<strong class="ia-urgent">$1</strong>')
         .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
         .replace(/\*(.+?)\*/g, '<em>$1</em>')
-        .replace(/`(.+?)`/g, '<code>$1</code>')
-        .replace(/^### (.+)$/gm, '<strong style="display:block;margin:8px 0 4px;font-size:0.92rem;">$1</strong>')
-        .replace(/^## (.+)$/gm, '<strong style="display:block;margin:10px 0 4px;font-size:0.95rem;border-bottom:1px solid #dee2e6;padding-bottom:3px;">$1</strong>')
-        .replace(/^- (.+)$/gm, '<li>$1</li>')
-        .replace(/(<li>.*<\/li>\n?)+/g, '<ul>$&</ul>')
-        .replace(/\n\n/g, '<br><br>')
-        .replace(/\n/g, '<br>');
+        .replace(/`(.+?)`/g, '<code class="ia-code">$1</code>')
+
+        // Listas mejoradas
+        .replace(/^- (.+)$/gm, '<li class="ia-list-item"><i class="fas fa-check-circle"></i> $1</li>')
+        .replace(/(<li>.*<\/li>\n?)+/g, '<ul class="ia-list">$&</ul>')
+
+        // Alertas y warnings
+        .replace(/⚠️/g, '<i class="fas fa-exclamation-triangle ia-warning"></i>')
+        .replace(/🚨/g, '<i class="fas fa-exclamation-circle ia-alert"></i>')
+        .replace(/✅/g, '<i class="fas fa-check-circle ia-success"></i>')
+        .replace(/❌/g, '<i class="fas fa-times-circle ia-error"></i>')
+        .replace(/📋/g, '<i class="fas fa-clipboard-list"></i>')
+        .replace(/🔵/g, '<i class="fas fa-circle ia-info"></i>')
+        .replace(/📊/g, '<i class="fas fa-chart-bar"></i>')
+        .replace(/🏥/g, '<i class="fas fa-hospital"></i>')
+        .replace(/🌙/g, '<i class="fas fa-moon"></i>')
+        .replace(/👋/g, '<i class="fas fa-hand-paper"></i>')
+        .replace(/💡/g, '<i class="fas fa-lightbulb"></i>')
+        .replace(/🎯/g, '<i class="fas fa-bullseye"></i>')
+        .replace(/📅/g, '<i class="fas fa-calendar"></i>')
+        .replace(/👥/g, '<i class="fas fa-users"></i>')
+        .replace(/⏰/g, '<i class="fas fa-clock"></i>')
+        .replace(/🔄/g, '<i class="fas fa-sync"></i>')
+
+        // Tablas simples (formato markdown básico)
+        .replace(/\|(.+)\|/g, function(match) {
+            const cells = match.split('|').slice(1, -1).map(cell => cell.trim());
+            return '<tr>' + cells.map(cell => `<td>${cell}</td>`).join('') + '</tr>';
+        })
+        .replace(/(<tr>.*<\/tr>\n?)+/g, '<table class="ia-table">$&</table>')
+
+        // Enlaces clickeables
+        .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="ia-link">$1</a>')
+
+        // Saltos de línea
+        .replace(/\n\n/g, '</p><p>')
+        .replace(/\n/g, '<br>')
+
+        // Wrap in paragraph if not already wrapped
+        .replace(/^(.+)$/, '<p>$1</p>')
+        .replace(/(<p>.*?<\/p>)\s*(<p>.*?<\/p>)/g, '$1$2');
+}
+
+function extraerComandoIA(texto) {
+    const inicio = texto.indexOf('---COMANDO---');
+    if (inicio === -1) return null;
+    const fin = texto.indexOf('---FIN COMANDO---', inicio);
+    const jsonText = texto.substring(inicio + '---COMANDO---'.length, fin === -1 ? texto.length : fin).trim();
+    try {
+        return JSON.parse(jsonText);
+    } catch (e) {
+        console.warn('No se pudo parsear comando IA:', e);
+        return null;
+    }
+}
+
+async function ejecutarComandoIA(comando) {
+    if (!comando || !comando.action) return false;
+
+    if (comando.action === 'assign') {
+        const params = comando.params || comando;
+        const datos = {
+            trabajador_id: params.trabajador_id,
+            puesto_trabajo_id: params.puesto_trabajo_id,
+            turno_id: params.turno_id,
+            fecha: params.fecha,
+            estado: params.estado || 'programado',
+            created_by: params.created_by || 1
+        };
+
+        if (!datos.trabajador_id || !datos.puesto_trabajo_id || !datos.turno_id || !datos.fecha) {
+            agregarMensaje('❌ No se pudo ejecutar la asignación: faltan datos obligatorios en el comando.', false);
+            return false;
+        }
+
+        agregarMensaje('🔄 Ejecutando asignación solicitada por IA...', false);
+
+        try {
+            const validacion = await fetch(`${API_BASE}turnos.php?action=validar`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(datos)
+            }).then(r => r.json());
+
+            if (!validacion.success || !validacion.data.valido) {
+                const errores = validacion.data?.errores || ['Error desconocido en validación'];
+                agregarMensaje('❌ La asignación no pasó la validación:\n' + errores.map(e => `- ${e}`).join('\n'), false);
+                return false;
+            }
+
+            const response = await fetch(`${API_BASE}turnos.php`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(datos)
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                agregarMensaje('✅ Asignación ejecutada correctamente.', false);
+                if (typeof cargarEstadisticasDashboard === 'function') cargarEstadisticasDashboard();
+                if (typeof limpiarFormulario === 'function') limpiarFormulario();
+                return true;
+            }
+
+            const errores = data.errores ? data.errores.map(e => `- ${e}`).join('\n') : data.message || 'Error al asignar turno';
+            agregarMensaje('❌ No se pudo asignar el turno:\n' + errores, false);
+            return false;
+        } catch (error) {
+            console.error('Error ejecutando comando IA:', error);
+            agregarMensaje('❌ Error al ejecutar la asignación. Revisa la consola del navegador.', false);
+            return false;
+        }
+    }
+
+    return false;
 }
 
 function mostrarTyping() {
@@ -93,8 +262,16 @@ async function obtenerContextoSistema() {
             const d = new Date(hoy);
             return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().split('T')[0];
         })();
+        const primerDiaMesAnterior = (() => {
+            const d = new Date(hoy);
+            return new Date(d.getFullYear(), d.getMonth() - 1, 1).toISOString().split('T')[0];
+        })();
+        const ultimoDiaMesAnterior = (() => {
+            const d = new Date(hoy);
+            return new Date(d.getFullYear(), d.getMonth(), 0).toISOString().split('T')[0];
+        })();
 
-        const [rTrab, rTurnosHoy, rTurnosSemana, rIncap, rDiasEspSemana, rTurnosMes, rDiasEspMes, rPuestos, rIncapMes] = await Promise.all([
+        const [rTrab, rTurnosHoy, rTurnosSemana, rIncap, rDiasEspSemana, rTurnosMes, rDiasEspMes, rPuestos, rIncapMes, rTurnosMesAnterior, rDiasEspMesAnterior, rIncapMesAnterior, rSupervisores] = await Promise.all([
             fetch(API_BASE + 'trabajadores.php').then(r => r.json()),
             fetch(API_BASE + 'turnos.php?fecha=' + hoy).then(r => r.json()),
             fetch(API_BASE + 'turnos.php?fecha_inicio=' + inicioSemana + '&fecha_fin=' + finSemana).then(r => r.json()),
@@ -103,7 +280,11 @@ async function obtenerContextoSistema() {
             fetch(API_BASE + 'turnos.php?fecha_inicio=' + primerDiaMes + '&fecha_fin=' + ultimoDiaMes).then(r => r.json()).catch(() => ({ success: false })),
             fetch(API_BASE + 'dias_especiales.php?fecha_inicio=' + primerDiaMes + '&fecha_fin=' + ultimoDiaMes).then(r => r.json()).catch(() => ({ success: false })),
             fetch(API_BASE + 'turnos.php?action=puestos').then(r => r.json()).catch(() => ({ success: false })),
-            fetch(API_BASE + 'incapacidades.php?fecha_inicio=' + primerDiaMes + '&fecha_fin=' + ultimoDiaMes).then(r => r.json()).catch(() => ({ success: false }))
+            fetch(API_BASE + 'incapacidades.php?fecha_inicio=' + primerDiaMes + '&fecha_fin=' + ultimoDiaMes).then(r => r.json()).catch(() => ({ success: false })),
+            fetch(API_BASE + 'turnos.php?fecha_inicio=' + primerDiaMesAnterior + '&fecha_fin=' + ultimoDiaMesAnterior).then(r => r.json()).catch(() => ({ success: false })),
+            fetch(API_BASE + 'dias_especiales.php?fecha_inicio=' + primerDiaMesAnterior + '&fecha_fin=' + ultimoDiaMesAnterior).then(r => r.json()).catch(() => ({ success: false })),
+            fetch(API_BASE + 'incapacidades.php?fecha_inicio=' + primerDiaMesAnterior + '&fecha_fin=' + ultimoDiaMesAnterior).then(r => r.json()).catch(() => ({ success: false })),
+            fetch(API_BASE + 'supervisores_turno.php').then(r => r.json()).catch(() => ({ success: false }))
         ]);
 
         const trabajadores     = (rTrab.success ? rTrab.data : []).filter(t => t.activo);
@@ -116,6 +297,10 @@ async function obtenerContextoSistema() {
         const diasEspMes       = rDiasEspMes.success ? (rDiasEspMes.data || []) : [];
         const puestosLista     = rPuestos.success ? (rPuestos.data || []) : [];
         const incapacidadesMes = rIncapMes.success ? (rIncapMes.data || []) : [];
+        const turnosMesAnterior = (rTurnosMesAnterior.success ? rTurnosMesAnterior.data : []).filter(t => t.estado !== 'cancelado');
+        const diasEspMesAnterior = rDiasEspMesAnterior.success ? (rDiasEspMesAnterior.data || []) : [];
+        const incapacidadesMesAnterior = rIncapMesAnterior.success ? (rIncapMesAnterior.data || []) : [];
+        const supervisores     = rSupervisores.success ? (rSupervisores.data || []) : [];
 
         // Trabajadores con incapacidad activa hoy
         const trabConIncap = new Set(incapacidades.map(i => Number(i.trabajador_id)));
@@ -259,6 +444,10 @@ Turno 3 - Noche:  22:00 - 06:00
 L4: turno de 4 horas (horario varía por puesto)
 Turnos especiales: L (día libre), ADMM (admin mañana), ADMT (admin tarde), ADM (admin día completo)
 
+--- SUPERVISORES ASIGNADOS (${supervisores.length}) ---
+${supervisores.length === 0 ? 'Ninguno registrado.' :
+supervisores.map(s => `- ${s.nombre || s.trabajador || '?'}${s.puesto ? ' (' + s.puesto + ')' : ''}`).join('\n')}
+
 --- PUESTOS POR ÁREA ---
 DELTA: D1, D2, D3, D4
 FOX: F4, F5, F6, F11, F14, F15
@@ -269,6 +458,11 @@ EQUIPAJES: G
 --- RESUMEN MES COMPLETO (${primerDiaMes} al ${ultimoDiaMes}) ---
 Total turnos asignados en el mes: ${turnosMes.length}
 Días libres (L) asignados en el mes: ${diasEspMes.filter(d => ['L','L8','LC'].includes(d.tipo)).length}
+
+--- RESUMEN MES ANTERIOR (${primerDiaMesAnterior} al ${ultimoDiaMesAnterior}) ---
+Total turnos asignados el mes pasado: ${turnosMesAnterior.length}
+Días libres (L) asignados el mes pasado: ${diasEspMesAnterior.filter(d => ['L','L8','LC'].includes(d.tipo)).length}
+Incapacidades registradas el mes pasado: ${incapacidadesMesAnterior.length}
 
 --- VACACIONES EN EL MES ---
 ${(() => {
@@ -449,29 +643,71 @@ async function enviarMensajeIA() {
         // Obtener contexto actualizado del sistema
         const contexto = await obtenerContextoSistema();
 
-        const systemPrompt = `Eres un asistente experto en gestión de turnos laborales para la Terminal de Transportes de Ibagué. Tienes acceso en tiempo real a todos los datos del sistema.
+        const systemPrompt = `Eres un asistente experto avanzado en gestión de turnos laborales para la Terminal de Transportes de Ibagué. Tienes acceso completo y en tiempo real a todos los datos del sistema.
 
-Tu objetivo es ayudar al jefe de turno a:
-1. Identificar puestos sin cubrir y recomendar quién asignar
-2. Detectar problemas: trabajadores sin día libre, incapacidades, restricciones violadas
-3. Sugerir asignaciones específicas respetando todas las reglas
-4. Responder preguntas sobre el estado del sistema
-5. Proporcionar resúmenes claros y accionables
+Tu objetivo es ayudar al jefe de turno con análisis profundos, recomendaciones inteligentes y acciones concretas:
+1. **Análisis predictivo**: Identificar problemas futuros antes de que ocurran
+2. **Optimización de asignaciones**: Sugerir las mejores combinaciones trabajador-puesto-turno
+3. **Reportes inteligentes**: Generar resúmenes ejecutivos con métricas clave
+4. **Alertas proactivas**: Detectar anomalías y situaciones de riesgo
+5. **Recomendaciones accionables**: Proporcionar soluciones específicas con pasos claros
+6. **Análisis de patrones**: Identificar sobrecargas, subutilización y tendencias
 
-REGLAS DEL SISTEMA que debes respetar siempre:
-- El Turno 3 (nocturno 22:00-06:00) SOLO opera en estos puestos: V1, V2, C (Conduces), D3, F6, F11. Los demás puestos NO tienen Turno 3.
-- L4 solo aplica en F5, F15, D2, F11 con horarios específicos
-- Cada trabajador debe tener 1 día libre (L) por semana obligatoriamente
-- Los trabajadores con incapacidad activa no pueden ser asignados
-- Los cumpleaños NO están registrados en el sistema (la tabla trabajadores no tiene fecha_nacimiento). Si te preguntan sobre cumpleaños, indica que ese dato no está disponible en la BD actual.
-- TNR = Turno No Realizado: el trabajador no se presentó. Cuenta como turno asignado pero no realizado.
-- Los trabajadores pueden tener restricciones de puesto específico (ej: no puede ir a D1). Respétalas al sugerir asignaciones.
-- Respetar restricciones individuales de cada trabajador (no_turno_noche, no_fuerza_fisica, movilidad_limitada, problema_visual, puesto_especifico)
+FUNCIONES AVANZADAS QUE PUEDES REALIZAR:
+- **Asignaciones óptimas**: Analizar restricciones, preferencias y carga de trabajo para sugerir asignaciones perfectas
+- **Análisis de equidad**: Detectar trabajadores sobrecargados o con pocos turnos
+- **Predicciones de cobertura**: Calcular probabilidades de cobertura futura basadas en patrones históricos
+- **Reportes personalizados**: Generar informes en diferentes formatos (resumen, detallado, ejecutivo)
+- **Simulaciones**: "Qué pasaría si" escenarios para cambios en el sistema
+- **Métricas avanzadas**: Eficiencia de asignación, rotación de personal, cumplimiento de reglas
+
+COMANDOS DE EJECUCIÓN DIRECTA:
+Si el usuario pide asignar un turno, responde con un bloque JSON EXACTO entre las etiquetas ---COMANDO--- y ---FIN COMANDO---.
+El bloque debe tener esta forma:
+---COMANDO---
+{
+  "action": "assign",
+  "params": {
+     "trabajador_id": 12,
+     "puesto_trabajo_id": 5,
+     "turno_id": 3,
+     "fecha": "2026-05-04"
+  }
+}
+---FIN COMANDO---
+
+Puedes añadir texto normal antes o después del bloque, pero el bloque JSON debe ser válido. El sistema ejecutará la acción si el JSON es correcto.
+
+FORMATO DE RESPUESTAS:
+- Usa **encabezados jerárquicos** (# ## ###) para organizar la información
+- **Listas numeradas** para pasos o prioridades
+- **Íconos descriptivos** (⚠️ 🚨 ✅ 📊 💡) para resaltar información importante
+- **Código inline** para nombres técnicos o códigos
+- **Enlaces simulados** [texto](acción) para sugerir acciones
+- **Tablas simples** cuando compares datos
+- **Resúmenes ejecutivos** al inicio de respuestas complejas
+
+REGLAS DEL SISTEMA que debes respetar SIEMPRE:
+- El Turno 3 (nocturno 22:00-06:00) SOLO opera en: V1, V2, C (Conduces), D3, F6, F11. Los demás puestos NO tienen Turno 3.
+- L4 solo aplica en F5, F15, D2, F11 con horarios específicos y SUSTITUYE turnos normales
+- Cada trabajador debe tener exactamente 1 día libre (L) por semana obligatoriamente
+- Los trabajadores con incapacidad activa NO pueden ser asignados
+- Respeta TODAS las restricciones individuales de cada trabajador
+- TNR = Turno No Realizado: cuenta como asignado pero no realizado
+- Los cumpleaños NO están registrados (no uses esa información)
+
+ESTRATEGIA DE RESPUESTAS:
+1. **Evalúa la urgencia**: Si hay problemas críticos, menciónalos PRIMERO con 🚨
+2. **Proporciona contexto**: Resume el estado actual antes de recomendaciones
+3. **Sé específico**: Nombra trabajadores, puestos y turnos concretos
+4. **Ofrece alternativas**: Cuando sugieras asignaciones, da opciones con pros/cons
+5. **Incluye métricas**: Usa porcentajes, conteos y ratios para respaldar recomendaciones
+6. **Termina con acciones**: "¿Quieres que implemente esta sugerencia?" o "¿Necesitas más detalles?"
 
 DATOS ACTUALES DEL SISTEMA:
 ${contexto}
 
-Responde de forma concisa, práctica y en español. Usa listas para facilitar la lectura. Cuando sugieras asignaciones, sé específico: indica el trabajador, el puesto y el turno. Si hay algo urgente, menciónalo primero.`;
+Responde en español, sé conciso pero completo. Si la respuesta es compleja, estructura con encabezados claros. Siempre termina ofreciendo ayuda adicional.`;
 
         // Construir mensajes para la API (últimos 10 de historial para no exceder tokens)
         const mensajesAPI = IA_HISTORIAL.slice(-10).map(m => ({
@@ -496,6 +732,11 @@ Responde de forma concisa, práctica y en español. Usa listas para facilitar la
             agregarMensaje(respuesta, false);
             IA_HISTORIAL.push({ role: 'assistant', content: respuesta });
 
+            const comando = extraerComandoIA(respuesta);
+            if (comando) {
+                await ejecutarComandoIA(comando);
+            }
+
             // Verificar si hay alertas urgentes mencionadas
             if (respuesta.toLowerCase().includes('urgente') || respuesta.toLowerCase().includes('sin cubrir')) {
                 if (!iaAbierto) mostrarBadgeIA();
@@ -519,34 +760,134 @@ function mostrarBadgeIA() {
     document.getElementById('ia-badge').style.display = 'flex';
 }
 
+function exportarConversacionIA() {
+    const fecha = new Date().toLocaleString('es-CO');
+    let contenido = `CONVERSACIÓN CON ASISTENTE IA - ${fecha}\n`;
+    contenido += '='.repeat(50) + '\n\n';
+
+    IA_HISTORIAL.forEach((msg, i) => {
+        const rol = msg.role === 'user' ? 'Usuario' : 'Asistente IA';
+        contenido += `[${rol}] ${msg.content}\n\n`;
+    });
+
+    // Crear blob y descargar
+    const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `conversacion-ia-${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    // Feedback visual
+    const btn = document.querySelector('.ia-export-btn');
+    if (btn) {
+        const originalIcon = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-check"></i>';
+        btn.style.background = '#198754';
+        setTimeout(() => {
+            btn.innerHTML = originalIcon;
+            btn.style.background = '';
+        }, 1500);
+    }
+}
+
+// Exponer funciones globales y asegurar eventos del botón flotante
+function inicializarAsistenteIA() {
+    console.log('inicializarAsistenteIA called');
+    window.toggleChat = toggleChat;
+    window.enviarMensajeIA = enviarMensajeIA;
+    window.enviarSugerencia = enviarSugerencia;
+    window.iaKeyDown = iaKeyDown;
+    window.autoResize = autoResize;
+    window.exportarConversacionIA = exportarConversacionIA;
+
+    const bubble = document.getElementById('ia-chat-bubble');
+    console.log('bubble:', bubble);
+    if (bubble) {
+        bubble.addEventListener('click', toggleChat);
+        bubble.style.pointerEvents = 'auto';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', inicializarAsistenteIA);
+console.log('IA asistente cargado');
+
 // ─── ALERTA PROACTIVA AL CARGAR ─────────────────────────────────────────────
 
 async function verificarAlertasIA() {
     try {
         const hoy = new Date().toISOString().split('T')[0];
-        const [rTurnosHoy, rTrab] = await Promise.all([
+        const mañana = new Date(Date.now() + 86400000).toISOString().split('T')[0];
+
+        const [rTurnosHoy, rTrab, rTurnosMañana] = await Promise.all([
             fetch(API_BASE + 'turnos.php?fecha=' + hoy).then(r => r.json()),
-            fetch(API_BASE + 'trabajadores.php').then(r => r.json())
+            fetch(API_BASE + 'trabajadores.php').then(r => r.json()),
+            fetch(API_BASE + 'turnos.php?fecha=' + mañana).then(r => r.json()).catch(() => ({ success: false }))
         ]);
 
         const turnosHoy  = (rTurnosHoy.success ? rTurnosHoy.data : []).filter(t => t.estado !== 'cancelado');
         const totalTrab  = (rTrab.success ? rTrab.data : []).filter(t => t.activo).length;
+        const turnosMañana = (rTurnosMañana.success ? rTurnosMañana.data : []).filter(t => t.estado !== 'cancelado');
 
-        // Si hay menos del 30% del día cubierto → mostrar badge
-        const TOTAL_ESPERADO = 17 * 3;
-        if (turnosHoy.length < TOTAL_ESPERADO * 0.3) {
+        // Calcular métricas de cobertura
+        const TOTAL_ESPERADO = 17 * 3; // 17 puestos × 3 turnos
+        const coberturaHoy = (turnosHoy.length / TOTAL_ESPERADO) * 100;
+        const coberturaMañana = turnosMañana.length > 0 ? (turnosMañana.length / TOTAL_ESPERADO) * 100 : null;
+
+        // Alertas inteligentes
+        let alertas = [];
+
+        // Cobertura crítica hoy
+        if (coberturaHoy < 30) {
+            alertas.push(`🚨 **CRÍTICO:** Solo ${turnosHoy.length} turnos asignados hoy (${coberturaHoy.toFixed(1)}% de cobertura)`);
+        } else if (coberturaHoy < 50) {
+            alertas.push(`⚠️ **Atención:** Cobertura baja hoy (${coberturaHoy.toFixed(1)}%) - ${TOTAL_ESPERADO - turnosHoy.length} puestos faltantes`);
+        }
+
+        // Problema mañana
+        if (coberturaMañana !== null && coberturaMañana < 40) {
+            alertas.push(`🔮 **Predicción:** Mañana tendrá cobertura crítica (${coberturaMañana.toFixed(1)}%)`);
+        }
+
+        // Verificar días libres esta semana
+        const inicioSemana = (() => {
+            const d = new Date();
+            const day = d.getDay();
+            const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+            return new Date(d.setDate(diff)).toISOString().split('T')[0];
+        })();
+
+        const rDiasEsp = await fetch(API_BASE + 'dias_especiales.php?fecha_inicio=' + inicioSemana + '&fecha_fin=' + mañana).then(r => r.json()).catch(() => ({ success: false }));
+        const diasEspSemana = rDiasEsp.success ? rDiasEsp.data : [];
+
+        const libresEstaSemana = new Set(
+            diasEspSemana
+                .filter(d => ['L','L8','LC'].includes(d.tipo))
+                .map(d => Number(d.trabajador_id))
+        );
+
+        const sinLibreSemana = totalTrab - libresEstaSemana.size;
+        if (sinLibreSemana > 0) {
+            alertas.push(`⚖️ **Equidad:** ${sinLibreSemana} trabajadores sin día libre esta semana`);
+        }
+
+        // Mostrar alertas si hay alguna crítica
+        if (alertas.length > 0) {
             mostrarBadgeIA();
 
-            // Si el chat ya está abierto, avisar automáticamente
             if (iaAbierto) {
-                agregarMensaje(
-                    `⚠️ **Alerta automática:** Solo hay **${turnosHoy.length}** turnos asignados hoy de ${TOTAL_ESPERADO} esperados. ¿Quieres que revise qué puestos faltan y sugiera asignaciones?`,
-                    false
-                );
+                const mensajeAlerta = `**🚨 ALERTAS DEL SISTEMA**\n\n${alertas.join('\n\n')}\n\n¿Te ayudo a resolver estos problemas? Puedo sugerir asignaciones específicas y generar un plan de acción.`;
+                agregarMensaje(mensajeAlerta, false);
             }
+        } else if (coberturaHoy < 70) {
+            // Badge sutil para cobertura moderada
+            mostrarBadgeIA();
         }
     } catch(e) {
-        // Silencioso
+        console.error('Error en alertas IA:', e);
     }
 }
 

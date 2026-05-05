@@ -534,7 +534,7 @@
      </div>
 
      <!-- IA Asistente flotante -->
-     <div id="ia-chat-bubble" onclick="toggleChat()" title="Asistente IA">
+     <div id="ia-chat-bubble" title="Asistente IA">
          <div class="ia-bubble-inner">
              <i class="fas fa-robot"></i>
              <span class="ia-badge" id="ia-badge" style="display:none;">!</span>
@@ -548,9 +548,15 @@
                  <div>
                      <strong>Asistente de Turnos</strong>
                      <span class="ia-status"><span class="ia-dot"></span> En línea</span>
+                     <div class="ia-panel-subtitle">Puede revisar todos los datos del sistema y ejecutar asignaciones si lo solicitas.</div>
                  </div>
              </div>
-             <button onclick="toggleChat()" class="ia-close-btn"><i class="fas fa-times"></i></button>
+             <div class="ia-header-actions">
+                 <button onclick="exportarConversacionIA()" class="ia-export-btn" title="Exportar conversación">
+                     <i class="fas fa-download"></i>
+                 </button>
+                 <button onclick="toggleChat()" class="ia-close-btn"><i class="fas fa-times"></i></button>
+             </div>
          </div>
 
          <div class="ia-sugerencias" id="ia-sugerencias">
@@ -558,17 +564,27 @@
              <div class="ia-chips">
                  <button class="ia-chip" onclick="enviarSugerencia('¿Qué puestos no tienen turno asignado hoy?')">📋 Puestos sin cubrir hoy</button>
                  <button class="ia-chip" onclick="enviarSugerencia('¿Quién no tiene día libre esta semana?')">🔵 Sin día libre esta semana</button>
-                 <button class="ia-chip" onclick="enviarSugerencia('Muéstrame un resumen del estado actual de los turnos')">📊 Resumen general</button>
+                 <button class="ia-chip" onclick="enviarSugerencia('Genera un reporte ejecutivo del estado actual')">📊 Reporte ejecutivo</button>
                  <button class="ia-chip" onclick="enviarSugerencia('¿Hay trabajadores con incapacidad activa?')">🏥 Incapacidades activas</button>
+                 <button class="ia-chip" onclick="enviarSugerencia('Analiza la equidad en la distribución de turnos')">⚖️ Análisis de equidad</button>
                  <button class="ia-chip" onclick="enviarSugerencia('¿Cuáles son las restricciones de turno nocturno?')">🌙 Restricciones nocturnas</button>
+                 <button class="ia-chip" onclick="enviarSugerencia('Predice problemas de cobertura para los próximos días')">🔮 Predicción de cobertura</button>
+                 <button class="ia-chip" onclick="enviarSugerencia('Muéstrame los datos del mes pasado')">🗂️ Mes pasado</button>
+                 <button class="ia-chip" onclick="enviarSugerencia('Sugerencias óptimas de asignación para hoy')">🎯 Asignaciones óptimas</button>
              </div>
          </div>
 
          <div class="ia-messages" id="ia-messages">
              <div class="ia-msg ia-msg-bot">
                  <div class="ia-msg-bubble">
-                     👋 Hola, soy tu asistente de gestión de turnos. Tengo acceso en tiempo real a los trabajadores, turnos, incapacidades y restricciones del sistema.<br><br>
-                     Puedo ayudarte a <strong>revisar el estado del día</strong>, <strong>detectar puestos sin cubrir</strong>, <strong>sugerir asignaciones</strong> y mucho más. ¿En qué te ayudo?
+                     👋 <strong>Hola, soy tu asistente avanzado de gestión de turnos</strong><br><br>
+                     Tengo acceso completo en tiempo real a todos los datos del sistema y puedo ayudarte con:<br><br>
+                     <strong>🎯 Análisis inteligentes:</strong> Detecto patrones, sobrecargas y oportunidades de optimización<br>
+                     <strong>📊 Reportes ejecutivos:</strong> Genero resúmenes con métricas clave y tendencias<br>
+                     <strong>🔮 Predicciones:</strong> Anticipo problemas de cobertura antes de que ocurran<br>
+                     <strong>⚖️ Equidad:</strong> Analizo distribución justa de turnos y días libres<br>
+                     <strong>💡 Recomendaciones:</strong> Sugiero asignaciones óptimas respetando todas las reglas<br><br>
+                     ¿En qué te ayudo hoy?
                  </div>
              </div>
          </div>
