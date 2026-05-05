@@ -4,17 +4,14 @@ const IA_HISTORIAL = [];
 let iaAbierto = false;
 
 function toggleChat() {
-    console.log('toggleChat called');
     iaAbierto = !iaAbierto;
     const panel = document.getElementById('ia-chat-panel');
-    console.log('panel:', panel);
     if (!panel) return;
     if (iaAbierto) {
         panel.classList.add('open');
     } else {
         panel.classList.remove('open');
     }
-    console.log('iaAbierto:', iaAbierto);
     if (iaAbierto) {
         const badge = document.getElementById('ia-badge');
         if (badge) badge.style.display = 'none';
@@ -796,7 +793,6 @@ function exportarConversacionIA() {
 
 // Exponer funciones globales y asegurar eventos del botón flotante
 function inicializarAsistenteIA() {
-    console.log('inicializarAsistenteIA called');
     window.toggleChat = toggleChat;
     window.enviarMensajeIA = enviarMensajeIA;
     window.enviarSugerencia = enviarSugerencia;
@@ -805,7 +801,6 @@ function inicializarAsistenteIA() {
     window.exportarConversacionIA = exportarConversacionIA;
 
     const bubble = document.getElementById('ia-chat-bubble');
-    console.log('bubble:', bubble);
     if (bubble) {
         bubble.addEventListener('click', toggleChat);
         bubble.style.pointerEvents = 'auto';
