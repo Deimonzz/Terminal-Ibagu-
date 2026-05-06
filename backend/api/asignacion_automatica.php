@@ -4,6 +4,7 @@ require_once __DIR__ . '/../clases/AsignacionAutomatica.php';
 
 // Asegurar que el endpoint responde JSON y capturar errores
 header('Content-Type: application/json; charset=utf-8');
+@set_time_limit(0);
 
 // Registrar errores propios del endpoint
 ini_set('display_errors', '0');

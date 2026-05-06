@@ -1169,10 +1169,18 @@ async function ejecutarAsignacionAutomatica(e) {
 
     // Avanzar la barra mientras espera la respuesta
     let pasoIdx = 1;
+    let esperaLarga = 0;
     const intervalo = setInterval(() => {
         if (pasoIdx < pasos.length) {
             mostrarProgreso('Generando ' + mesNombre + ' ' + anio, pasos[pasoIdx].msg, pasos[pasoIdx].pct);
             pasoIdx++;
+        } else {
+            esperaLarga += 900;
+            const ultimaPct = 93 + Math.min(6, Math.floor(esperaLarga / 3000));
+            const mensaje = esperaLarga >= 15000
+                ? 'Continuando... la operación puede tardar varios minutos.'
+                : 'Finalizando y guardando...';
+            mostrarProgreso('Generando ' + mesNombre + ' ' + anio, mensaje, Math.min(99, ultimaPct));
         }
     }, 900);
 
