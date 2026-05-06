@@ -3,9 +3,11 @@ require_once dirname(dirname(__DIR__)) . '/config/database.php';
 
 class Trabajadores {
     private $db;
+    private $restriccionPuestoColumn;
     
     public function __construct() {
         $this->db = Database::getInstance()->getConnection();
+        $this->restriccionPuestoColumn = Database::getColumnName('restricciones_trabajador', 'puesto_trabajo_id', 'puesto_id');
     }
     
     public function obtenerTodos($filtros = []) {
@@ -167,8 +169,14 @@ class Trabajadores {
     }
     
     public function obtenerRestricciones($trabajador_id) {
-        $sql = "SELECT rt.*, pt.codigo AS puesto_codigo, pt.nombre AS puesto_nombre FROM restricciones_trabajador rt
-                LEFT JOIN puestos_trabajo pt ON rt.puesto_trabajo_id = pt.id
+        $puestoJoin = '';
+        $selectPuesto = 'NULL AS puesto_trabajo_id, NULL AS puesto_codigo, NULL AS puesto_nombre';
+        if ($this->restriccionPuestoColumn) {
+            $selectPuesto = 'pt.id AS puesto_trabajo_id, pt.codigo AS puesto_codigo, pt.nombre AS puesto_nombre';
+            $puestoJoin = 'LEFT JOIN puestos_trabajo pt ON rt.' . $this->restriccionPuestoColumn . ' = pt.id';
+        }
+
+        $sql = "SELECT rt.*, " . $selectPuesto . " FROM restricciones_trabajador rt " . $puestoJoin . "
                 WHERE rt.trabajador_id = :id 
                 AND rt.activa = true 
                 AND (rt.fecha_fin IS NULL OR rt.fecha_fin >= " . Database::currentDate() . ")
@@ -180,11 +188,17 @@ class Trabajadores {
     }
 
     public function obtenerListaRestricciones($filtros = []) {
-        $sql = "SELECT rt.*, t.nombre as trabajador_nombre, t.cedula,
-                pt.id AS puesto_trabajo_id, pt.codigo AS puesto_codigo, pt.nombre AS puesto_nombre
+        $puestoJoin = '';
+        $selectPuesto = 'NULL AS puesto_trabajo_id, NULL AS puesto_codigo, NULL AS puesto_nombre';
+        if ($this->restriccionPuestoColumn) {
+            $selectPuesto = 'pt.id AS puesto_trabajo_id, pt.codigo AS puesto_codigo, pt.nombre AS puesto_nombre';
+            $puestoJoin = 'LEFT JOIN puestos_trabajo pt ON rt.' . $this->restriccionPuestoColumn . ' = pt.id';
+        }
+
+        $sql = "SELECT rt.*, t.nombre as trabajador_nombre, t.cedula, " . $selectPuesto . "
                 FROM restricciones_trabajador rt
                 INNER JOIN trabajadores t ON rt.trabajador_id = t.id
-                LEFT JOIN puestos_trabajo pt ON rt.puesto_trabajo_id = pt.id
+                " . $puestoJoin . "
                 WHERE rt.activa = true";
         $params = [];
 
@@ -205,21 +219,31 @@ class Trabajadores {
     }
     
     public function agregarRestriccion($datos) {
-        $sql = "INSERT INTO restricciones_trabajador 
-                (trabajador_id, tipo_restriccion, puesto_trabajo_id, descripcion, fecha_inicio, fecha_fin, documento_soporte) 
-                VALUES (:trabajador_id, :tipo, :puesto_id, :descripcion, :fecha_inicio, :fecha_fin, :documento)";
+        $columnName = $this->restriccionPuestoColumn;
+        $fields = 'trabajador_id, tipo_restriccion, descripcion, fecha_inicio, fecha_fin, documento_soporte';
+        $values = ':trabajador_id, :tipo, :descripcion, :fecha_inicio, :fecha_fin, :documento';
+        if ($columnName) {
+            $fields = 'trabajador_id, tipo_restriccion, ' . $columnName . ', descripcion, fecha_inicio, fecha_fin, documento_soporte';
+            $values = ':trabajador_id, :tipo, :puesto_id, :descripcion, :fecha_inicio, :fecha_fin, :documento';
+        }
+
+        $sql = "INSERT INTO restricciones_trabajador (" . $fields . ") VALUES (" . $values . ")";
         
         try {
-            $stmt = $this->db->prepare($sql);
-            $stmt->execute([
+            $params = [
                 ':trabajador_id' => $datos['trabajador_id'],
                 ':tipo' => $datos['tipo_restriccion'],
-                ':puesto_id' => $datos['puesto_trabajo_id'] ?? null,
                 ':descripcion' => $datos['descripcion'] ?? null,
                 ':fecha_inicio' => $datos['fecha_inicio'],
                 ':fecha_fin' => $datos['fecha_fin'] ?? null,
                 ':documento' => $datos['documento_soporte'] ?? null
-            ]);
+            ];
+            if ($this->restriccionPuestoColumn) {
+                $params[':puesto_id'] = $datos['puesto_trabajo_id'] ?? null;
+            }
+
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
             
             return [
                 'success' => true,
@@ -235,9 +259,15 @@ class Trabajadores {
     }
     
     public function actualizarRestriccion($id, $datos) {
+        $columnName = $this->restriccionPuestoColumn;
+        $puestoSql = '';
+        if ($columnName) {
+            $puestoSql = "{$columnName} = :puesto_id,";
+        }
+
         $sql = "UPDATE restricciones_trabajador SET 
                 tipo_restriccion = :tipo,
-                puesto_trabajo_id = :puesto_id,
+                " . $puestoSql . "
                 descripcion = :descripcion,
                 fecha_inicio = :fecha_inicio,
                 fecha_fin = :fecha_fin,
@@ -245,16 +275,19 @@ class Trabajadores {
                 WHERE id = :id";
         
         try {
-            $stmt = $this->db->prepare($sql);
-            $stmt->execute([
+            $params = [
                 ':id' => $id,
                 ':tipo' => $datos['tipo_restriccion'],
-                ':puesto_id' => $datos['puesto_trabajo_id'] ?? null,
                 ':descripcion' => $datos['descripcion'] ?? null,
                 ':fecha_inicio' => $datos['fecha_inicio'],
                 ':fecha_fin' => $datos['fecha_fin'] ?? null,
                 ':activa' => $datos['activa'] ?? true
-            ]);
+            ];
+            if ($this->restriccionPuestoColumn) {
+                $params[':puesto_id'] = $datos['puesto_trabajo_id'] ?? null;
+            }
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
             
             return [
                 'success' => true,
@@ -445,19 +478,19 @@ class Trabajadores {
             $params[':fecha_prev'] = $fechaAnterior;
         }
 
-        if ($puesto) {
+        if ($puesto && $this->restriccionPuestoColumn) {
             $sql .= " AND t.id NOT IN (
                 SELECT trabajador_id FROM restricciones_trabajador 
                 WHERE tipo_restriccion = 'puesto_especifico'
                 AND activa = true
-                AND puesto_trabajo_id = :puesto_id_restriccion
+                AND " . $this->restriccionPuestoColumn . " = :puesto_id_restriccion
                 AND :fecha12 >= fecha_inicio
                 AND (:fecha13 <= fecha_fin OR fecha_fin IS NULL)
             )";
             $params[':puesto_id_restriccion'] = $puesto['id'];
-            $params[':fecha12'] = $fecha;
-            $params[':fecha13'] = $fecha;
         }
+        $params[':fecha12'] = $fecha;
+        $params[':fecha13'] = $fecha;
         
         $sql .= " ORDER BY t.nombre ASC";
         
@@ -561,13 +594,13 @@ class Trabajadores {
                     AND :fecha3 BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                     AND estado IN ('programado','activo')
                 )";
-        if (!empty($puesto_id)) {
+        if (!empty($puesto_id) && $this->restriccionPuestoColumn) {
             $sql .= "
                 AND t.id NOT IN (
                     SELECT trabajador_id FROM restricciones_trabajador
                     WHERE tipo_restriccion = 'puesto_especifico'
                     AND activa = true
-                    AND puesto_trabajo_id = :puesto_id_l4
+                    AND " . $this->restriccionPuestoColumn . " = :puesto_id_l4
                     AND :fecha4 >= fecha_inicio
                     AND (:fecha5 <= fecha_fin OR fecha_fin IS NULL)
                 )";

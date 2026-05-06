@@ -220,23 +220,26 @@ class TurnosAsignados {
             }
 
             if ($puesto) {
-                $sql = "SELECT COUNT(*) as count FROM restricciones_trabajador
-                        WHERE trabajador_id = :trabajador_id
-                        AND tipo_restriccion = 'puesto_especifico'
-                        AND activa = true
-                        AND puesto_trabajo_id = :puesto_id
-                        AND :fecha >= fecha_inicio
-                        AND (:fecha2 <= fecha_fin OR fecha_fin IS NULL)";
-                $stmt = $this->db->prepare($sql);
-                $stmt->execute([
-                    ':trabajador_id' => $trabajador_id,
-                    ':puesto_id' => $puesto_id,
-                    ':fecha' => $fecha,
-                    ':fecha2' => $fecha
-                ]);
-                $result = $stmt->fetch();
-                if ($result['count'] > 0) {
-                    $errores[] = 'El trabajador tiene restricción para este puesto específico';
+                $columnName = Database::getColumnName('restricciones_trabajador', 'puesto_trabajo_id', 'puesto_id');
+                if ($columnName) {
+                    $sql = "SELECT COUNT(*) as count FROM restricciones_trabajador
+                            WHERE trabajador_id = :trabajador_id
+                            AND tipo_restriccion = 'puesto_especifico'
+                            AND activa = true
+                            AND " . $columnName . " = :puesto_id
+                            AND :fecha >= fecha_inicio
+                            AND (:fecha2 <= fecha_fin OR fecha_fin IS NULL)";
+                    $stmt = $this->db->prepare($sql);
+                    $stmt->execute([
+                        ':trabajador_id' => $trabajador_id,
+                        ':puesto_id' => $puesto_id,
+                        ':fecha' => $fecha,
+                        ':fecha2' => $fecha
+                    ]);
+                    $result = $stmt->fetch();
+                    if ($result['count'] > 0) {
+                        $errores[] = 'El trabajador tiene restricción para este puesto específico';
+                    }
                 }
             }
         } catch (Exception $e) {

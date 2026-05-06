@@ -62,6 +62,38 @@ class Database {
         return $this->connection;
     }
 
+    public static function hasColumn($table, $column) {
+        try {
+            $db = self::getInstance()->getConnection();
+            if (DB_DRIVER === 'pgsql') {
+                $sql = "SELECT COUNT(*) FROM information_schema.columns 
+                        WHERE table_name = :table 
+                        AND column_name = :column 
+                        AND table_schema = ANY (current_schemas(false))";
+            } else {
+                $sql = "SELECT COUNT(*) FROM information_schema.columns 
+                        WHERE table_schema = DATABASE() 
+                        AND table_name = :table 
+                        AND column_name = :column";
+            }
+            $stmt = $db->prepare($sql);
+            $stmt->execute([':table' => $table, ':column' => $column]);
+            return (int)$stmt->fetchColumn() > 0;
+        } catch (Exception $e) {
+            return false;
+        }
+    }
+
+    public static function getColumnName($table, $preferred, $fallback = null) {
+        if (self::hasColumn($table, $preferred)) {
+            return $preferred;
+        }
+        if ($fallback && self::hasColumn($table, $fallback)) {
+            return $fallback;
+        }
+        return null;
+    }
+
     private function __clone() {}
     public function __wakeup() {}
 
