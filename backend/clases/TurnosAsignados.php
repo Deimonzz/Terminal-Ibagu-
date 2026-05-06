@@ -150,9 +150,9 @@ class TurnosAsignados {
             $errores[] = 'El trabajador tiene día especial: ' . $result['tipos'];
         }
         
-        // 4. Verificar si el turno es nocturno
+        // 4. Verificar si el turno es nocturno y las reglas de descanso
         try {
-            $sql = "SELECT es_nocturno FROM configuracion_turnos WHERE id = :turno_id";
+            $sql = "SELECT es_nocturno, numero_turno FROM configuracion_turnos WHERE id = :turno_id";
             $stmt = $this->db->prepare($sql);
             $stmt->execute([':turno_id' => $turno_id]);
             $turno = $stmt->fetch();
@@ -160,6 +160,22 @@ class TurnosAsignados {
             if ($turno && $turno['es_nocturno']) {
                 if (!$this->trabajadores->puedeTrabajarNoche($trabajador_id, $fecha)) {
                     $errores[] = 'El trabajador tiene restricción para trabajar en turno nocturno';
+                }
+
+                $mes = (int)date('n', strtotime($fecha));
+                $anio = (int)date('Y', strtotime($fecha));
+                if ($this->trabajadores->contarTurnosNocheEnMes($trabajador_id, $mes, $anio) >= 7) {
+                    $errores[] = 'El trabajador ya tiene el máximo de 7 turnos de noche en el mes';
+                }
+
+                if ($this->trabajadores->tieneTurnoMananaDiaSiguiente($trabajador_id, $fecha)) {
+                    $errores[] = 'El trabajador no puede tener turno de noche si tiene turno en la mañana siguiente';
+                }
+            }
+
+            if ($turno && (int)$turno['numero_turno'] === 1) {
+                if ($this->trabajadores->tieneTurnoNocheDiaAnterior($trabajador_id, $fecha)) {
+                    $errores[] = 'El trabajador no puede tener turno en la mañana si tuvo turno de noche la noche anterior';
                 }
             }
         } catch (Exception $e) {

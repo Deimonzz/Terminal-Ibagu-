@@ -321,10 +321,15 @@ class Trabajadores {
         $stmtPuesto->execute([':puesto_id' => $puesto_id]);
         $puesto = $stmtPuesto->fetch();
         
-        $sqlTurno = "SELECT es_nocturno FROM configuracion_turnos WHERE id = :turno_id";
+        $sqlTurno = "SELECT es_nocturno, numero_turno FROM configuracion_turnos WHERE id = :turno_id";
         $stmtTurno = $this->db->prepare($sqlTurno);
         $stmtTurno->execute([':turno_id' => $turno_id]);
         $turno = $stmtTurno->fetch();
+        $numeroTurno = $turno['numero_turno'] ?? null;
+        $fechaInicioMes = date('Y-m-01', strtotime($fecha));
+        $fechaFinMes = date('Y-m-t', strtotime($fecha));
+        $fechaSiguiente = date('Y-m-d', strtotime($fecha . ' +1 day'));
+        $fechaAnterior = date('Y-m-d', strtotime($fecha . ' -1 day'));
         
         $sql = "SELECT DISTINCT t.*, 
                 " . Database::groupConcat('DISTINCT rt.tipo_restriccion', ', ') . " as restricciones
@@ -400,16 +405,52 @@ class Trabajadores {
             $params[':fecha11'] = $fecha;
         }
 
+        if ($turno && $turno['es_nocturno']) {
+            $sql .= " AND t.id NOT IN (
+                SELECT ta.trabajador_id FROM turnos_asignados ta
+                INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
+                WHERE ta.trabajador_id = t.id
+                AND ct.numero_turno = 3
+                AND ta.fecha BETWEEN :mes_inicio AND :mes_fin
+                AND ta.estado IN ('programado', 'activo')
+                GROUP BY ta.trabajador_id
+                HAVING COUNT(*) >= 7
+            )";
+            $sql .= " AND t.id NOT IN (
+                SELECT ta2.trabajador_id FROM turnos_asignados ta2
+                INNER JOIN configuracion_turnos ct2 ON ta2.turno_id = ct2.id
+                WHERE ta2.trabajador_id = t.id
+                AND ta2.fecha = :fecha_next
+                AND ct2.numero_turno = 1
+                AND ta2.estado IN ('programado', 'activo')
+            )";
+            $params[':mes_inicio'] = $fechaInicioMes;
+            $params[':mes_fin'] = $fechaFinMes;
+            $params[':fecha_next'] = $fechaSiguiente;
+        }
+
+        if ($numeroTurno == 1) {
+            $sql .= " AND t.id NOT IN (
+                SELECT ta2.trabajador_id FROM turnos_asignados ta2
+                INNER JOIN configuracion_turnos ct2 ON ta2.turno_id = ct2.id
+                WHERE ta2.trabajador_id = t.id
+                AND ta2.fecha = :fecha_prev
+                AND ct2.numero_turno = 3
+                AND ta2.estado IN ('programado', 'activo')
+            )";
+            $params[':fecha_prev'] = $fechaAnterior;
+        }
+
         if ($puesto) {
             $sql .= " AND t.id NOT IN (
                 SELECT trabajador_id FROM restricciones_trabajador 
                 WHERE tipo_restriccion = 'puesto_especifico'
                 AND activa = true
-                AND puesto_trabajo_id = :puesto_id
+                AND puesto_trabajo_id = :puesto_id_restriccion
                 AND :fecha12 >= fecha_inicio
                 AND (:fecha13 <= fecha_fin OR fecha_fin IS NULL)
             )";
-            $params[':puesto_id'] = $puesto_id;
+            $params[':puesto_id_restriccion'] = $puesto['id'];
             $params[':fecha12'] = $fecha;
             $params[':fecha13'] = $fecha;
         }
@@ -420,6 +461,73 @@ class Trabajadores {
         $stmt->execute($params);
         
         return $stmt->fetchAll();
+    }
+
+    public function contarTurnosNocheEnMes($trabajador_id, $mes, $anio) {
+        $fechaInicio = sprintf('%04d-%02d-01', $anio, $mes);
+        $fechaFin = date('Y-m-t', strtotime($fechaInicio));
+
+        $sql = "SELECT COUNT(*) as count FROM turnos_asignados ta
+                INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
+                WHERE ta.trabajador_id = :id
+                AND ct.numero_turno = 3
+                AND ta.fecha BETWEEN :fi AND :ff
+                AND ta.estado IN ('programado', 'activo')";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':id' => $trabajador_id, ':fi' => $fechaInicio, ':ff' => $fechaFin]);
+        $row = $stmt->fetch();
+        return (int)($row['count'] ?? 0);
+    }
+
+    public function obtenerConteoTurnosNochePorMes($mes, $anio) {
+        $fechaInicio = sprintf('%04d-%02d-01', $anio, $mes);
+        $fechaFin = date('Y-m-t', strtotime($fechaInicio));
+
+        $sql = "SELECT ta.trabajador_id, COUNT(*) as count FROM turnos_asignados ta
+                INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
+                WHERE ct.numero_turno = 3
+                AND ta.fecha BETWEEN :fi AND :ff
+                AND ta.estado IN ('programado', 'activo')
+                GROUP BY ta.trabajador_id";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':fi' => $fechaInicio, ':ff' => $fechaFin]);
+        $rows = $stmt->fetchAll();
+
+        $result = [];
+        foreach ($rows as $row) {
+            $result[$row['trabajador_id']] = (int)$row['count'];
+        }
+        return $result;
+    }
+
+    public function tieneTurnoNocheDiaAnterior($trabajador_id, $fecha) {
+        $fechaAnterior = date('Y-m-d', strtotime($fecha . ' -1 day'));
+
+        $sql = "SELECT COUNT(*) as count FROM turnos_asignados ta
+                INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
+                WHERE ta.trabajador_id = :id
+                AND ta.fecha = :fecha
+                AND ct.numero_turno = 3
+                AND ta.estado IN ('programado', 'activo')";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':id' => $trabajador_id, ':fecha' => $fechaAnterior]);
+        $row = $stmt->fetch();
+        return (int)($row['count'] ?? 0) > 0;
+    }
+
+    public function tieneTurnoMananaDiaSiguiente($trabajador_id, $fecha) {
+        $fechaSiguiente = date('Y-m-d', strtotime($fecha . ' +1 day'));
+
+        $sql = "SELECT COUNT(*) as count FROM turnos_asignados ta
+                INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
+                WHERE ta.trabajador_id = :id
+                AND ta.fecha = :fecha
+                AND ct.numero_turno = 1
+                AND ta.estado IN ('programado', 'activo')";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([':id' => $trabajador_id, ':fecha' => $fechaSiguiente]);
+        $row = $stmt->fetch();
+        return (int)($row['count'] ?? 0) > 0;
     }
 
     // Disponibles para L4: trabajadores activos sin L4 ese día, sin día libre/incapacidad
@@ -470,9 +578,9 @@ class Trabajadores {
             ':fecha3' => $fecha
         ];
         if (!empty($puesto_id)) {
-            $params[':puesto_id_l4'] = $puesto_id;
             $params[':fecha4'] = $fecha;
             $params[':fecha5'] = $fecha;
+            $params[':puesto_id_l4'] = $puesto_id;
         }
         $stmt->execute($params);
         return $stmt->fetchAll();

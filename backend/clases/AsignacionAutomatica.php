@@ -27,6 +27,7 @@ class AsignacionAutomatica {
             "SELECT id, nombre FROM trabajadores WHERE activo = true AND LOWER(COALESCE(cargo, '')) != 'supervisor' ORDER BY nombre"
         );
         $trabajadoresActivos = $stmt->fetchAll();
+        $turnosNochePorTrabajador = $this->trabajadores->obtenerConteoTurnosNochePorMes($mes, $anio);
 
         $puestos = $this->obtenerPuestos();
 
@@ -210,7 +211,7 @@ class AsignacionAutomatica {
                             $rowPuesto = $stmtChkL4Puesto->fetch(PDO::FETCH_ASSOC);
                             if ((int)$rowPuesto['cnt'] > 0) continue;
 
-                            $disponibles = $this->trabajadores->obtenerDisponibles(
+                            $disponibles = $this->trabajadores->obtenerDisponiblesL4(
                                 $puesto['id'], $turnoIdL4, $fechaL4
                             );
                             $disponible = array_filter($disponibles, function($t) use ($trab) {
@@ -280,8 +281,16 @@ class AsignacionAutomatica {
                         $disponibles = $this->trabajadores->obtenerDisponibles($puesto['id'], $turnoIdReal, $fecha);
 
                         if (count($disponibles) > 0) {
-                            $randomIndex = array_rand($disponibles);
-                            $sel = $disponibles[$randomIndex];
+                            if ($turno == 3) {
+                                $prioritarios = array_values(array_filter($disponibles, function($t) use ($turnosNochePorTrabajador) {
+                                    return ($turnosNochePorTrabajador[$t['id']] ?? 0) < 5;
+                                }));
+                                $candidatos = !empty($prioritarios) ? $prioritarios : $disponibles;
+                                $sel = $candidatos[array_rand($candidatos)];
+                            } else {
+                                $sel = $disponibles[array_rand($disponibles)];
+                            }
+
                             $resultado = $this->turnosAsignados->asignar([
                                 'trabajador_id'     => $sel['id'],
                                 'puesto_trabajo_id' => $puesto['id'],
@@ -290,6 +299,9 @@ class AsignacionAutomatica {
                                 'observaciones'     => 'Asignacion automatica'
                             ]);
                             if ($resultado['success']) {
+                                if ($turno == 3) {
+                                    $turnosNochePorTrabajador[$sel['id']] = ($turnosNochePorTrabajador[$sel['id']] ?? 0) + 1;
+                                }
                                 $asignaciones[] = ['fecha'=>$fecha,'puesto'=>$puesto['codigo'],'turno'=>$turno,'trabajador'=>$sel['nombre']];
                             } else {
                                 $errores[] = ['fecha'=>$fecha,'puesto'=>$puesto['codigo'],'turno'=>$turno,'error'=>$resultado['message']];
