@@ -488,9 +488,9 @@ class Trabajadores {
                 AND (:fecha13 <= fecha_fin OR fecha_fin IS NULL)
             )";
             $params[':puesto_id_restriccion'] = $puesto['id'];
+            $params[':fecha12'] = $fecha;
+            $params[':fecha13'] = $fecha;
         }
-        $params[':fecha12'] = $fecha;
-        $params[':fecha13'] = $fecha;
         
         $sql .= " ORDER BY t.nombre ASC";
         
@@ -614,7 +614,7 @@ class Trabajadores {
             ':fecha2' => $fecha,
             ':fecha3' => $fecha
         ];
-        if (!empty($puesto_id)) {
+        if (!empty($puesto_id) && $this->restriccionPuestoColumn) {
             $params[':fecha4'] = $fecha;
             $params[':fecha5'] = $fecha;
             $params[':puesto_id_l4'] = $puesto_id;
