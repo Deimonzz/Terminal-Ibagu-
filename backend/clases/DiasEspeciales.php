@@ -38,7 +38,7 @@ class DiasEspeciales {
         }
         
         if (!empty($filtros['mes'])) {
-            $sql .= " AND MONTH(de.fecha_inicio) = :mes";
+            $sql .= " AND " . Database::month('de.fecha_inicio') . " = :mes";
             $params[':mes'] = $filtros['mes'];
         }
 
@@ -323,11 +323,11 @@ class DiasEspeciales {
         // Asumir que los cumpleaños están en un campo adicional de trabajadores
         // o calcular desde la fecha de nacimiento si existe
         $sql = "SELECT t.id, t.nombre, t.cedula, 
-                DATE_FORMAT(t.fecha_nacimiento, '%d') as dia_cumpleanos
+                " . Database::dateFormat('t.fecha_nacimiento', '%d') . " as dia_cumpleanos
                 FROM trabajadores t
-                WHERE MONTH(t.fecha_nacimiento) = :mes
+                WHERE " . Database::month('t.fecha_nacimiento') . " = :mes
                 AND t.activo = true
-                ORDER BY DAY(t.fecha_nacimiento)";
+                ORDER BY " . Database::day('t.fecha_nacimiento') . "";
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':mes' => $mes]);

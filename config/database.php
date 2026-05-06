@@ -66,13 +66,17 @@ class Database {
     public function __wakeup() {}
 
     public static function groupConcat($column, $separator = ', ') {
-        // Remover DISTINCT si está presente en el parámetro
-        $column = str_replace('DISTINCT ', '', $column);
-        
-        if (DB_DRIVER === 'pgsql') {
-            return "STRING_AGG(CAST($column AS VARCHAR), '$separator')";
+        $distinct = false;
+        if (stripos($column, 'DISTINCT ') === 0) {
+            $distinct = true;
+            $column = substr($column, 9);
         }
-        return "GROUP_CONCAT(DISTINCT $column SEPARATOR '$separator')";
+
+        if (DB_DRIVER === 'pgsql') {
+            return "STRING_AGG(" . ($distinct ? 'DISTINCT ' : '') . "CAST($column AS VARCHAR), '$separator')";
+        }
+
+        return "GROUP_CONCAT(" . ($distinct ? 'DISTINCT ' : '') . "$column SEPARATOR '$separator')";
     }
 
     public static function currentDate() {
@@ -82,7 +86,25 @@ class Database {
     public static function year($column) {
         return DB_DRIVER === 'pgsql' ? "EXTRACT(YEAR FROM $column)" : "YEAR($column)";
     }
+    public static function month($column) {
+        return DB_DRIVER === 'pgsql' ? "EXTRACT(MONTH FROM $column)" : "MONTH($column)";
+    }
 
+    public static function day($column) {
+        return DB_DRIVER === 'pgsql' ? "EXTRACT(DAY FROM $column)" : "DAY($column)";
+    }
+
+    public static function dateFormat($column, $format) {
+        if (DB_DRIVER === 'pgsql') {
+            $format = str_replace(
+                ['%d', '%m', '%Y', '%y', '%H', '%i', '%s'],
+                ['DD', 'MM', 'YYYY', 'YY', 'HH24', 'MI', 'SS'],
+                $format
+            );
+            return "TO_CHAR($column, '$format')";
+        }
+        return "DATE_FORMAT($column, '$format')";
+    }
     public static function dateDiff($date1, $date2) {
         if (DB_DRIVER === 'pgsql') {
             return "(($date1)::date - ($date2)::date)";

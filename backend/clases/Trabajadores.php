@@ -10,11 +10,13 @@ class Trabajadores {
     
     public function obtenerTodos($filtros = []) {
         $sql = "SELECT t.*, 
-                " . Database::groupConcat('rt.tipo_restriccion', ', ') . " as restricciones
-                FROM trabajadores t
-                LEFT JOIN restricciones_trabajador rt ON t.id = rt.trabajador_id 
-                    AND rt.activa = true 
-                    AND (rt.fecha_fin IS NULL OR rt.fecha_fin >= " . Database::currentDate() . ")";
+                (SELECT " . Database::groupConcat('rt.tipo_restriccion', ', ') . "
+                 FROM restricciones_trabajador rt
+                 WHERE rt.trabajador_id = t.id
+                   AND rt.activa = true
+                   AND (rt.fecha_fin IS NULL OR rt.fecha_fin >= " . Database::currentDate() . ")
+                ) as restricciones
+                FROM trabajadores t";
 
         // Por defecto solo activos, pero se puede incluir inactivos mediante filtro
         if (empty($filtros['incluir_inactivos'])) {
@@ -35,7 +37,7 @@ class Trabajadores {
             $params[':search'] = '%' . $filtros['search'] . '%';
         }
         
-        $sql .= " GROUP BY t.id ORDER BY t.nombre ASC";
+        $sql .= " ORDER BY t.nombre ASC";
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
@@ -332,12 +334,14 @@ class Trabajadores {
         $fechaAnterior = date('Y-m-d', strtotime($fecha . ' -1 day'));
         
         $sql = "SELECT DISTINCT t.*, 
-                " . Database::groupConcat('DISTINCT rt.tipo_restriccion', ', ') . " as restricciones
+                (SELECT " . Database::groupConcat('DISTINCT rt.tipo_restriccion', ', ') . "
+                 FROM restricciones_trabajador rt
+                 WHERE rt.trabajador_id = t.id
+                   AND rt.activa = true
+                   AND :fecha1 >= rt.fecha_inicio
+                   AND (:fecha2 <= rt.fecha_fin OR rt.fecha_fin IS NULL)
+                ) as restricciones
                 FROM trabajadores t
-                LEFT JOIN restricciones_trabajador rt ON t.id = rt.trabajador_id 
-                    AND rt.activa = true 
-                    AND :fecha1 >= rt.fecha_inicio
-                    AND (:fecha2 <= rt.fecha_fin OR rt.fecha_fin IS NULL)
                 WHERE t.activo = true
                 AND LOWER(COALESCE(t.cargo, '')) != 'supervisor'";
         
@@ -455,7 +459,7 @@ class Trabajadores {
             $params[':fecha13'] = $fecha;
         }
         
-        $sql .= " GROUP BY t.id ORDER BY t.nombre ASC";
+        $sql .= " ORDER BY t.nombre ASC";
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
