@@ -1,168 +1,205 @@
 <?php
+// Headers PRIMERO - antes de cualquier salida
+header('Content-Type: application/json; charset=utf-8');
+http_response_code(500); // Default a 500, se cambia a 200 si todo va bien
+
 ini_set('display_errors', '0');
 error_reporting(0);
-
-require_once dirname(dirname(__DIR__)) . '/config/database.php';
-require_once __DIR__ . '/../clases/AsignacionAutomatica.php';
-require_once __DIR__ . '/../clases/TurnosAsignados.php';
-require_once __DIR__ . '/../clases/Trabajadores.php';
-
-// Asegurar que el endpoint responde JSON y capturar errores
-header('Content-Type: application/json; charset=utf-8');
 @set_time_limit(0);
 
-// Registrar errores propios del endpoint
-ini_set('display_errors', '0');
-ini_set('log_errors', '1');
-$logDir = dirname(__DIR__) . '/logs';
+// Setup de logging
+$logDir = __DIR__ . '/../logs';
 if (!is_dir($logDir)) {
     @mkdir($logDir, 0755, true);
 }
 $logFile = $logDir . '/asignacion_errors.log';
 
-set_error_handler(function($severity, $message, $file, $line) use ($logFile) {
-    $msg = date('[Y-m-d H:i:s] ') . "PHP Error: {$message} in {$file} on line {$line}\n";
-    error_log($msg, 3, $logFile);
-});
+// Funciones de error ANTES de cualquier require
+function logError($msg) {
+    global $logFile;
+    error_log('[' . date('Y-m-d H:i:s') . '] ' . $msg . "\n", 3, $logFile);
+}
 
-set_exception_handler(function(Throwable $e) use ($logFile) {
-    $msg = date('[Y-m-d H:i:s] ') . "Uncaught Throwable: " . $e->getMessage() . " in " . $e->getFile() . " on line " . $e->getLine() . "\n";
-    error_log($msg, 3, $logFile);
-    http_response_code(500);
-    echo json_encode(['success' => false, 'message' => 'Internal server error']);
-    exit;
-});
-
-register_shutdown_function(function() use ($logFile) {
-    $error = error_get_last();
-    if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR])) {
-        $msg = date('[Y-m-d H:i:s] ') . "Fatal Error: {$error['message']} in {$error['file']} on line {$error['line']}\n";
-        error_log($msg, 3, $logFile);
-        http_response_code(500);
-        if (!headers_sent()) {
-            header('Content-Type: application/json');
-        }
-        echo json_encode(['success' => false, 'message' => 'Fatal error occurred']);
-    }
-});
-
-// Evitar salidas accidentales antes de enviar JSON
-ob_start();
-
-function sendJsonAndExit($data, $status = 200) {
-    if (ob_get_length() !== false) {
-        @ob_end_clean();
-    }
-    http_response_code($status);
-    echo json_encode($data);
+function sendJson($success, $message = '', $data = []) {
+    $response = array_merge(['success' => $success, 'message' => $message], $data);
+    if ($success) http_response_code(200);
+    echo json_encode($response);
     exit;
 }
 
-$asignacion = new AsignacionAutomatica();
+// Limpiar output buffer
+ob_start();
 
-// Test básico antes de procesar
+// Try-catch para TODOS los requires
+try {
+    if (!file_exists(dirname(dirname(__DIR__)) . '/config/database.php')) {
+        throw new Exception('database.php not found');
+    }
+    require_once dirname(dirname(__DIR__)) . '/config/database.php';
+    
+    if (!file_exists(__DIR__ . '/../clases/AsignacionAutomatica.php')) {
+        throw new Exception('AsignacionAutomatica.php not found');
+    }
+    require_once __DIR__ . '/../clases/AsignacionAutomatica.php';
+    
+    if (!class_exists('AsignacionAutomatica')) {
+        throw new Exception('AsignacionAutomatica class not found after require');
+    }
+    
+} catch (Throwable $e) {
+    ob_end_clean();
+    logError('Failed to load dependencies: ' . $e->getMessage());
+    sendJson(false, 'Error al cargar dependencias: ' . $e->getMessage());
+}
+
+// Inicializar la clase
+try {
+    $asignacion = new AsignacionAutomatica();
+} catch (Throwable $e) {
+    ob_end_clean();
+    logError('Failed to instantiate AsignacionAutomatica: ' . $e->getMessage());
+    sendJson(false, 'Error al inicializar: ' . $e->getMessage());
+}
+
+// Test básico
 if (isset($_GET['test'])) {
     try {
         $test = $asignacion->testConnection();
-        sendJsonAndExit(['success' => true, 'message' => 'Connection OK', 'test' => $test]);
+        ob_end_clean();
+        sendJson(true, 'Connection OK', ['test' => $test]);
     } catch (Throwable $e) {
-        sendJsonAndExit(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+        ob_end_clean();
+        logError('Test failed: ' . $e->getMessage());
+        sendJson(false, 'Error de conexión: ' . $e->getMessage());
     }
 }
 
+// Procesar solicitud
 $method = $_SERVER['REQUEST_METHOD'];
 
 try {
     if ($method === 'POST') {
-        $datos = json_decode(file_get_contents('php://input'), true);
+        $rawInput = file_get_contents('php://input');
+        $datos = json_decode($rawInput, true);
+        
+        if (!$datos) {
+            ob_end_clean();
+            sendJson(false, 'JSON inválido en POST');
+        }
+        
         $action = $datos['action'] ?? '';
 
         if ($action === 'deshacer_mes') {
             $mes  = intval($datos['mes']  ?? 0);
             $anio = intval($datos['anio'] ?? 0);
             if (!$mes || !$anio) {
-                sendJsonAndExit(['success' => false, 'message' => 'Mes y año requeridos'], 400);
+                ob_end_clean();
+                sendJson(false, 'Mes y año requeridos');
             }
-            $db = Database::getInstance()->getConnection();
-            $db->beginTransaction();
+            
             try {
+                $db = Database::getInstance()->getConnection();
+                $db->beginTransaction();
+                
                 $fechaInicio = sprintf('%04d-%02d-01', $anio, $mes);
                 $fechaFin    = date('Y-m-t', strtotime($fechaInicio));
+                
                 $stmtT = $db->prepare("DELETE FROM turnos_asignados WHERE fecha BETWEEN :fi AND :ff AND estado IN ('programado','activo','cancelado','no_presentado')");
                 $stmtT->execute([':fi' => $fechaInicio, ':ff' => $fechaFin]);
                 $turnosEliminados = $stmtT->rowCount();
+                
                 $stmtL = $db->prepare("DELETE FROM dias_especiales WHERE fecha_inicio BETWEEN :fi AND :ff AND tipo IN ('L','L8','LC','VAC','SUS','ADMM','ADMT','ADM')");
                 $stmtL->execute([':fi' => $fechaInicio, ':ff' => $fechaFin]);
                 $libresEliminados = $stmtL->rowCount();
+                
                 $db->commit();
-                sendJsonAndExit(['success' => true, 'turnos_eliminados' => $turnosEliminados, 'libres_eliminados' => $libresEliminados, 'message' => 'Mes deshecho correctamente']);
-            } catch (Exception $e) {
-                $db->rollback();
-                sendJsonAndExit(['success' => false, 'message' => $e->getMessage()], 500);
+                ob_end_clean();
+                sendJson(true, 'Mes deshecho correctamente', [
+                    'turnos_eliminados' => $turnosEliminados,
+                    'libres_eliminados' => $libresEliminados
+                ]);
+            } catch (Throwable $e) {
+                if (isset($db)) $db->rollback();
+                ob_end_clean();
+                logError('Undo failed: ' . $e->getMessage());
+                sendJson(false, 'Error al deshacer: ' . $e->getMessage());
             }
         } else {
-            $resultado = $asignacion->asignarMesCompleto(
-                $datos['mes'],
-                $datos['anio'],
-                $datos['opciones'] ?? []
-            );
-            sendJsonAndExit($resultado);
+            // Asignar mes completo
+            $mes = intval($datos['mes'] ?? 0);
+            $anio = intval($datos['anio'] ?? 0);
+            
+            if (!$mes || !$anio) {
+                ob_end_clean();
+                sendJson(false, 'Mes y año requeridos');
+            }
+            
+            try {
+                $resultado = $asignacion->asignarMesCompleto($mes, $anio, $datos['opciones'] ?? []);
+                ob_end_clean();
+                echo json_encode($resultado);
+            } catch (Throwable $e) {
+                ob_end_clean();
+                logError('Assignment failed: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+                sendJson(false, 'Error en asignación: ' . $e->getMessage());
+            }
         }
+        
     } elseif ($method === 'DELETE') {
-        $datos = json_decode(file_get_contents('php://input'), true);
+        $rawInput = file_get_contents('php://input');
+        $datos = json_decode($rawInput, true);
+        
+        if (!$datos) {
+            ob_end_clean();
+            sendJson(false, 'JSON inválido en DELETE');
+        }
+        
         $mes   = intval($datos['mes']  ?? 0);
         $anio  = intval($datos['anio'] ?? 0);
 
         if (!$mes || !$anio) {
-            sendJsonAndExit(['success' => false, 'message' => 'Mes y año requeridos'], 400);
+            ob_end_clean();
+            sendJson(false, 'Mes y año requeridos');
         }
 
-        $db = Database::getInstance()->getConnection();
-        $db->beginTransaction();
-
         try {
-            // Eliminar turnos del mes
-            $fechaInicio = sprintf('%04d-%02d-01', $anio, $mes);
-            $fechaFin    = date('Y-m-t', strtotime($fechaInicio)); // último día del mes
+            $db = Database::getInstance()->getConnection();
+            $db->beginTransaction();
 
-            $sqlT = "DELETE FROM turnos_asignados
-                     WHERE fecha BETWEEN :fi AND :ff
-                     AND estado IN ('programado','activo','cancelado','no_presentado')";
+            $fechaInicio = sprintf('%04d-%02d-01', $anio, $mes);
+            $fechaFin    = date('Y-m-t', strtotime($fechaInicio));
+
+            $sqlT = "DELETE FROM turnos_asignados WHERE fecha BETWEEN :fi AND :ff AND estado IN ('programado','activo','cancelado','no_presentado')";
             $stmtT = $db->prepare($sqlT);
             $stmtT->execute([':fi' => $fechaInicio, ':ff' => $fechaFin]);
             $turnosEliminados = $stmtT->rowCount();
 
-            // Eliminar días libres automáticos del mes (descripcion empieza con AUTO:)
-            $sqlL = "DELETE FROM dias_especiales
-                     WHERE fecha_inicio BETWEEN :fi AND :ff
-                     AND tipo IN ('L','L8','LC','VAC','SUS','ADMM','ADMT','ADM')";
+            $sqlL = "DELETE FROM dias_especiales WHERE fecha_inicio BETWEEN :fi AND :ff AND tipo IN ('L','L8','LC','VAC','SUS','ADMM','ADMT','ADM')";
             $stmtL = $db->prepare($sqlL);
             $stmtL->execute([':fi' => $fechaInicio, ':ff' => $fechaFin]);
             $libresEliminados = $stmtL->rowCount();
 
             $db->commit();
-
-            sendJsonAndExit([
-                'success'          => true,
+            ob_end_clean();
+            sendJson(true, 'Mes deshecho correctamente', [
                 'turnos_eliminados' => $turnosEliminados,
-                'libres_eliminados' => $libresEliminados,
-                'message'          => 'Mes deshecho correctamente'
+                'libres_eliminados' => $libresEliminados
             ]);
-        } catch (Exception $e) {
-            $db->rollback();
-            sendJsonAndExit(['success' => false, 'message' => $e->getMessage()], 500);
+        } catch (Throwable $e) {
+            if (isset($db)) $db->rollback();
+            ob_end_clean();
+            logError('Delete failed: ' . $e->getMessage());
+            sendJson(false, 'Error al eliminar: ' . $e->getMessage());
         }
 
     } else {
-        sendJsonAndExit([
-            'success' => false,
-            'message' => 'Metodo no permitido'
-        ], 405);
+        ob_end_clean();
+        sendJson(false, 'Metodo no permitido');
     }
-} catch (Exception $e) {
-    sendJsonAndExit([
-        'success' => false,
-        'message' => 'Error del servidor: ' . $e->getMessage()
-    ], 500);
+    
+} catch (Throwable $e) {
+    ob_end_clean();
+    logError('Unexpected error: ' . $e->getMessage() . "\n" . $e->getTraceAsString());
+    sendJson(false, 'Error inesperado: ' . $e->getMessage());
 }
 ?>
