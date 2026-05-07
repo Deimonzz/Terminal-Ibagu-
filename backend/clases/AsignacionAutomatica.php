@@ -14,6 +14,10 @@ class AsignacionAutomatica {
         $this->trabajadores    = new Trabajadores();
     }
 
+    public function testConnection() {
+        return $this->db->query("SELECT 1 as test")->fetch()['test'];
+    }
+
     public function asignarMesCompleto($mes, $anio, $opciones = []) {
         // Calcular días del mes (alternativa a cal_days_in_month)
         $diasMes = (int)date('t', mktime(0, 0, 0, $mes, 1, $anio));

@@ -1,6 +1,11 @@
 <?php
+ini_set('display_errors', '0');
+error_reporting(0);
+
 require_once dirname(dirname(__DIR__)) . '/config/database.php';
 require_once __DIR__ . '/../clases/AsignacionAutomatica.php';
+require_once __DIR__ . '/../clases/TurnosAsignados.php';
+require_once __DIR__ . '/../clases/Trabajadores.php';
 
 // Asegurar que el endpoint responde JSON y capturar errores
 header('Content-Type: application/json; charset=utf-8');
@@ -28,6 +33,19 @@ set_exception_handler(function(Throwable $e) use ($logFile) {
     exit;
 });
 
+register_shutdown_function(function() use ($logFile) {
+    $error = error_get_last();
+    if ($error && in_array($error['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR])) {
+        $msg = date('[Y-m-d H:i:s] ') . "Fatal Error: {$error['message']} in {$error['file']} on line {$error['line']}\n";
+        error_log($msg, 3, $logFile);
+        http_response_code(500);
+        if (!headers_sent()) {
+            header('Content-Type: application/json');
+        }
+        echo json_encode(['success' => false, 'message' => 'Fatal error occurred']);
+    }
+});
+
 // Evitar salidas accidentales antes de enviar JSON
 ob_start();
 
@@ -41,6 +59,17 @@ function sendJsonAndExit($data, $status = 200) {
 }
 
 $asignacion = new AsignacionAutomatica();
+
+// Test básico antes de procesar
+if (isset($_GET['test'])) {
+    try {
+        $test = $asignacion->testConnection();
+        sendJsonAndExit(['success' => true, 'message' => 'Connection OK', 'test' => $test]);
+    } catch (Throwable $e) {
+        sendJsonAndExit(['success' => false, 'message' => 'Error: ' . $e->getMessage()], 500);
+    }
+}
+
 $method = $_SERVER['REQUEST_METHOD'];
 
 try {
