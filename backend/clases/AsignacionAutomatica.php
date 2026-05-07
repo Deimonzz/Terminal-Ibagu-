@@ -305,7 +305,7 @@ class AsignacionAutomatica {
                 'detalle_libres'       => $libresAsignados
             ];
 
-        } catch (Exception $e) {
+        } catch (Throwable $e) {
             return ['success'=>false,'message'=>'Error en asignacion automatica: '.$e->getMessage()];
         }
     }
@@ -360,7 +360,7 @@ class AsignacionAutomatica {
         $cargaPorFecha = [];
 
         foreach ($result as $row) {
-            $libresPorTrabajador[$row['trabajador_id']][] = $row['fecha_inicio'];
+            $libresPorTrabajador[$row['trabajador_id']][] = ['fecha_inicio' => $row['fecha_inicio'], 'fecha_fin' => null];
             $cargaPorFecha[$row['fecha_inicio']] = ($cargaPorFecha[$row['fecha_inicio']] ?? 0) + 1;
         }
 
@@ -398,7 +398,8 @@ class AsignacionAutomatica {
         }
 
         $ultimo = null;
-        foreach ($libresPorTrabajador[$trabajador_id] as $fechaLibre) {
+        foreach ($libresPorTrabajador[$trabajador_id] as $libre) {
+            $fechaLibre = $libre['fecha_inicio'];
             if ($fechaLibre >= $fecha) {
                 break;
             }

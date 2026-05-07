@@ -20,8 +20,8 @@ set_error_handler(function($severity, $message, $file, $line) use ($logFile) {
     error_log($msg, 3, $logFile);
 });
 
-set_exception_handler(function($e) use ($logFile) {
-    $msg = date('[Y-m-d H:i:s] ') . "Uncaught Exception: " . $e->getMessage() . " in " . $e->getFile() . " on line " . $e->getLine() . "\n";
+set_exception_handler(function(Throwable $e) use ($logFile) {
+    $msg = date('[Y-m-d H:i:s] ') . "Uncaught Throwable: " . $e->getMessage() . " in " . $e->getFile() . " on line " . $e->getLine() . "\n";
     error_log($msg, 3, $logFile);
     http_response_code(500);
     echo json_encode(['success' => false, 'message' => 'Internal server error']);
