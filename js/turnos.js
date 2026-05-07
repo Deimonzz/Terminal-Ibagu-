@@ -1193,14 +1193,23 @@ async function ejecutarAsignacionAutomatica(e) {
 
         clearInterval(intervalo);
 
-        if (!response.ok) throw new Error('Error HTTP: ' + response.status);
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error('Error HTTP: ' + response.status + ' - ' + (errorText || response.statusText));
+        }
+
+        const rawResponse = await response.text();
+        let result;
+        try {
+            result = JSON.parse(rawResponse);
+        } catch (jsonError) {
+            throw new Error('Respuesta no válida del servidor: ' + rawResponse.substring(0, 500));
+        }
 
         // Completar al 100%
         mostrarProgreso('Generando ' + mesNombre + ' ' + anio, '¡Completado!', 100);
         await new Promise(r => setTimeout(r, 600));
         ocultarProgreso();
-
-        const result = await response.json();
 
         if (result.success) {
             cargarEstadisticasDashboard();
