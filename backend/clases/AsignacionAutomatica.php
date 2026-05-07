@@ -477,6 +477,8 @@ class AsignacionAutomatica {
         $key = $puesto_id . '|' . $numero_turno . '|' . $fecha;
         return isset($turnosPorPuestoFecha[$key]);
     }
+
+    private function obtenerPatronLibresMesAnterior($mes, $anio, $trabajadores) {
         $fechaInicio = sprintf('%04d-%02d-01', $anio, $mes);
         $fechaFin = date('Y-m-t', strtotime($fechaInicio));
         // Última semana: del último lunes al domingo del mes anterior
@@ -504,15 +506,15 @@ class AsignacionAutomatica {
             $diasSemana = [];
             foreach ($diasLibres as $libre) {
                 $dow = (int)date('N', strtotime($libre['fecha_inicio']));
-                $diasSemana[] = $dow; // 1=lunes, 7=domingo
+                $diasSemana[] = $dow;
             }
             if (!empty($diasSemana)) {
                 $conteo = array_count_values($diasSemana);
                 arsort($conteo);
-                $diaPreferido = key($conteo); // Día más común en la última semana
+                $diaPreferido = key($conteo);
                 $patron[$trab['id']] = $diaPreferido;
             } else {
-                $patron[$trab['id']] = null; // Sin patrón
+                $patron[$trab['id']] = null;
             }
         }
         return $patron;
