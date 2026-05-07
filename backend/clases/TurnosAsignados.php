@@ -330,6 +330,45 @@ class TurnosAsignados {
             ];
         }
     }
+
+    public function asignarDirecto($datos) {
+        try {
+            $this->db->beginTransaction();
+            $sql = "INSERT INTO turnos_asignados 
+                    (trabajador_id, puesto_trabajo_id, turno_id, fecha, estado, observaciones, created_by) 
+                    VALUES (:trabajador_id, :puesto_id, :turno_id, :fecha, :estado, :observaciones, :created_by)";
+
+            $datos_finales = [
+                ':trabajador_id' => $datos['trabajador_id'] ?? null,
+                ':puesto_id'     => $datos['puesto_trabajo_id'] ?? null,
+                ':turno_id'      => $datos['turno_id'] ?? null,
+                ':fecha'         => $datos['fecha'] ?? null,
+                ':estado'        => $datos['estado'] ?? 'programado',
+                ':observaciones' => $datos['observaciones'] ?? '',
+                ':created_by'    => $datos['created_by'] ?? 1
+            ];
+
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($datos_finales);
+            $turno_id = $this->db->lastInsertId();
+
+            $this->registrarHistorial($turno_id, $datos['trabajador_id'], $datos['puesto_trabajo_id'], 
+                                     $datos['turno_id'], $datos['fecha'], 'creado', $datos['created_by'] ?? null);
+
+            $this->db->commit();
+            return [
+                'success' => true,
+                'id' => $turno_id,
+                'message' => 'Turno asignado exitosamente'
+            ];
+        } catch (PDOException $e) {
+            $this->db->rollBack();
+            return [
+                'success' => false,
+                'message' => 'Error al asignar turno directamente: ' . $e->getMessage()
+            ];
+        }
+    }
     
     
     //Asignar múltiples turnos (asignación masiva)
