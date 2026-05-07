@@ -40,7 +40,9 @@ class AsignacionAutomatica {
             "SELECT id, numero_turno FROM configuracion_turnos ORDER BY numero_turno"
         )->fetchAll();
         $turnoIdPorNumero = [];
+        $numeroPorTurnoId = [];
         foreach ($turnosConfig as $tc) {
+            $numeroPorTurnoId[$tc['id']] = $tc['numero_turno'];
             if (in_array($tc['numero_turno'], [1,2,3])) {
                 $turnoIdPorNumero[$tc['numero_turno']] = $tc['id'];
             }
@@ -151,6 +153,8 @@ class AsignacionAutomatica {
                     try {
                         $stmtInsLibre->execute([$trab['id'], $mejorDia]);
                         $libresAsignados[] = ['trabajador' => $trab['nombre'], 'fecha' => $mejorDia];
+                        $libresPorTrabajador[$trab['id']][] = ['fecha_inicio' => $mejorDia, 'fecha_fin' => null];
+                        $cargaPorFecha[$mejorDia] = ($cargaPorFecha[$mejorDia] ?? 0) + 1;
                     } catch (Exception $eL) {
                         $libresErrores[] = ['trabajador' => $trab['nombre'], 'semana' => $semana['lunes'], 'error' => $eL->getMessage()];
                     }
@@ -189,8 +193,9 @@ class AsignacionAutomatica {
                         if ($asignado) break;
                         foreach ($puestosL4Mezclados as $puesto) {
                             $turnoIdL4 = $puestosL4Map[$puesto['codigo']] ?? 9;
+                            $numeroTurnoL4 = $numeroPorTurnoId[$turnoIdL4] ?? 4;
 
-                            if ($this->estaPuestoOcupado($puesto['id'], $turnoIdL4, $fechaL4, $turnosPorPuestoFecha)) {
+                            if ($this->estaPuestoOcupado($puesto['id'], $numeroTurnoL4, $fechaL4, $turnosPorPuestoFecha)) {
                                 continue;
                             }
 
@@ -212,6 +217,11 @@ class AsignacionAutomatica {
 
                             if ($resultado['success']) {
                                 $asignaciones[] = ['fecha'=>$fechaL4,'puesto'=>$puesto['codigo'],'turno'=>'L4','trabajador'=>$trab['nombre']];
+                                $turnosPorPuestoFecha[$puesto['id'] . '|' . $numeroTurnoL4 . '|' . $fechaL4] = true;
+                                if (!isset($turnosPorTrabajadorSemana[$trab['id']][$semana['lunes']])) {
+                                    $turnosPorTrabajadorSemana[$trab['id']][$semana['lunes']] = [];
+                                }
+                                $turnosPorTrabajadorSemana[$trab['id']][$semana['lunes']][] = $numeroTurnoL4;
                                 $asignado = true;
                                 break;
                             }
@@ -244,7 +254,7 @@ class AsignacionAutomatica {
                             }
                         }
 
-                        if ($this->estaPuestoOcupado($puesto['id'], $turnoIdReal, $fecha, $turnosPorPuestoFecha)) {
+                        if ($this->estaPuestoOcupado($puesto['id'], $turno, $fecha, $turnosPorPuestoFecha)) {
                             continue;
                         }
 
@@ -272,6 +282,7 @@ class AsignacionAutomatica {
                                 if ($turno == 3) {
                                     $turnosNochePorTrabajador[$sel['id']] = ($turnosNochePorTrabajador[$sel['id']] ?? 0) + 1;
                                 }
+                                $turnosPorPuestoFecha[$puesto['id'] . '|' . $turno . '|' . $fecha] = true;
                                 $asignaciones[] = ['fecha'=>$fecha,'puesto'=>$puesto['codigo'],'turno'=>$turno,'trabajador'=>$sel['nombre']];
                             } else {
                                 $errores[] = ['fecha'=>$fecha,'puesto'=>$puesto['codigo'],'turno'=>$turno,'error'=>$resultado['message']];
