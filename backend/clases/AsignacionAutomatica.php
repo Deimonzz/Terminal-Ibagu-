@@ -29,6 +29,11 @@ class AsignacionAutomatica {
         $trabajadoresActivos = $stmt->fetchAll();
         $turnosNochePorTrabajador = $this->trabajadores->obtenerConteoTurnosNochePorMes($mes, $anio);
 
+        // Obtener patrón de libres del mes anterior
+        $mesAnterior = $mes == 1 ? 12 : $mes - 1;
+        $anioAnterior = $mes == 1 ? $anio - 1 : $anio;
+        $patronLibresMesAnterior = $this->obtenerPatronLibresMesAnterior($mesAnterior, $anioAnterior, $trabajadoresActivos);
+
         $puestos = $this->obtenerPuestos();
 
         $turnosConfig = $this->db->query(
@@ -152,7 +157,15 @@ class AsignacionAutomatica {
                         continue;
                     }
 
-                    usort($candidatos, function($a, $b) {
+                    usort($candidatos, function($a, $b) use ($patronLibresMesAnterior, $trab) {
+                        $diaPreferido = $patronLibresMesAnterior[$trab['id']] ?? null;
+                        $dowA = (int)date('N', strtotime($a['fecha']));
+                        $dowB = (int)date('N', strtotime($b['fecha']));
+                        if ($diaPreferido) {
+                            $prefA = ($dowA == $diaPreferido) ? 1 : 0;
+                            $prefB = ($dowB == $diaPreferido) ? 1 : 0;
+                            if ($prefA != $prefB) return $prefB - $prefA; // Preferido primero
+                        }
                         return $a['carga'] - $b['carga'];
                     });
                     $mejorDia = $candidatos[0]['fecha'];
@@ -359,6 +372,48 @@ class AsignacionAutomatica {
         $stmt = $this->db->prepare($sql);
         $stmt->execute();
         return $stmt->fetchAll();
+    }
+
+    private function obtenerPatronLibresMesAnterior($mes, $anio, $trabajadores) {
+        $fechaInicio = sprintf('%04d-%02d-01', $anio, $mes);
+        $fechaFin = date('Y-m-t', strtotime($fechaInicio));
+        // Última semana: del último lunes al domingo del mes anterior
+        $ultimoDiaMes = strtotime($fechaFin);
+        $dowUltimo = (int)date('N', $ultimoDiaMes);
+        $ultimoLunes = $ultimoDiaMes - ($dowUltimo - 1) * 86400;
+        $fechaInicioUltimaSemana = date('Y-m-d', $ultimoLunes);
+        $fechaFinUltimaSemana = date('Y-m-d', $ultimoLunes + 6 * 86400);
+
+        $patron = [];
+
+        $stmt = $this->db->prepare(
+            "SELECT trabajador_id, fecha_inicio FROM dias_especiales
+             WHERE tipo IN ('L','L8','LC','VAC','SUS')
+             AND fecha_inicio BETWEEN ? AND ?
+             AND estado IN ('programado','activo')"
+        );
+        $stmt->execute([$fechaInicioUltimaSemana, $fechaFinUltimaSemana]);
+        $libres = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        foreach ($trabajadores as $trab) {
+            $diasLibres = array_filter($libres, function($l) use ($trab) {
+                return $l['trabajador_id'] == $trab['id'];
+            });
+            $diasSemana = [];
+            foreach ($diasLibres as $libre) {
+                $dow = (int)date('N', strtotime($libre['fecha_inicio']));
+                $diasSemana[] = $dow; // 1=lunes, 7=domingo
+            }
+            if (!empty($diasSemana)) {
+                $conteo = array_count_values($diasSemana);
+                arsort($conteo);
+                $diaPreferido = key($conteo); // Día más común en la última semana
+                $patron[$trab['id']] = $diaPreferido;
+            } else {
+                $patron[$trab['id']] = null; // Sin patrón
+            }
+        }
+        return $patron;
     }
 }
 ?>
