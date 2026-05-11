@@ -100,8 +100,14 @@ class AsignacionAutomatica {
                  VALUES (?, 'L', ?, NULL, 'AUTO: generado automáticamente', 'programado')"
             );
 
-            foreach ($semanas as $semana) {
-                foreach ($trabajadoresActivos as $trab) {
+            // Shuffle workers and weeks to distribute free days more evenly
+            $trabajadoresShuffled = $trabajadoresActivos;
+            shuffle($trabajadoresShuffled);
+            $semanasShuffled = $semanas;
+            shuffle($semanasShuffled);
+
+            foreach ($semanasShuffled as $semana) {
+                foreach ($trabajadoresShuffled as $trab) {
                     if ($this->tieneLibreEnRango($trab['id'], $semana['lunes'], $semana['domingo'], $libresPorTrabajador)) {
                         continue;
                     }
@@ -164,7 +170,9 @@ class AsignacionAutomatica {
                             $prefB = ($dowB == $diaPreferido) ? 1 : 0;
                             if ($prefA != $prefB) return $prefB - $prefA; // Preferido primero
                         }
-                        return $a['carga'] - $b['carga'];
+                        if ($a['carga'] != $b['carga']) return $a['carga'] - $b['carga']; // Menor carga primero
+                        // Si carga igual, preferir días más tarde en el mes
+                        return date('j', strtotime($b['fecha'])) - date('j', strtotime($a['fecha']));
                     });
                     $mejorDia = $candidatos[0]['fecha'];
 
@@ -187,8 +195,8 @@ class AsignacionAutomatica {
             $turnosPorTrabajadorSemana = $turnosAsignadosPrefetch['turnosPorTrabajadorSemana'];
             $turnosPorPuestoFecha = $turnosAsignadosPrefetch['turnosPorPuestoFecha'];
 
-            foreach ($semanas as $semana) {
-                foreach ($trabajadoresActivos as $trab) {
+            foreach ($semanasShuffled as $semana) {
+                foreach ($trabajadoresShuffled as $trab) {
                     if ($this->tieneTurnoL4EnSemana($trab['id'], $semana['lunes'], $semana['domingo'], $turnosPorTrabajadorSemana)) {
                         continue;
                     }
