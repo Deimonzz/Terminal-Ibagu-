@@ -33,6 +33,20 @@ class AsignacionAutomatica {
         $trabajadoresActivos = $stmt->fetchAll();
         $turnosNochePorTrabajador = $this->trabajadores->obtenerConteoTurnosNochePorMes($mes, $anio);
 
+        // Obtener conteo total de turnos por trabajador en el mes
+        $fechaInicioMes = sprintf('%04d-%02d-01', $anio, $mes);
+        $fechaFinMes = date('Y-m-t', strtotime($fechaInicioMes));
+        $stmtConteo = $this->db->prepare(
+            "SELECT ta.trabajador_id, COUNT(*) as total_turnos FROM turnos_asignados ta
+             WHERE ta.fecha BETWEEN :fi AND :ff AND ta.estado IN ('programado', 'activo')
+             GROUP BY ta.trabajador_id"
+        );
+        $stmtConteo->execute([':fi' => $fechaInicioMes, ':ff' => $fechaFinMes]);
+        $conteoTurnosPorTrabajador = [];
+        foreach ($stmtConteo->fetchAll() as $row) {
+            $conteoTurnosPorTrabajador[$row['trabajador_id']] = (int)$row['total_turnos'];
+        }
+
         // Obtener patrón de libres del mes anterior
         $mesAnterior = $mes == 1 ? 12 : $mes - 1;
         $anioAnterior = $mes == 1 ? $anio - 1 : $anio;
@@ -68,7 +82,7 @@ class AsignacionAutomatica {
         $puestosNocturnos = ['V1','V2','C','D3','F6','F11'];
 
         // Máximo libres permitidos el mismo día
-        $MAX_LIBRES_DIA = 4;
+        $MAX_LIBRES_DIA = 3;
 
         try {
             // ════════════════════════════════════════════════════
@@ -245,8 +259,14 @@ class AsignacionAutomatica {
             for ($dia = 1; $dia <= $diasMes; $dia++) {
                 $fecha    = sprintf('%04d-%02d-%02d', $anio, $mes, $dia);
 
-                foreach ($puestos as $puesto) {
-                    foreach ($turnos as $turno) {
+                $puestosShuffled = $puestos;
+                shuffle($puestosShuffled);
+
+                foreach ($puestosShuffled as $puesto) {
+                    $turnosShuffled = $turnos;
+                    shuffle($turnosShuffled);
+
+                    foreach ($turnosShuffled as $turno) {
                         if ($turno == 3 && !in_array(strtoupper($puesto['codigo']), $puestosNocturnos)) continue;
 
                         $turnoIdReal  = $turnoIdPorNumero[$turno] ?? $turno;
@@ -270,9 +290,21 @@ class AsignacionAutomatica {
                                     return ($turnosNochePorTrabajador[$t['id']] ?? 0) < 5;
                                 }));
                                 $candidatos = !empty($prioritarios) ? $prioritarios : $disponibles;
-                                $sel = $candidatos[array_rand($candidatos)];
+                                // Ordenar por turnos totales en el mes (menos turnos primero)
+                                usort($candidatos, function($a, $b) use ($conteoTurnosPorTrabajador) {
+                                    $turnosA = $conteoTurnosPorTrabajador[$a['id']] ?? 0;
+                                    $turnosB = $conteoTurnosPorTrabajador[$b['id']] ?? 0;
+                                    return $turnosA - $turnosB;
+                                });
+                                $sel = $candidatos[0]; // Tomar el que menos turnos tiene
                             } else {
-                                $sel = $disponibles[array_rand($disponibles)];
+                                // Ordenar por turnos totales en el mes (menos turnos primero)
+                                usort($disponibles, function($a, $b) use ($conteoTurnosPorTrabajador) {
+                                    $turnosA = $conteoTurnosPorTrabajador[$a['id']] ?? 0;
+                                    $turnosB = $conteoTurnosPorTrabajador[$b['id']] ?? 0;
+                                    return $turnosA - $turnosB;
+                                });
+                                $sel = $disponibles[0]; // Tomar el que menos turnos tiene
                             }
 
                             $resultado = $this->turnosAsignados->asignarDirecto([
@@ -286,6 +318,7 @@ class AsignacionAutomatica {
                                 if ($turno == 3) {
                                     $turnosNochePorTrabajador[$sel['id']] = ($turnosNochePorTrabajador[$sel['id']] ?? 0) + 1;
                                 }
+                                $conteoTurnosPorTrabajador[$sel['id']] = ($conteoTurnosPorTrabajador[$sel['id']] ?? 0) + 1; // Actualizar conteo
                                 $turnosPorPuestoFecha[$puesto['id'] . '|' . $turno . '|' . $fecha] = true;
                                 $asignaciones[] = ['fecha'=>$fecha,'puesto'=>$puesto['codigo'],'turno'=>$turno,'trabajador'=>$sel['nombre']];
                             } else {
