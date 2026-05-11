@@ -137,7 +137,9 @@ try {
             try {
                 $resultado = $asignacion->asignarMesCompleto($mes, $anio, $datos['opciones'] ?? []);
                 ob_end_clean();
+                http_response_code(200);
                 echo json_encode($resultado);
+                exit;
             } catch (Throwable $e) {
                 ob_end_clean();
                 logError('Assignment failed: ' . $e->getMessage() . "\n" . $e->getTraceAsString());

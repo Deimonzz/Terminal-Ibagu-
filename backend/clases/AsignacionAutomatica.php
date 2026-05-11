@@ -304,7 +304,6 @@ class AsignacionAutomatica {
                 'errores'              => count($errores),
                 'libres_asignados'     => count($libresAsignados),
                 'libres_errores'       => count($libresErrores),
-                'detalle_asignaciones' => $asignaciones,
                 'detalle_errores'      => $errores,
                 'detalle_libres'       => $libresAsignados
             ];
