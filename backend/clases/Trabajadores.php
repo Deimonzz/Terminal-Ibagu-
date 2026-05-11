@@ -63,7 +63,7 @@ class Trabajadores {
                 )
                 AND t.id NOT IN (
                     SELECT trabajador_id FROM dias_especiales
-                    WHERE tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS')
+                    WHERE tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS', 'ADM', 'ADMM', 'ADMT')
                     AND :fecha_lib BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                     AND estado IN ('programado', 'activo')
                 )";
@@ -619,7 +619,7 @@ class Trabajadores {
                     )
                     AND t.id NOT IN (
                         SELECT trabajador_id FROM dias_especiales
-                        WHERE tipo IN ('LC','L','L8','VAC','SUS')
+                        WHERE tipo IN ('LC','L','L8','VAC','SUS','ADM','ADMM','ADMT')
                         AND :fecha3 BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                         AND estado IN ('programado','activo')
                     )

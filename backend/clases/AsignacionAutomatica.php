@@ -393,7 +393,7 @@ class AsignacionAutomatica {
 
         $stmt = $this->db->prepare(
             "SELECT trabajador_id, fecha_inicio FROM dias_especiales
-             WHERE tipo IN ('L','L8','LC','VAC','SUS')
+             WHERE tipo IN ('L','L8','LC','VAC','SUS','ADM','ADMM','ADMT')
              AND fecha_inicio BETWEEN ? AND ?
              AND estado IN ('programado','activo')"
         );
