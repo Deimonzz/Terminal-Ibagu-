@@ -76,7 +76,7 @@ class AsignacionAutomatica {
         // 5. Restricciones de trabajadores vigentes en el mes
         $stmtR = $this->db->prepare(
             "SELECT trabajador_id, tipo_restriccion,
-                    COALESCE(puesto_trabajo_id, puesto_id) as puesto_id,
+                    puesto_id,
                     fecha_inicio, fecha_fin
              FROM restricciones_trabajador
              WHERE activa = true
