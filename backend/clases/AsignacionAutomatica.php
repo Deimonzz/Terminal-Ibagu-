@@ -26,8 +26,7 @@ class AsignacionAutomatica {
     private function prefetchDisponibilidadMes($mes, $anio) {
         $fechaInicio = sprintf('%04d-%02d-01', $anio, $mes);
         $fechaFin    = date('Y-m-t', strtotime($fechaInicio));
-        // Extender un día en cada extremo para las reglas T3→T1 y T1←T3
-        $fechaFinExt = date('Y-m-d', strtotime($fechaFin   . ' +1 day'));
+        $fechaFinExt = date('Y-m-d', strtotime($fechaFin    . ' +1 day'));
         $fechaIniExt = date('Y-m-d', strtotime($fechaInicio . ' -1 day'));
 
         // 1. Trabajadores activos (no supervisores)
@@ -97,7 +96,7 @@ class AsignacionAutomatica {
             $puestosFlags[$p['id']] = $p;
         }
 
-        // 7. Conteo de turnos noche del mes (para el límite de 7 noches)
+        // 7. Conteo de turnos noche del mes (límite 7 noches)
         $stmtN = $this->db->prepare(
             "SELECT ta.trabajador_id, COUNT(*) as cnt
              FROM turnos_asignados ta
@@ -130,9 +129,9 @@ class AsignacionAutomatica {
 
     /**
      * Devuelve trabajadores disponibles para puesto+turno+fecha.
-     * Consulta únicamente estructuras en memoria cargadas por prefetchDisponibilidadMes().
-     * Se actualiza $ctx['asignadosPorDia'] después de cada asignación exitosa,
-     * por lo que es consistente dentro del mismo bucle de asignación.
+     * Opera únicamente sobre estructuras en memoria.
+     * $ctx['asignadosPorDia'] se actualiza tras cada asignación exitosa,
+     * garantizando que el mismo trabajador no se asigne dos veces en el mismo día.
      */
     private function getDisponibles($puestoId, $numeroTurno, $fecha, &$ctx, &$conteoTurnos) {
         $fechaAnterior  = date('Y-m-d', strtotime($fecha . ' -1 day'));
@@ -140,7 +139,7 @@ class AsignacionAutomatica {
 
         $bloqueados = [];
 
-        // Ya tiene turno hoy (cualquier turno)
+        // Ya tiene turno hoy
         foreach ($ctx['asignadosPorDia'][$fecha] ?? [] as $trabId => $turnos) {
             $bloqueados[$trabId] = true;
         }
@@ -159,21 +158,21 @@ class AsignacionAutomatica {
             }
         }
 
-        // Regla: T1 no puede asignarse si el día anterior tuvo T3
+        // Regla: T1 no si el día anterior tuvo T3
         if ($numeroTurno == 1) {
             foreach ($ctx['asignadosPorDia'][$fechaAnterior] ?? [] as $trabId => $turnos) {
                 if (in_array(3, $turnos)) $bloqueados[$trabId] = true;
             }
         }
 
-        // Regla: T3 no puede asignarse si el día siguiente tiene T1
+        // Regla: T3 no si el día siguiente tiene T1
         if ($numeroTurno == 3) {
             foreach ($ctx['asignadosPorDia'][$fechaSiguiente] ?? [] as $trabId => $turnos) {
                 if (in_array(1, $turnos)) $bloqueados[$trabId] = true;
             }
         }
 
-        // Restricciones individuales de trabajadores
+        // Restricciones individuales
         foreach ($ctx['restricciones'] as $rest) {
             if ($fecha < $rest['fecha_inicio']) continue;
             if ($rest['fecha_fin'] !== null && $fecha > $rest['fecha_fin']) continue;
@@ -183,6 +182,7 @@ class AsignacionAutomatica {
                     if ($numeroTurno == 3) $bloqueados[$rest['trabajador_id']] = true;
                     break;
                 case 'puesto_especifico':
+                    // FIX: usar puesto_trabajo_id
                     if ($rest['puesto_trabajo_id'] == $puestoId) $bloqueados[$rest['trabajador_id']] = true;
                     break;
             }
@@ -210,7 +210,7 @@ class AsignacionAutomatica {
             }
         }
 
-        // Construir lista de disponibles y ordenar por menor carga
+        // Construir lista y ordenar por menor carga
         $disponibles = [];
         foreach ($ctx['todosActivos'] as $trab) {
             if (!isset($bloqueados[$trab['id']])) {
@@ -236,7 +236,7 @@ class AsignacionAutomatica {
 
     /**
      * Disponibles para L4: sin L4 hoy, sin libre/incapacidad.
-     * SÍ pueden tener T1/T2/T3 asignado (L4 es compatible).
+     * SÍ pueden tener T1/T2/T3 (L4 es compatible con turnos normales).
      */
     private function getDisponiblesL4($puestoId, $fecha, &$ctx) {
         $bloqueados = [];
@@ -265,7 +265,8 @@ class AsignacionAutomatica {
         // Restricción puesto específico
         foreach ($ctx['restricciones'] as $rest) {
             if ($rest['tipo_restriccion'] !== 'puesto_especifico') continue;
-            if ($rest['puesto_id'] != $puestoId) continue;
+            // FIX: usar puesto_trabajo_id
+            if ($rest['puesto_trabajo_id'] != $puestoId) continue;
             if ($fecha < $rest['fecha_inicio']) continue;
             if ($rest['fecha_fin'] !== null && $fecha > $rest['fecha_fin']) continue;
             $bloqueados[$rest['trabajador_id']] = true;
@@ -293,7 +294,7 @@ class AsignacionAutomatica {
         $fechaInicioMes = sprintf('%04d-%02d-01', $anio, $mes);
         $fechaFinMes    = date('Y-m-t', strtotime($fechaInicioMes));
 
-        // ── Prefetch masivo ──────────────────────────────────────────────────
+        // Prefetch masivo
         $ctx = $this->prefetchDisponibilidadMes($mes, $anio);
 
         // Conteo de turnos en memoria para balanceo equitativo
@@ -402,12 +403,12 @@ class AsignacionAutomatica {
                         $stmtInsLibre->execute([$trab['id'], $mejorDia]);
                         $libresAsignados[] = ['trabajador' => $trab['nombre'], 'fecha' => $mejorDia];
 
-                        // Actualizar estado en memoria para que pasos 2 y 3 lo vean
+                        // Actualizar estado en memoria
                         $libresPorTrabajador[$trab['id']][] = ['fecha_inicio' => $mejorDia, 'fecha_fin' => null];
                         usort($libresPorTrabajador[$trab['id']], fn($a,$b) => strcmp($a['fecha_inicio'], $b['fecha_inicio']));
                         $cargaPorFecha[$mejorDia] = ($cargaPorFecha[$mejorDia] ?? 0) + 1;
 
-                        // Sincronizar con el contexto de disponibilidad
+                        // Sincronizar con contexto de disponibilidad para pasos 2 y 3
                         $ctx['diasEspeciales'][] = [
                             'trabajador_id' => $trab['id'],
                             'fecha_inicio'  => $mejorDia,
@@ -497,9 +498,9 @@ class AsignacionAutomatica {
             // ════════════════════════════════════════════════════════════════
             // PASO 3 — TURNOS NORMALES (T1, T2, T3)
             //
-            // CLAVE: $ctx['asignadosPorDia'] se actualiza inmediatamente
-            // después de cada asignación exitosa → el mismo trabajador NO puede
-            // ser seleccionado para otro puesto en la misma fecha.
+            // $ctx['asignadosPorDia'] se actualiza inmediatamente tras cada
+            // asignación exitosa → el mismo trabajador no puede ser asignado
+            // a otro puesto en la misma fecha dentro del mismo bucle.
             // ════════════════════════════════════════════════════════════════
 
             for ($dia = 1; $dia <= $diasMes; $dia++) {
@@ -529,7 +530,7 @@ class AsignacionAutomatica {
                             continue;
                         }
 
-                        // Disponibilidad completamente en memoria, sin queries
+                        // Disponibilidad en memoria, sin queries
                         $disponibles = $this->getDisponibles($puesto['id'], $turno, $fecha, $ctx, $conteoTurnos);
 
                         if (empty($disponibles)) {
