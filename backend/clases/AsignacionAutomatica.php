@@ -76,7 +76,7 @@ class AsignacionAutomatica {
         // 5. Restricciones de trabajadores vigentes en el mes
         $stmtR = $this->db->prepare(
             "SELECT trabajador_id, tipo_restriccion,
-                    puesto_id,
+                    puesto_trabajo_id,
                     fecha_inicio, fecha_fin
              FROM restricciones_trabajador
              WHERE activa = true
@@ -183,7 +183,7 @@ class AsignacionAutomatica {
                     if ($numeroTurno == 3) $bloqueados[$rest['trabajador_id']] = true;
                     break;
                 case 'puesto_especifico':
-                    if ($rest['puesto_id'] == $puestoId) $bloqueados[$rest['trabajador_id']] = true;
+                    if ($rest['puesto_trabajo_id'] == $puestoId) $bloqueados[$rest['trabajador_id']] = true;
                     break;
             }
         }
