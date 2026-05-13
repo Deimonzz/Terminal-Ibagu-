@@ -18,41 +18,304 @@ class AsignacionAutomatica {
         return $this->db->query("SELECT 1 as test")->fetch()['test'];
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    // PREFETCH MASIVO
+    // Carga toda la información del mes en memoria con ~6 queries.
+    // Elimina las N×M×D queries individuales del método original.
+    // ─────────────────────────────────────────────────────────────────────────
+    private function prefetchDisponibilidadMes($mes, $anio) {
+        $fechaInicio = sprintf('%04d-%02d-01', $anio, $mes);
+        $fechaFin    = date('Y-m-t', strtotime($fechaInicio));
+        // Extender un día en cada extremo para las reglas T3→T1 y T1←T3
+        $fechaFinExt = date('Y-m-d', strtotime($fechaFin   . ' +1 day'));
+        $fechaIniExt = date('Y-m-d', strtotime($fechaInicio . ' -1 day'));
+
+        // 1. Trabajadores activos (no supervisores)
+        $todosActivos = $this->db->query(
+            "SELECT id, nombre FROM trabajadores
+             WHERE activo = true AND LOWER(COALESCE(cargo,'')) != 'supervisor'
+             ORDER BY nombre"
+        )->fetchAll(PDO::FETCH_ASSOC);
+
+        // 2. Turnos ya asignados en el rango extendido
+        $stmtTA = $this->db->prepare(
+            "SELECT ta.trabajador_id, ta.fecha, ct.numero_turno
+             FROM turnos_asignados ta
+             INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
+             WHERE ta.fecha BETWEEN ? AND ?
+             AND ta.estado IN ('programado','activo')"
+        );
+        $stmtTA->execute([$fechaIniExt, $fechaFinExt]);
+        $asignadosPorDia = [];
+        foreach ($stmtTA->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $asignadosPorDia[$row['fecha']][$row['trabajador_id']][] = (int)$row['numero_turno'];
+        }
+
+        // 3. Incapacidades activas que se solapan con el mes
+        $stmtI = $this->db->prepare(
+            "SELECT trabajador_id, fecha_inicio, fecha_fin
+             FROM incapacidades
+             WHERE estado = 'activa'
+             AND fecha_inicio <= ? AND fecha_fin >= ?"
+        );
+        $stmtI->execute([$fechaFin, $fechaInicio]);
+        $incapacidades = $stmtI->fetchAll(PDO::FETCH_ASSOC);
+
+        // 4. Días especiales (libres, vacaciones, etc.)
+        $stmtDE = $this->db->prepare(
+            "SELECT trabajador_id, fecha_inicio,
+                    COALESCE(fecha_fin, fecha_inicio) as fecha_fin
+             FROM dias_especiales
+             WHERE tipo IN ('LC','L','L8','VAC','SUS','ADM','ADMM','ADMT')
+             AND estado IN ('programado','activo')
+             AND fecha_inicio <= ? AND COALESCE(fecha_fin, fecha_inicio) >= ?"
+        );
+        $stmtDE->execute([$fechaFin, $fechaInicio]);
+        $diasEspeciales = $stmtDE->fetchAll(PDO::FETCH_ASSOC);
+
+        // 5. Restricciones de trabajadores vigentes en el mes
+        $stmtR = $this->db->prepare(
+            "SELECT trabajador_id, tipo_restriccion,
+                    COALESCE(puesto_trabajo_id, puesto_id) as puesto_id,
+                    fecha_inicio, fecha_fin
+             FROM restricciones_trabajador
+             WHERE activa = true
+             AND fecha_inicio <= ?
+             AND (fecha_fin IS NULL OR fecha_fin >= ?)"
+        );
+        $stmtR->execute([$fechaFin, $fechaInicio]);
+        $restricciones = $stmtR->fetchAll(PDO::FETCH_ASSOC);
+
+        // 6. Flags de puestos (fuerza física, movilidad)
+        $stmtP = $this->db->prepare(
+            "SELECT id, codigo, requiere_fuerza_fisica, requiere_movilidad
+             FROM puestos_trabajo WHERE activo = TRUE"
+        );
+        $stmtP->execute();
+        $puestosFlags = [];
+        foreach ($stmtP->fetchAll(PDO::FETCH_ASSOC) as $p) {
+            $puestosFlags[$p['id']] = $p;
+        }
+
+        // 7. Conteo de turnos noche del mes (para el límite de 7 noches)
+        $stmtN = $this->db->prepare(
+            "SELECT ta.trabajador_id, COUNT(*) as cnt
+             FROM turnos_asignados ta
+             INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
+             WHERE ct.numero_turno = 3
+             AND ta.fecha BETWEEN ? AND ?
+             AND ta.estado IN ('programado','activo')
+             GROUP BY ta.trabajador_id"
+        );
+        $stmtN->execute([$fechaInicio, $fechaFin]);
+        $nochesPorTrabajador = [];
+        foreach ($stmtN->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $nochesPorTrabajador[$row['trabajador_id']] = (int)$row['cnt'];
+        }
+
+        return [
+            'todosActivos'        => $todosActivos,
+            'asignadosPorDia'     => $asignadosPorDia,
+            'incapacidades'       => $incapacidades,
+            'diasEspeciales'      => $diasEspeciales,
+            'restricciones'       => $restricciones,
+            'puestosFlags'        => $puestosFlags,
+            'nochesPorTrabajador' => $nochesPorTrabajador,
+        ];
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // DISPONIBILIDAD EN MEMORIA (sin queries adicionales)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Devuelve trabajadores disponibles para puesto+turno+fecha.
+     * Consulta únicamente estructuras en memoria cargadas por prefetchDisponibilidadMes().
+     * Se actualiza $ctx['asignadosPorDia'] después de cada asignación exitosa,
+     * por lo que es consistente dentro del mismo bucle de asignación.
+     */
+    private function getDisponibles($puestoId, $numeroTurno, $fecha, &$ctx, &$conteoTurnos) {
+        $fechaAnterior  = date('Y-m-d', strtotime($fecha . ' -1 day'));
+        $fechaSiguiente = date('Y-m-d', strtotime($fecha . ' +1 day'));
+
+        $bloqueados = [];
+
+        // Ya tiene turno hoy (cualquier turno)
+        foreach ($ctx['asignadosPorDia'][$fecha] ?? [] as $trabId => $turnos) {
+            $bloqueados[$trabId] = true;
+        }
+
+        // Incapacidad activa
+        foreach ($ctx['incapacidades'] as $inc) {
+            if ($fecha >= $inc['fecha_inicio'] && $fecha <= $inc['fecha_fin']) {
+                $bloqueados[$inc['trabajador_id']] = true;
+            }
+        }
+
+        // Día especial (libre, vacaciones, etc.)
+        foreach ($ctx['diasEspeciales'] as $de) {
+            if ($fecha >= $de['fecha_inicio'] && $fecha <= $de['fecha_fin']) {
+                $bloqueados[$de['trabajador_id']] = true;
+            }
+        }
+
+        // Regla: T1 no puede asignarse si el día anterior tuvo T3
+        if ($numeroTurno == 1) {
+            foreach ($ctx['asignadosPorDia'][$fechaAnterior] ?? [] as $trabId => $turnos) {
+                if (in_array(3, $turnos)) $bloqueados[$trabId] = true;
+            }
+        }
+
+        // Regla: T3 no puede asignarse si el día siguiente tiene T1
+        if ($numeroTurno == 3) {
+            foreach ($ctx['asignadosPorDia'][$fechaSiguiente] ?? [] as $trabId => $turnos) {
+                if (in_array(1, $turnos)) $bloqueados[$trabId] = true;
+            }
+        }
+
+        // Restricciones individuales de trabajadores
+        foreach ($ctx['restricciones'] as $rest) {
+            if ($fecha < $rest['fecha_inicio']) continue;
+            if ($rest['fecha_fin'] !== null && $fecha > $rest['fecha_fin']) continue;
+
+            switch ($rest['tipo_restriccion']) {
+                case 'no_turno_noche':
+                    if ($numeroTurno == 3) $bloqueados[$rest['trabajador_id']] = true;
+                    break;
+                case 'puesto_especifico':
+                    if ($rest['puesto_id'] == $puestoId) $bloqueados[$rest['trabajador_id']] = true;
+                    break;
+            }
+        }
+
+        // Flags del puesto (fuerza física, movilidad)
+        $puesto = $ctx['puestosFlags'][$puestoId] ?? null;
+        if ($puesto) {
+            foreach ($ctx['restricciones'] as $rest) {
+                if ($fecha < $rest['fecha_inicio']) continue;
+                if ($rest['fecha_fin'] !== null && $fecha > $rest['fecha_fin']) continue;
+                if (!empty($puesto['requiere_fuerza_fisica']) && $rest['tipo_restriccion'] === 'no_fuerza_fisica') {
+                    $bloqueados[$rest['trabajador_id']] = true;
+                }
+                if (!empty($puesto['requiere_movilidad']) && $rest['tipo_restriccion'] === 'movilidad_limitada') {
+                    $bloqueados[$rest['trabajador_id']] = true;
+                }
+            }
+        }
+
+        // Límite de 7 turnos noche por mes
+        if ($numeroTurno == 3) {
+            foreach ($ctx['nochesPorTrabajador'] as $trabId => $cnt) {
+                if ($cnt >= 7) $bloqueados[$trabId] = true;
+            }
+        }
+
+        // Construir lista de disponibles y ordenar por menor carga
+        $disponibles = [];
+        foreach ($ctx['todosActivos'] as $trab) {
+            if (!isset($bloqueados[$trab['id']])) {
+                $disponibles[] = $trab;
+            }
+        }
+
+        if ($numeroTurno == 3) {
+            usort($disponibles, function($a, $b) use ($conteoTurnos, $ctx) {
+                $nA = $ctx['nochesPorTrabajador'][$a['id']] ?? 0;
+                $nB = $ctx['nochesPorTrabajador'][$b['id']] ?? 0;
+                if ($nA !== $nB) return $nA - $nB;
+                return ($conteoTurnos[$a['id']] ?? 0) - ($conteoTurnos[$b['id']] ?? 0);
+            });
+        } else {
+            usort($disponibles, function($a, $b) use ($conteoTurnos) {
+                return ($conteoTurnos[$a['id']] ?? 0) - ($conteoTurnos[$b['id']] ?? 0);
+            });
+        }
+
+        return $disponibles;
+    }
+
+    /**
+     * Disponibles para L4: sin L4 hoy, sin libre/incapacidad.
+     * SÍ pueden tener T1/T2/T3 asignado (L4 es compatible).
+     */
+    private function getDisponiblesL4($puestoId, $fecha, &$ctx) {
+        $bloqueados = [];
+
+        // Ya tiene L4 (turno 4 o 5) hoy
+        foreach ($ctx['asignadosPorDia'][$fecha] ?? [] as $trabId => $turnos) {
+            if (in_array(4, $turnos) || in_array(5, $turnos)) {
+                $bloqueados[$trabId] = true;
+            }
+        }
+
+        // Incapacidad
+        foreach ($ctx['incapacidades'] as $inc) {
+            if ($fecha >= $inc['fecha_inicio'] && $fecha <= $inc['fecha_fin']) {
+                $bloqueados[$inc['trabajador_id']] = true;
+            }
+        }
+
+        // Día especial
+        foreach ($ctx['diasEspeciales'] as $de) {
+            if ($fecha >= $de['fecha_inicio'] && $fecha <= $de['fecha_fin']) {
+                $bloqueados[$de['trabajador_id']] = true;
+            }
+        }
+
+        // Restricción puesto específico
+        foreach ($ctx['restricciones'] as $rest) {
+            if ($rest['tipo_restriccion'] !== 'puesto_especifico') continue;
+            if ($rest['puesto_id'] != $puestoId) continue;
+            if ($fecha < $rest['fecha_inicio']) continue;
+            if ($rest['fecha_fin'] !== null && $fecha > $rest['fecha_fin']) continue;
+            $bloqueados[$rest['trabajador_id']] = true;
+        }
+
+        $disponibles = [];
+        foreach ($ctx['todosActivos'] as $trab) {
+            if (!isset($bloqueados[$trab['id']])) {
+                $disponibles[] = $trab;
+            }
+        }
+        return $disponibles;
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // MÉTODO PRINCIPAL
+    // ─────────────────────────────────────────────────────────────────────────
     public function asignarMesCompleto($mes, $anio, $opciones = []) {
-        $diasMes       = (int)date('t', mktime(0, 0, 0, $mes, 1, $anio));
-        $asignaciones  = [];
-        $errores       = [];
+        $diasMes         = (int)date('t', mktime(0, 0, 0, $mes, 1, $anio));
+        $asignaciones    = [];
+        $errores         = [];
         $libresAsignados = [];
         $libresErrores   = [];
 
-        // ── Datos base ──────────────────────────────────────────
-        $stmt = $this->db->query(
-            "SELECT id, nombre FROM trabajadores WHERE activo = true AND LOWER(COALESCE(cargo, '')) != 'supervisor' ORDER BY nombre"
-        );
-        $trabajadoresActivos = $stmt->fetchAll();
-        $turnosNochePorTrabajador = $this->trabajadores->obtenerConteoTurnosNochePorMes($mes, $anio);
-
-        // Obtener conteo total de turnos por trabajador en el mes
         $fechaInicioMes = sprintf('%04d-%02d-01', $anio, $mes);
         $fechaFinMes    = date('Y-m-t', strtotime($fechaInicioMes));
+
+        // ── Prefetch masivo ──────────────────────────────────────────────────
+        $ctx = $this->prefetchDisponibilidadMes($mes, $anio);
+
+        // Conteo de turnos en memoria para balanceo equitativo
         $stmtConteo = $this->db->prepare(
-            "SELECT ta.trabajador_id, COUNT(*) as total_turnos FROM turnos_asignados ta
-             WHERE ta.fecha BETWEEN :fi AND :ff AND ta.estado IN ('programado', 'activo')
+            "SELECT ta.trabajador_id, COUNT(*) as total FROM turnos_asignados ta
+             WHERE ta.fecha BETWEEN :fi AND :ff AND ta.estado IN ('programado','activo')
              GROUP BY ta.trabajador_id"
         );
         $stmtConteo->execute([':fi' => $fechaInicioMes, ':ff' => $fechaFinMes]);
-        $conteoTurnosPorTrabajador = [];
+        $conteoTurnos = [];
         foreach ($stmtConteo->fetchAll() as $row) {
-            $conteoTurnosPorTrabajador[$row['trabajador_id']] = (int)$row['total_turnos'];
+            $conteoTurnos[$row['trabajador_id']] = (int)$row['total'];
         }
 
-        // Obtener patrón de libres del mes anterior
+        // Patrón de libres del mes anterior (continuidad entre meses)
         $mesAnterior  = $mes == 1 ? 12 : $mes - 1;
         $anioAnterior = $mes == 1 ? $anio - 1 : $anio;
-        $patronLibresMesAnterior = $this->obtenerPatronLibresMesAnterior($mesAnterior, $anioAnterior, $trabajadoresActivos);
+        $patronLibres = $this->obtenerPatronLibresMesAnterior($mesAnterior, $anioAnterior, $ctx['todosActivos']);
 
         $puestos = $this->obtenerPuestos();
 
+        // Configuración de turnos
         $turnosConfig = $this->db->query(
             "SELECT id, numero_turno FROM configuracion_turnos ORDER BY numero_turno"
         )->fetchAll();
@@ -77,23 +340,20 @@ class AsignacionAutomatica {
         $stmtPuestosL4->execute();
         $puestosL4Info = $stmtPuestosL4->fetchAll();
 
-        // Puestos nocturnos
         $puestosNocturnos = ['V1','V2','C','D3','F6','F11'];
-
-        // Máximo libres permitidos el mismo día
-        $MAX_LIBRES_DIA = 3;
+        $MAX_LIBRES_DIA   = 3;
 
         try {
-            // ════════════════════════════════════════════════════
+            // ════════════════════════════════════════════════════════════════
             // PASO 1 — DÍAS LIBRES
-            // ════════════════════════════════════════════════════
+            // ════════════════════════════════════════════════════════════════
 
             $semanas = $this->calcularSemanas($mes, $anio);
 
-            // FIX: prefetch incluye -14 días del mes anterior para continuidad
-            $diasEspecialesPrefetch  = $this->prefetchDiasEspeciales($mes, $anio);
-            $libresPorTrabajador     = $diasEspecialesPrefetch['libresPorTrabajador'];
-            $cargaPorFecha           = $diasEspecialesPrefetch['cargaPorFecha'];
+            // Prefetch extendido -14 días para continuidad con mes anterior
+            $diasEspecialesPrefetch = $this->prefetchDiasEspeciales($mes, $anio);
+            $libresPorTrabajador    = $diasEspecialesPrefetch['libresPorTrabajador'];
+            $cargaPorFecha          = $diasEspecialesPrefetch['cargaPorFecha'];
 
             $stmtInsLibre = $this->db->prepare(
                 "INSERT INTO dias_especiales
@@ -101,78 +361,30 @@ class AsignacionAutomatica {
                  VALUES (?, 'L', ?, NULL, 'AUTO: generado automáticamente', 'programado')"
             );
 
-            $trabajadoresShuffled = $trabajadoresActivos;
+            $trabajadoresShuffled = $ctx['todosActivos'];
             shuffle($trabajadoresShuffled);
             $semanasShuffled = $semanas;
             shuffle($semanasShuffled);
 
             foreach ($semanasShuffled as $semana) {
                 foreach ($trabajadoresShuffled as $trab) {
-                    // FIX: tieneLibreEnRango ahora extrae correctamente fecha_inicio del array
                     if ($this->tieneLibreEnRango($trab['id'], $semana['lunes'], $semana['domingo'], $libresPorTrabajador)) {
                         continue;
                     }
 
-                    // FIX: obtenerUltimoLibreAntes ahora extrae correctamente fecha_inicio del array
-                    // y el prefetch ya incluye días del mes anterior, por lo que la primera
-                    // semana del mes respeta el descanso del mes anterior
                     $tsUltimoLibre = $this->obtenerUltimoLibreAntes($trab['id'], $semana['lunes'], $libresPorTrabajador);
 
-                    $candidatos = [];
-                    for ($d = 0; $d <= 6; $d++) {
-                        $ts       = strtotime($semana['lunes']) + $d * 86400;
-                        $dow      = (int)date('N', $ts);
-                        $fechaDia = date('Y-m-d', $ts);
-
-                        if ($dow > 5) continue;
-                        if ((int)date('n', $ts) != (int)$mes) continue;
-                        if ($tsUltimoLibre && ($ts - $tsUltimoLibre) < (6 * 86400)) continue;
-
-                        $carga = $cargaPorFecha[$fechaDia] ?? 0;
-                        if ($carga < $MAX_LIBRES_DIA) {
-                            $candidatos[] = ['fecha' => $fechaDia, 'carga' => $carga];
-                        }
-                    }
-
-                    // Fallback 1: ignorar restricción de 6 días pero respetar carga máxima
-                    if (empty($candidatos)) {
-                        for ($d = 0; $d <= 6; $d++) {
-                            $ts       = strtotime($semana['lunes']) + $d * 86400;
-                            $dow      = (int)date('N', $ts);
-                            $fechaDia = date('Y-m-d', $ts);
-                            if ($dow > 5) continue;
-                            if ((int)date('n', $ts) != (int)$mes) continue;
-                            $carga = $cargaPorFecha[$fechaDia] ?? 0;
-                            if ($carga < $MAX_LIBRES_DIA) {
-                                $candidatos[] = ['fecha' => $fechaDia, 'carga' => $carga];
-                            }
-                        }
-                    }
-
-                    // Fallback 2: cualquier día entre semana del mes
-                    if (empty($candidatos)) {
-                        for ($d = 0; $d <= 6; $d++) {
-                            $ts       = strtotime($semana['lunes']) + $d * 86400;
-                            $dow      = (int)date('N', $ts);
-                            $fechaDia = date('Y-m-d', $ts);
-                            if ($dow > 5) continue;
-                            if ((int)date('n', $ts) != (int)$mes) continue;
-                            $carga = $cargaPorFecha[$fechaDia] ?? 0;
-                            $candidatos[] = ['fecha' => $fechaDia, 'carga' => $carga];
-                        }
-                    }
+                    $candidatos = $this->buscarCandidatosLibre(
+                        $trab['id'], $semana, $mes, $tsUltimoLibre, $cargaPorFecha, $MAX_LIBRES_DIA
+                    );
 
                     if (empty($candidatos)) {
-                        $libresErrores[] = [
-                            'trabajador' => $trab['nombre'],
-                            'semana'     => $semana['lunes'],
-                            'error'      => 'Sin día entre semana disponible'
-                        ];
+                        $libresErrores[] = ['trabajador' => $trab['nombre'], 'semana' => $semana['lunes'], 'error' => 'Sin día entre semana disponible'];
                         continue;
                     }
 
-                    usort($candidatos, function($a, $b) use ($patronLibresMesAnterior, $trab) {
-                        $diaPreferido = $patronLibresMesAnterior[$trab['id']] ?? null;
+                    usort($candidatos, function($a, $b) use ($patronLibres, $trab) {
+                        $diaPreferido = $patronLibres[$trab['id']] ?? null;
                         $dowA = (int)date('N', strtotime($a['fecha']));
                         $dowB = (int)date('N', strtotime($b['fecha']));
                         if ($diaPreferido) {
@@ -181,7 +393,6 @@ class AsignacionAutomatica {
                             if ($prefA != $prefB) return $prefB - $prefA;
                         }
                         if ($a['carga'] != $b['carga']) return $a['carga'] - $b['carga'];
-                        // Si carga igual, preferir días más tarde en la semana para distribuir mejor
                         return date('j', strtotime($b['fecha'])) - date('j', strtotime($a['fecha']));
                     });
 
@@ -190,27 +401,29 @@ class AsignacionAutomatica {
                     try {
                         $stmtInsLibre->execute([$trab['id'], $mejorDia]);
                         $libresAsignados[] = ['trabajador' => $trab['nombre'], 'fecha' => $mejorDia];
+
+                        // Actualizar estado en memoria para que pasos 2 y 3 lo vean
                         $libresPorTrabajador[$trab['id']][] = ['fecha_inicio' => $mejorDia, 'fecha_fin' => null];
-                        // Reordenar para mantener el array ordenado por fecha
-                        usort($libresPorTrabajador[$trab['id']], function($a, $b) {
-                            return strcmp($a['fecha_inicio'], $b['fecha_inicio']);
-                        });
+                        usort($libresPorTrabajador[$trab['id']], fn($a,$b) => strcmp($a['fecha_inicio'], $b['fecha_inicio']));
                         $cargaPorFecha[$mejorDia] = ($cargaPorFecha[$mejorDia] ?? 0) + 1;
-                    } catch (Exception $eL) {
-                        $libresErrores[] = [
-                            'trabajador' => $trab['nombre'],
-                            'semana'     => $semana['lunes'],
-                            'error'      => $eL->getMessage()
+
+                        // Sincronizar con el contexto de disponibilidad
+                        $ctx['diasEspeciales'][] = [
+                            'trabajador_id' => $trab['id'],
+                            'fecha_inicio'  => $mejorDia,
+                            'fecha_fin'     => $mejorDia
                         ];
+                    } catch (Exception $eL) {
+                        $libresErrores[] = ['trabajador' => $trab['nombre'], 'semana' => $semana['lunes'], 'error' => $eL->getMessage()];
                     }
                 }
             }
 
-            // ════════════════════════════════════════════════════
+            // ════════════════════════════════════════════════════════════════
             // PASO 2 — TURNOS L4
-            // ════════════════════════════════════════════════════
+            // ════════════════════════════════════════════════════════════════
 
-            // FIX: prefetch incluye -7 días del mes anterior para la primera semana
+            // Prefetch extendido -7 días para la primera semana del mes
             $turnosAsignadosPrefetch   = $this->prefetchTurnosAsignados($mes, $anio);
             $turnosPorTrabajadorSemana = $turnosAsignadosPrefetch['turnosPorTrabajadorSemana'];
             $turnosPorPuestoFecha      = $turnosAsignadosPrefetch['turnosPorPuestoFecha'];
@@ -238,19 +451,15 @@ class AsignacionAutomatica {
                     foreach ($diasSemana as $fechaL4) {
                         if ($asignado) break;
                         foreach ($puestosL4Mezclados as $puesto) {
-                            $turnoIdL4      = $puestosL4Map[$puesto['codigo']] ?? 9;
-                            $numeroTurnoL4  = $numeroPorTurnoId[$turnoIdL4] ?? 4;
+                            $turnoIdL4     = $puestosL4Map[$puesto['codigo']] ?? 9;
+                            $numeroTurnoL4 = $numeroPorTurnoId[$turnoIdL4] ?? 4;
 
                             if ($this->estaPuestoOcupado($puesto['id'], $numeroTurnoL4, $fechaL4, $turnosPorPuestoFecha)) {
                                 continue;
                             }
 
-                            $disponibles = $this->trabajadores->obtenerDisponiblesL4(
-                                $puesto['id'], $turnoIdL4, $fechaL4
-                            );
-                            $disponible = array_filter($disponibles, function($t) use ($trab) {
-                                return $t['id'] == $trab['id'];
-                            });
+                            $disponiblesL4 = $this->getDisponiblesL4($puesto['id'], $fechaL4, $ctx);
+                            $disponible    = array_filter($disponiblesL4, fn($t) => $t['id'] == $trab['id']);
                             if (empty($disponible)) continue;
 
                             $resultado = $this->turnosAsignados->asignarDirecto([
@@ -262,17 +471,17 @@ class AsignacionAutomatica {
                             ]);
 
                             if ($resultado['success']) {
-                                $asignaciones[] = [
-                                    'fecha'      => $fechaL4,
-                                    'puesto'     => $puesto['codigo'],
-                                    'turno'      => 'L4',
-                                    'trabajador' => $trab['nombre']
-                                ];
-                                $turnosPorPuestoFecha[$puesto['id'] . '|' . $numeroTurnoL4 . '|' . $fechaL4] = true;
+                                $asignaciones[] = ['fecha'=>$fechaL4,'puesto'=>$puesto['codigo'],'turno'=>'L4','trabajador'=>$trab['nombre']];
+                                $turnosPorPuestoFecha[$puesto['id'].'|'.$numeroTurnoL4.'|'.$fechaL4] = true;
+
                                 if (!isset($turnosPorTrabajadorSemana[$trab['id']][$semana['lunes']])) {
                                     $turnosPorTrabajadorSemana[$trab['id']][$semana['lunes']] = [];
                                 }
                                 $turnosPorTrabajadorSemana[$trab['id']][$semana['lunes']][] = $numeroTurnoL4;
+
+                                // Actualizar contexto en memoria
+                                $ctx['asignadosPorDia'][$fechaL4][$trab['id']][] = $numeroTurnoL4;
+                                $conteoTurnos[$trab['id']] = ($conteoTurnos[$trab['id']] ?? 0) + 1;
                                 $asignado = true;
                                 break;
                             }
@@ -280,19 +489,18 @@ class AsignacionAutomatica {
                     }
 
                     if (!$asignado) {
-                        $errores[] = [
-                            'fecha'      => $semana['lunes'] . ' al ' . $semana['domingo'],
-                            'puesto'     => 'L4',
-                            'turno'      => 'L4',
-                            'error'      => 'Sin puesto L4 disponible para ' . $trab['nombre']
-                        ];
+                        $errores[] = ['fecha'=>$semana['lunes'].' al '.$semana['domingo'],'puesto'=>'L4','turno'=>'L4','error'=>'Sin puesto L4 disponible para '.$trab['nombre']];
                     }
                 }
             }
 
-            // ════════════════════════════════════════════════════
+            // ════════════════════════════════════════════════════════════════
             // PASO 3 — TURNOS NORMALES (T1, T2, T3)
-            // ════════════════════════════════════════════════════
+            //
+            // CLAVE: $ctx['asignadosPorDia'] se actualiza inmediatamente
+            // después de cada asignación exitosa → el mismo trabajador NO puede
+            // ser seleccionado para otro puesto en la misma fecha.
+            // ════════════════════════════════════════════════════════════════
 
             for ($dia = 1; $dia <= $diasMes; $dia++) {
                 $fecha = sprintf('%04d-%02d-%02d', $anio, $mes, $dia);
@@ -305,10 +513,11 @@ class AsignacionAutomatica {
                     shuffle($turnosShuffled);
 
                     foreach ($turnosShuffled as $turno) {
-                        if ($turno == 3 && !in_array(strtoupper($puesto['codigo']), $puestosNocturnos)) continue;
-
-                        $turnoIdReal  = $turnoIdPorNumero[$turno] ?? $turno;
                         $codigoPuesto = strtoupper($puesto['codigo']);
+
+                        if ($turno == 3 && !in_array($codigoPuesto, $puestosNocturnos)) continue;
+
+                        $turnoIdReal = $turnoIdPorNumero[$turno] ?? $turno;
 
                         if (isset($puestosL4Turno[$codigoPuesto]) && $puestosL4Turno[$codigoPuesto] == $turno) {
                             if ($this->tieneTurnoL4EnFecha($puesto['id'], $fecha, $turnosPorPuestoFecha)) {
@@ -320,60 +529,37 @@ class AsignacionAutomatica {
                             continue;
                         }
 
-                        $disponibles = $this->trabajadores->obtenerDisponibles($puesto['id'], $turnoIdReal, $fecha);
+                        // Disponibilidad completamente en memoria, sin queries
+                        $disponibles = $this->getDisponibles($puesto['id'], $turno, $fecha, $ctx, $conteoTurnos);
 
-                        if (count($disponibles) > 0) {
+                        if (empty($disponibles)) {
+                            $errores[] = ['fecha'=>$fecha,'puesto'=>$puesto['codigo'],'turno'=>$turno,'error'=>'Sin trabajadores disponibles'];
+                            continue;
+                        }
+
+                        $sel = $disponibles[0]; // Menor carga primero
+
+                        $resultado = $this->turnosAsignados->asignarDirecto([
+                            'trabajador_id'     => $sel['id'],
+                            'puesto_trabajo_id' => $puesto['id'],
+                            'turno_id'          => $turnoIdReal,
+                            'fecha'             => $fecha,
+                            'observaciones'     => 'Asignacion automatica'
+                        ]);
+
+                        if ($resultado['success']) {
+                            // Actualizar contexto en memoria INMEDIATAMENTE
+                            $ctx['asignadosPorDia'][$fecha][$sel['id']][] = $turno;
+
                             if ($turno == 3) {
-                                $prioritarios = array_values(array_filter($disponibles, function($t) use ($turnosNochePorTrabajador) {
-                                    return ($turnosNochePorTrabajador[$t['id']] ?? 0) < 5;
-                                }));
-                                $candidatos = !empty($prioritarios) ? $prioritarios : $disponibles;
-                                usort($candidatos, function($a, $b) use ($conteoTurnosPorTrabajador) {
-                                    return ($conteoTurnosPorTrabajador[$a['id']] ?? 0) - ($conteoTurnosPorTrabajador[$b['id']] ?? 0);
-                                });
-                                $sel = $candidatos[0];
-                            } else {
-                                usort($disponibles, function($a, $b) use ($conteoTurnosPorTrabajador) {
-                                    return ($conteoTurnosPorTrabajador[$a['id']] ?? 0) - ($conteoTurnosPorTrabajador[$b['id']] ?? 0);
-                                });
-                                $sel = $disponibles[0];
+                                $ctx['nochesPorTrabajador'][$sel['id']] = ($ctx['nochesPorTrabajador'][$sel['id']] ?? 0) + 1;
                             }
+                            $conteoTurnos[$sel['id']] = ($conteoTurnos[$sel['id']] ?? 0) + 1;
+                            $turnosPorPuestoFecha[$puesto['id'].'|'.$turno.'|'.$fecha] = true;
 
-                            $resultado = $this->turnosAsignados->asignarDirecto([
-                                'trabajador_id'     => $sel['id'],
-                                'puesto_trabajo_id' => $puesto['id'],
-                                'turno_id'          => $turnoIdReal,
-                                'fecha'             => $fecha,
-                                'observaciones'     => 'Asignacion automatica'
-                            ]);
-
-                            if ($resultado['success']) {
-                                if ($turno == 3) {
-                                    $turnosNochePorTrabajador[$sel['id']] = ($turnosNochePorTrabajador[$sel['id']] ?? 0) + 1;
-                                }
-                                $conteoTurnosPorTrabajador[$sel['id']] = ($conteoTurnosPorTrabajador[$sel['id']] ?? 0) + 1;
-                                $turnosPorPuestoFecha[$puesto['id'] . '|' . $turno . '|' . $fecha] = true;
-                                $asignaciones[] = [
-                                    'fecha'      => $fecha,
-                                    'puesto'     => $puesto['codigo'],
-                                    'turno'      => $turno,
-                                    'trabajador' => $sel['nombre']
-                                ];
-                            } else {
-                                $errores[] = [
-                                    'fecha'  => $fecha,
-                                    'puesto' => $puesto['codigo'],
-                                    'turno'  => $turno,
-                                    'error'  => $resultado['message']
-                                ];
-                            }
+                            $asignaciones[] = ['fecha'=>$fecha,'puesto'=>$puesto['codigo'],'turno'=>$turno,'trabajador'=>$sel['nombre']];
                         } else {
-                            $errores[] = [
-                                'fecha'  => $fecha,
-                                'puesto' => $puesto['codigo'],
-                                'turno'  => $turno,
-                                'error'  => 'Sin trabajadores disponibles'
-                            ];
+                            $errores[] = ['fecha'=>$fecha,'puesto'=>$puesto['codigo'],'turno'=>$turno,'error'=>$resultado['message']];
                         }
                     }
                 }
@@ -394,9 +580,37 @@ class AsignacionAutomatica {
         }
     }
 
-    // ─────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
     // HELPERS
-    // ─────────────────────────────────────────────────────────────
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * 3 niveles de búsqueda para candidatos de día libre:
+     * 1. Respeta separación de 6 días + carga máxima
+     * 2. Solo respeta carga máxima
+     * 3. Cualquier día entre semana del mes (fallback final)
+     */
+    private function buscarCandidatosLibre($trabajadorId, $semana, $mes, $tsUltimoLibre, $cargaPorFecha, $maxLibresDia) {
+        for ($nivel = 1; $nivel <= 3; $nivel++) {
+            $candidatos = [];
+            for ($d = 0; $d <= 6; $d++) {
+                $ts       = strtotime($semana['lunes']) + $d * 86400;
+                $dow      = (int)date('N', $ts);
+                $fechaDia = date('Y-m-d', $ts);
+
+                if ($dow > 5) continue;
+                if ((int)date('n', $ts) != (int)$mes) continue;
+                if ($nivel == 1 && $tsUltimoLibre && ($ts - $tsUltimoLibre) < (6 * 86400)) continue;
+
+                $carga = $cargaPorFecha[$fechaDia] ?? 0;
+                if ($nivel <= 2 && $carga >= $maxLibresDia) continue;
+
+                $candidatos[] = ['fecha' => $fechaDia, 'carga' => $carga];
+            }
+            if (!empty($candidatos)) return $candidatos;
+        }
+        return [];
+    }
 
     private function calcularSemanas($mes, $anio) {
         $diasMes = (int)date('t', mktime(0, 0, 0, $mes, 1, $anio));
@@ -411,10 +625,7 @@ class AsignacionAutomatica {
                 if ($sem['lunes'] === $lunesStr) { $encontrado = true; break; }
             }
             if (!$encontrado) {
-                $semanas[] = [
-                    'lunes'   => $lunesStr,
-                    'domingo' => date('Y-m-d', $lunesTs + 6 * 86400)
-                ];
+                $semanas[] = ['lunes' => $lunesStr, 'domingo' => date('Y-m-d', $lunesTs + 6 * 86400)];
             }
         }
         return $semanas;
@@ -428,15 +639,9 @@ class AsignacionAutomatica {
         return $stmt->fetchAll();
     }
 
-    /**
-     * FIX: Ahora incluye los 14 días anteriores al mes para que la primera semana
-     * del mes tenga en cuenta los libres del mes anterior y no asigne libre el día 1
-     * a todos los trabajadores.
-     */
     private function prefetchDiasEspeciales($mes, $anio) {
         $fechaInicio     = sprintf('%04d-%02d-01', $anio, $mes);
         $fechaFin        = date('Y-m-t', strtotime($fechaInicio));
-        // 14 días atrás garantiza cubrir los libres de la última semana del mes anterior
         $fechaInicioPrev = date('Y-m-d', strtotime($fechaInicio . ' -14 days'));
 
         $stmt = $this->db->prepare(
@@ -452,69 +657,44 @@ class AsignacionAutomatica {
         $cargaPorFecha       = [];
 
         foreach ($result as $row) {
-            $libresPorTrabajador[$row['trabajador_id']][] = [
-                'fecha_inicio' => $row['fecha_inicio'],
-                'fecha_fin'    => null
-            ];
-            // Solo contar carga dentro del mes actual
+            $libresPorTrabajador[$row['trabajador_id']][] = ['fecha_inicio' => $row['fecha_inicio'], 'fecha_fin' => null];
             if ($row['fecha_inicio'] >= $fechaInicio) {
                 $cargaPorFecha[$row['fecha_inicio']] = ($cargaPorFecha[$row['fecha_inicio']] ?? 0) + 1;
             }
         }
 
-        // Ordenar por fecha para que obtenerUltimoLibreAntes funcione correctamente
         foreach ($libresPorTrabajador as &$fechas) {
-            usort($fechas, function($a, $b) {
-                return strcmp($a['fecha_inicio'], $b['fecha_inicio']);
-            });
+            usort($fechas, fn($a,$b) => strcmp($a['fecha_inicio'], $b['fecha_inicio']));
         }
         unset($fechas);
 
-        return [
-            'libresPorTrabajador' => $libresPorTrabajador,
-            'cargaPorFecha'       => $cargaPorFecha
-        ];
+        return ['libresPorTrabajador' => $libresPorTrabajador, 'cargaPorFecha' => $cargaPorFecha];
     }
 
-    /**
-     * FIX: Extrae correctamente fecha_inicio del array en lugar de comparar el array entero.
-     */
     private function tieneLibreEnRango($trabajador_id, $inicio, $fin, $libresPorTrabajador) {
         if (empty($libresPorTrabajador[$trabajador_id])) return false;
-
         foreach ($libresPorTrabajador[$trabajador_id] as $libre) {
-            $fechaLibre = $libre['fecha_inicio']; // ← FIX: extraer string del array
-            if ($fechaLibre > $fin) break;        // ordenado, podemos cortar antes
-            if ($fechaLibre >= $inicio) return true;
+            $f = $libre['fecha_inicio'];
+            if ($f > $fin) break;
+            if ($f >= $inicio) return true;
         }
         return false;
     }
 
-    /**
-     * FIX: Extrae correctamente fecha_inicio del array.
-     * Gracias al prefetch extendido (-14 días), ahora sí encuentra el último
-     * libre del mes anterior para la primera semana del mes nuevo.
-     */
     private function obtenerUltimoLibreAntes($trabajador_id, $fecha, $libresPorTrabajador) {
         if (empty($libresPorTrabajador[$trabajador_id])) return null;
-
         $ultimo = null;
         foreach ($libresPorTrabajador[$trabajador_id] as $libre) {
-            $fechaLibre = $libre['fecha_inicio']; // ← FIX: extraer string del array
-            if ($fechaLibre >= $fecha) break;
-            $ultimo = $fechaLibre;
+            $f = $libre['fecha_inicio'];
+            if ($f >= $fecha) break;
+            $ultimo = $f;
         }
         return $ultimo ? strtotime($ultimo) : null;
     }
 
-    /**
-     * FIX: Incluye 7 días anteriores al mes para que tieneTurnoL4EnSemana
-     * detecte L4 ya asignados en la última semana del mes anterior.
-     */
     private function prefetchTurnosAsignados($mes, $anio) {
         $fechaInicio     = sprintf('%04d-%02d-01', $anio, $mes);
         $fechaFin        = date('Y-m-t', strtotime($fechaInicio));
-        // 7 días atrás cubre la semana que puede solaparse con el inicio del mes
         $fechaInicioPrev = date('Y-m-d', strtotime($fechaInicio . ' -7 days'));
 
         $stmt = $this->db->prepare(
@@ -532,22 +712,11 @@ class AsignacionAutomatica {
 
         foreach ($result as $row) {
             $semanaKey = $this->getSemanaKey($row['fecha']);
-            if (!isset($turnosPorTrabajadorSemana[$row['trabajador_id']])) {
-                $turnosPorTrabajadorSemana[$row['trabajador_id']] = [];
-            }
-            if (!isset($turnosPorTrabajadorSemana[$row['trabajador_id']][$semanaKey])) {
-                $turnosPorTrabajadorSemana[$row['trabajador_id']][$semanaKey] = [];
-            }
             $turnosPorTrabajadorSemana[$row['trabajador_id']][$semanaKey][] = $row['numero_turno'];
-
-            $key = $row['puesto_trabajo_id'] . '|' . $row['numero_turno'] . '|' . $row['fecha'];
-            $turnosPorPuestoFecha[$key] = true;
+            $turnosPorPuestoFecha[$row['puesto_trabajo_id'].'|'.$row['numero_turno'].'|'.$row['fecha']] = true;
         }
 
-        return [
-            'turnosPorTrabajadorSemana' => $turnosPorTrabajadorSemana,
-            'turnosPorPuestoFecha'      => $turnosPorPuestoFecha
-        ];
+        return ['turnosPorTrabajadorSemana' => $turnosPorTrabajadorSemana, 'turnosPorPuestoFecha' => $turnosPorPuestoFecha];
     }
 
     private function getSemanaKey($fecha) {
@@ -559,29 +728,27 @@ class AsignacionAutomatica {
 
     private function tieneTurnoL4EnSemana($trabajador_id, $lunes, $domingo, $turnosPorTrabajadorSemana) {
         if (!isset($turnosPorTrabajadorSemana[$trabajador_id][$lunes])) return false;
-        $turnos = $turnosPorTrabajadorSemana[$trabajador_id][$lunes];
-        return in_array(4, $turnos) || in_array(5, $turnos);
+        $t = $turnosPorTrabajadorSemana[$trabajador_id][$lunes];
+        return in_array(4, $t) || in_array(5, $t);
     }
 
     private function tieneTurnoL4EnFecha($puesto_id, $fecha, $turnosPorPuestoFecha) {
-        return isset($turnosPorPuestoFecha[$puesto_id . '|4|' . $fecha])
-            || isset($turnosPorPuestoFecha[$puesto_id . '|5|' . $fecha]);
+        return isset($turnosPorPuestoFecha[$puesto_id.'|4|'.$fecha])
+            || isset($turnosPorPuestoFecha[$puesto_id.'|5|'.$fecha]);
     }
 
     private function estaPuestoOcupado($puesto_id, $numero_turno, $fecha, $turnosPorPuestoFecha) {
-        return isset($turnosPorPuestoFecha[$puesto_id . '|' . $numero_turno . '|' . $fecha]);
+        return isset($turnosPorPuestoFecha[$puesto_id.'|'.$numero_turno.'|'.$fecha]);
     }
 
     private function obtenerPatronLibresMesAnterior($mes, $anio, $trabajadores) {
-        $fechaInicio    = sprintf('%04d-%02d-01', $anio, $mes);
-        $fechaFin       = date('Y-m-t', strtotime($fechaInicio));
-        $ultimoDiaMes   = strtotime($fechaFin);
-        $dowUltimo      = (int)date('N', $ultimoDiaMes);
-        $ultimoLunes    = $ultimoDiaMes - ($dowUltimo - 1) * 86400;
-        $fechaInicioUltimaSemana = date('Y-m-d', $ultimoLunes);
-        $fechaFinUltimaSemana    = date('Y-m-d', $ultimoLunes + 6 * 86400);
-
-        $patron = [];
+        $fechaInicio  = sprintf('%04d-%02d-01', $anio, $mes);
+        $fechaFin     = date('Y-m-t', strtotime($fechaInicio));
+        $ultimoDia    = strtotime($fechaFin);
+        $dowUltimo    = (int)date('N', $ultimoDia);
+        $ultimoLunes  = $ultimoDia - ($dowUltimo - 1) * 86400;
+        $inicioSemana = date('Y-m-d', $ultimoLunes);
+        $finSemana    = date('Y-m-d', $ultimoLunes + 6 * 86400);
 
         $stmt = $this->db->prepare(
             "SELECT trabajador_id, fecha_inicio FROM dias_especiales
@@ -589,16 +756,16 @@ class AsignacionAutomatica {
              AND fecha_inicio BETWEEN ? AND ?
              AND estado IN ('programado','activo')"
         );
-        $stmt->execute([$fechaInicioUltimaSemana, $fechaFinUltimaSemana]);
+        $stmt->execute([$inicioSemana, $finSemana]);
         $libres = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
+        $patron = [];
         foreach ($trabajadores as $trab) {
-            $diasLibres = array_filter($libres, function($l) use ($trab) {
-                return $l['trabajador_id'] == $trab['id'];
-            });
             $diasSemana = [];
-            foreach ($diasLibres as $libre) {
-                $diasSemana[] = (int)date('N', strtotime($libre['fecha_inicio']));
+            foreach ($libres as $libre) {
+                if ($libre['trabajador_id'] == $trab['id']) {
+                    $diasSemana[] = (int)date('N', strtotime($libre['fecha_inicio']));
+                }
             }
             if (!empty($diasSemana)) {
                 $conteo = array_count_values($diasSemana);
