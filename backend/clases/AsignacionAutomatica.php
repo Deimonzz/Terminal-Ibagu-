@@ -73,9 +73,13 @@ class AsignacionAutomatica {
         $diasEspeciales = $stmtDE->fetchAll(PDO::FETCH_ASSOC);
 
         // 5. Restricciones de trabajadores vigentes en el mes
+        // Detectar el nombre correcto de la columna puesto (puesto_trabajo_id o puesto_id)
+        $puestoCol = Database::getColumnName('restricciones_trabajador', 'puesto_trabajo_id', 'puesto_id');
+        $puestoCol = $puestoCol ?: 'puesto_id'; // fallback a puesto_id
+        
         $stmtR = $this->db->prepare(
             "SELECT trabajador_id, tipo_restriccion,
-                    puesto_trabajo_id,
+                    " . $puestoCol . " as puesto_trabajo_id,
                     fecha_inicio, fecha_fin
              FROM restricciones_trabajador
              WHERE activa = true
@@ -698,8 +702,12 @@ class AsignacionAutomatica {
         $fechaFin        = date('Y-m-t', strtotime($fechaInicio));
         $fechaInicioPrev = date('Y-m-d', strtotime($fechaInicio . ' -7 days'));
 
+        // Detectar si la columna es puesto_trabajo_id o puesto_id
+        $puestoCol = Database::getColumnName('turnos_asignados', 'puesto_trabajo_id', 'puesto_id');
+        $puestoCol = $puestoCol ?: 'puesto_trabajo_id'; // fallback
+
         $stmt = $this->db->prepare(
-            "SELECT ta.trabajador_id, ta.puesto_trabajo_id, ta.fecha, ct.numero_turno
+            "SELECT ta.trabajador_id, ta." . $puestoCol . " as puesto_trabajo_id, ta.fecha, ct.numero_turno
              FROM turnos_asignados ta
              INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
              WHERE ta.fecha BETWEEN ? AND ?

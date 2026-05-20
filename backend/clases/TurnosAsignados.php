@@ -14,6 +14,10 @@ class TurnosAsignados {
     
     
     public function obtenerTurnos($filtros = []) {
+        // Detectar el nombre correcto de la columna puesto
+        $puestoCol = Database::getColumnName('turnos_asignados', 'puesto_trabajo_id', 'puesto_id');
+        $puestoCol = $puestoCol ?: 'puesto_trabajo_id'; // fallback
+        
         $sql = "SELECT 
                 ta.id,
                 ta.fecha,
@@ -33,7 +37,7 @@ class TurnosAsignados {
                 ct.horas_laborales
                 FROM turnos_asignados ta
                 INNER JOIN trabajadores t ON ta.trabajador_id = t.id
-                INNER JOIN puestos_trabajo pt ON ta.puesto_trabajo_id = pt.id
+                INNER JOIN puestos_trabajo pt ON ta." . $puestoCol . " = pt.id
                 INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
                 WHERE 1=1";
         
@@ -86,6 +90,10 @@ class TurnosAsignados {
      
     public function validarAsignacion($trabajador_id, $puesto_id, $turno_id, $fecha, $exclude_id = null) {
         $errores = [];
+        
+        // Detectar el nombre correcto de la columna puesto en turnos_asignados
+        $puestoCol = Database::getColumnName('turnos_asignados', 'puesto_trabajo_id', 'puesto_id');
+        $puestoCol = $puestoCol ?: 'puesto_trabajo_id'; // fallback
 
         try {
         
@@ -96,7 +104,7 @@ class TurnosAsignados {
                 INNER JOIN trabajadores t ON ta.trabajador_id = t.id
                 INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
                 INNER JOIN configuracion_turnos ct2 ON ct2.id = :turno_id
-                WHERE ta.puesto_trabajo_id = :puesto_id
+                WHERE ta." . $puestoCol . " = :puesto_id
                 AND ct.numero_turno = ct2.numero_turno
                 AND ta.fecha = :fecha
                 AND ta.estado IN ('programado', 'activo')";
@@ -290,9 +298,13 @@ class TurnosAsignados {
         try {
             $this->db->beginTransaction();
             
+            // Detectar el nombre correcto de la columna puesto
+            $puestoCol = Database::getColumnName('turnos_asignados', 'puesto_trabajo_id', 'puesto_id');
+            $puestoCol = $puestoCol ?: 'puesto_trabajo_id'; // fallback
+            
             // Insertar turno
             $sql = "INSERT INTO turnos_asignados 
-                    (trabajador_id, puesto_trabajo_id, turno_id, fecha, estado, observaciones, created_by) 
+                    (trabajador_id, " . $puestoCol . ", turno_id, fecha, estado, observaciones, created_by) 
                     VALUES (:trabajador_id, :puesto_id, :turno_id, :fecha, :estado, :observaciones, :created_by)";
             
             $datos_finales = [
@@ -334,8 +346,13 @@ class TurnosAsignados {
     public function asignarDirecto($datos) {
         try {
             $this->db->beginTransaction();
+            
+            // Detectar el nombre correcto de la columna puesto
+            $puestoCol = Database::getColumnName('turnos_asignados', 'puesto_trabajo_id', 'puesto_id');
+            $puestoCol = $puestoCol ?: 'puesto_trabajo_id'; // fallback
+            
             $sql = "INSERT INTO turnos_asignados 
-                    (trabajador_id, puesto_trabajo_id, turno_id, fecha, estado, observaciones, created_by) 
+                    (trabajador_id, " . $puestoCol . ", turno_id, fecha, estado, observaciones, created_by) 
                     VALUES (:trabajador_id, :puesto_id, :turno_id, :fecha, :estado, :observaciones, :created_by)";
 
             $datos_finales = [
@@ -453,8 +470,12 @@ class TurnosAsignados {
             }
 
             try {
+                // Detectar el nombre correcto de la columna puesto
+                $puestoCol = Database::getColumnName('turnos_asignados', 'puesto_trabajo_id', 'puesto_id');
+                $puestoCol = $puestoCol ?: 'puesto_trabajo_id'; // fallback
+                
                 $stmt = $this->db->prepare(
-                    "UPDATE turnos_asignados SET turno_id = :turno_id, puesto_trabajo_id = :puesto_id WHERE id = :id"
+                    "UPDATE turnos_asignados SET turno_id = :turno_id, " . $puestoCol . " = :puesto_id WHERE id = :id"
                 );
                 $stmt->execute([':turno_id' => $nuevoTurnoId, ':puesto_id' => $nuevoPuestoId, ':id' => $id]);
                 return ['success' => true, 'message' => 'Turno actualizado'];
@@ -523,13 +544,17 @@ class TurnosAsignados {
     //Obtener turno por ID
     
     public function obtenerPorId($id) {
+        // Detectar el nombre correcto de la columna puesto
+        $puestoCol = Database::getColumnName('turnos_asignados', 'puesto_trabajo_id', 'puesto_id');
+        $puestoCol = $puestoCol ?: 'puesto_trabajo_id'; // fallback
+        
         $sql = "SELECT ta.*, 
                 t.nombre as trabajador,
                 pt.nombre as puesto,
                 ct.nombre as turno
                 FROM turnos_asignados ta
                 INNER JOIN trabajadores t ON ta.trabajador_id = t.id
-                INNER JOIN puestos_trabajo pt ON ta.puesto_trabajo_id = pt.id
+                INNER JOIN puestos_trabajo pt ON ta." . $puestoCol . " = pt.id
                 INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
                 WHERE ta.id = :id";
         
@@ -542,6 +567,10 @@ class TurnosAsignados {
     //Obtener calendario de turnos (vista mensual)
     
     public function obtenerCalendario($mes, $anio, $area = null) {
+        // Detectar el nombre correcto de la columna puesto
+        $puestoCol = Database::getColumnName('turnos_asignados', 'puesto_trabajo_id', 'puesto_id');
+        $puestoCol = $puestoCol ?: 'puesto_trabajo_id'; // fallback
+        
         $fecha_inicio = "$anio-" . str_pad($mes, 2, '0', STR_PAD_LEFT) . "-01";
         $fecha_fin = date("Y-m-t", strtotime($fecha_inicio));
         
@@ -560,7 +589,7 @@ class TurnosAsignados {
                 ct.hora_fin
                 FROM turnos_asignados ta
                 INNER JOIN trabajadores t ON ta.trabajador_id = t.id
-                INNER JOIN puestos_trabajo pt ON ta.puesto_trabajo_id = pt.id
+                INNER JOIN puestos_trabajo pt ON ta." . $puestoCol . " = pt.id
                 INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
                 WHERE ta.fecha BETWEEN :fecha_inicio AND :fecha_fin
                 AND ta.estado IN ('programado', 'activo', 'completado')";
