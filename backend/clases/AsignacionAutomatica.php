@@ -75,11 +75,11 @@ class AsignacionAutomatica {
         // 5. Restricciones de trabajadores vigentes en el mes
         // Detectar el nombre correcto de la columna puesto (puesto_trabajo_id o puesto_id)
         $puestoCol = Database::getColumnName('restricciones_trabajador', 'puesto_trabajo_id', 'puesto_id');
-        $puestoCol = $puestoCol ?: 'puesto_id'; // fallback a puesto_id
+        $selectPuesto = $puestoCol ? "$puestoCol as puesto_trabajo_id" : "NULL as puesto_trabajo_id";
         
         $stmtR = $this->db->prepare(
             "SELECT trabajador_id, tipo_restriccion,
-                    " . $puestoCol . " as puesto_trabajo_id,
+                    " . $selectPuesto . ",
                     fecha_inicio, fecha_fin
              FROM restricciones_trabajador
              WHERE activa = true
@@ -704,10 +704,10 @@ class AsignacionAutomatica {
 
         // Detectar si la columna es puesto_trabajo_id o puesto_id
         $puestoCol = Database::getColumnName('turnos_asignados', 'puesto_trabajo_id', 'puesto_id');
-        $puestoCol = $puestoCol ?: 'puesto_trabajo_id'; // fallback
+        $selectPuesto = $puestoCol ? "ta.$puestoCol as puesto_trabajo_id" : "NULL as puesto_trabajo_id";
 
         $stmt = $this->db->prepare(
-            "SELECT ta.trabajador_id, ta." . $puestoCol . " as puesto_trabajo_id, ta.fecha, ct.numero_turno
+            "SELECT ta.trabajador_id, " . $selectPuesto . ", ta.fecha, ct.numero_turno
              FROM turnos_asignados ta
              INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
              WHERE ta.fecha BETWEEN ? AND ?
@@ -722,7 +722,9 @@ class AsignacionAutomatica {
         foreach ($result as $row) {
             $semanaKey = $this->getSemanaKey($row['fecha']);
             $turnosPorTrabajadorSemana[$row['trabajador_id']][$semanaKey][] = $row['numero_turno'];
-            $turnosPorPuestoFecha[$row['puesto_trabajo_id'].'|'.$row['numero_turno'].'|'.$row['fecha']] = true;
+            if ($row['puesto_trabajo_id'] !== null) {
+                $turnosPorPuestoFecha[$row['puesto_trabajo_id'].'|'.$row['numero_turno'].'|'.$row['fecha']] = true;
+            }
         }
 
         return ['turnosPorTrabajadorSemana' => $turnosPorTrabajadorSemana, 'turnosPorPuestoFecha' => $turnosPorPuestoFecha];
