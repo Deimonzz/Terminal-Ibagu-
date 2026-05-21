@@ -107,9 +107,9 @@ class Incapacidades {
                 ':descripcion' => $datos['descripcion'] ?? null,
                 ':documento' => $datos['documento_soporte'] ?? null,
                 ':eps' => $datos['eps'] ?? null,
-                ':genera_restriccion' => $datos['genera_restriccion'] ?? false,
+                ':genera_restriccion' => filter_var($datos['genera_restriccion'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 ':tipo_restriccion' => $datos['tipo_restriccion_generada'] ?? null,
-                ':restriccion_permanente' => $datos['restriccion_permanente'] ?? false,
+                ':restriccion_permanente' => filter_var($datos['restriccion_permanente'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 ':fecha_fin_restriccion' => $datos['fecha_fin_restriccion'] ?? null
             ]);
 
