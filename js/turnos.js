@@ -6366,9 +6366,28 @@ async function cargarTablaRestricciones() {
         restricciones.forEach(r => {
             const tipo = r.tipo_restriccion || r.tipo || '-';
             let descripcion = r.descripcion || '-';
-            if (tipo === 'puesto_especifico' && (r.puesto_codigo || r.puesto_nombre)) {
-                descripcion = 'No puede asignarse a ' + (r.puesto_codigo ? r.puesto_codigo : r.puesto_nombre) + (r.descripcion ? ' – ' + r.descripcion : '');
+            
+            // Si es puesto específico, SIEMPRE mostrar cuál es el puesto
+            if (tipo === 'puesto_especifico') {
+                let puestoInfo = '';
+                if (r.puesto_codigo) {
+                    puestoInfo = r.puesto_codigo;
+                } else if (r.puesto_nombre) {
+                    puestoInfo = r.puesto_nombre;
+                } else if (r.puesto_trabajo_id) {
+                    puestoInfo = '(ID Puesto: ' + r.puesto_trabajo_id + ')';
+                }
+                
+                if (puestoInfo) {
+                    descripcion = '❌ No puede estar en: <strong>' + puestoInfo + '</strong>';
+                    if (r.descripcion && r.descripcion.trim()) {
+                        descripcion += ' – ' + r.descripcion;
+                    }
+                } else if (!r.descripcion) {
+                    descripcion = '❌ Restricción de puesto específico (información incompleta)';
+                }
             }
+            
             html += '<tr>';
             html += '<td>' + (r.trabajador_nombre || r.nombre || '-') + '</td>';
             html += '<td><span style="background:#f8d7da;color:#721c24;padding:2px 8px;border-radius:4px;font-size:0.82rem;font-weight:600;">' + tipo + '</span></td>';

@@ -339,7 +339,29 @@ class Trabajadores {
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':id' => $trabajador_id]);
-        return $stmt->fetchAll();
+        
+        // Procesar resultados para asegurar que restricciones de puesto específico siempre tengan la información del puesto
+        $resultados = $stmt->fetchAll();
+        foreach ($resultados as &$restriccion) {
+            // Si es restricción de puesto específico pero no tiene información del puesto
+            if ($restriccion['tipo_restriccion'] === 'puesto_especifico' && 
+                (!$restriccion['puesto_codigo'] && !$restriccion['puesto_nombre'])) {
+                
+                // Intenta obtener la información del puesto desde la columna de puesto_id
+                if ($this->restriccionPuestoColumn && isset($restriccion[$this->restriccionPuestoColumn]) && $restriccion[$this->restriccionPuestoColumn]) {
+                    $puesto = $this->getPuesto($restriccion[$this->restriccionPuestoColumn]);
+                    if ($puesto) {
+                        $restriccion['puesto_trabajo_id'] = $puesto['id'] ?? null;
+                        $restriccion['puesto_codigo'] = $puesto['codigo'] ?? null;
+                        $restriccion['puesto_nombre'] = $puesto['nombre'] ?? null;
+                    }
+                }
+            }
+        }
+        unset($restriccion);
+        
+        return $resultados;
+    }
     }
 
     public function obtenerListaRestricciones($filtros = []) {
@@ -370,7 +392,28 @@ class Trabajadores {
         $sql .= " ORDER BY rt.fecha_inicio DESC";
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
-        return $stmt->fetchAll();
+        
+        // Procesar resultados para asegurar que restricciones de puesto específico siempre tengan la información del puesto
+        $resultados = $stmt->fetchAll();
+        foreach ($resultados as &$restriccion) {
+            // Si es restricción de puesto específico pero no tiene información del puesto
+            if ($restriccion['tipo_restriccion'] === 'puesto_especifico' && 
+                (!$restriccion['puesto_codigo'] && !$restriccion['puesto_nombre'])) {
+                
+                // Intenta obtener la información del puesto desde la columna de puesto_id
+                if ($this->restriccionPuestoColumn && isset($restriccion[$this->restriccionPuestoColumn]) && $restriccion[$this->restriccionPuestoColumn]) {
+                    $puesto = $this->getPuesto($restriccion[$this->restriccionPuestoColumn]);
+                    if ($puesto) {
+                        $restriccion['puesto_trabajo_id'] = $puesto['id'] ?? null;
+                        $restriccion['puesto_codigo'] = $puesto['codigo'] ?? null;
+                        $restriccion['puesto_nombre'] = $puesto['nombre'] ?? null;
+                    }
+                }
+            }
+        }
+        unset($restriccion);
+        
+        return $resultados;
     }
     
     public function agregarRestriccion($datos) {
