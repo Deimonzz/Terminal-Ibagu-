@@ -6370,21 +6370,25 @@ async function cargarTablaRestricciones() {
             // Si es puesto específico, SIEMPRE mostrar cuál es el puesto
             if (tipo === 'puesto_especifico') {
                 let puestoInfo = '';
-                if (r.puesto_codigo) {
+                
+                // Intentar obtener info del puesto en este orden: codigo > nombre > id
+                if (r.puesto_codigo && r.puesto_codigo.trim()) {
                     puestoInfo = r.puesto_codigo;
-                } else if (r.puesto_nombre) {
+                } else if (r.puesto_nombre && r.puesto_nombre.trim()) {
                     puestoInfo = r.puesto_nombre;
                 } else if (r.puesto_trabajo_id) {
-                    puestoInfo = '(ID Puesto: ' + r.puesto_trabajo_id + ')';
+                    puestoInfo = 'Puesto ID: ' + r.puesto_trabajo_id;
                 }
                 
                 if (puestoInfo) {
+                    // Hay información del puesto
                     descripcion = '❌ No puede estar en: <strong>' + puestoInfo + '</strong>';
                     if (r.descripcion && r.descripcion.trim()) {
                         descripcion += ' – ' + r.descripcion;
                     }
-                } else if (!r.descripcion) {
-                    descripcion = '❌ Restricción de puesto específico (información incompleta)';
+                } else {
+                    // No hay información del puesto (debería ser raro ahora)
+                    descripcion = r.descripcion || '❌ Restricción de puesto específico';
                 }
             }
             
