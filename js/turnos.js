@@ -1,8 +1,6 @@
 //Variables Globales
 
-const API_BASE = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-    ? '/Terminal-Ibagu-/backend/api/'   // Ruta para XAMPP local
-    : '/backend/api/'; 
+const API_BASE = 'backend/api/'; 
 
 function cerrarModal() {
     const overlay = document.getElementById('modal-overlay');

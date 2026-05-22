@@ -84,12 +84,20 @@ function agregarBotonesAccion(bubble, texto) {
     let match;
     while ((match = linkRegex.exec(texto)) !== null) {
         const label = match[1];
-        const url = match[2];
+        let url = match[2];
+        
+        // Si el URL ya es absoluto o comienza con http, usarlo tal cual
+        // Si no, asumir que es relativo desde la raíz (backend/api/...)
+        if (!url.startsWith('http') && !url.startsWith('/')) {
+            // Es una ruta relativa como "backend/api/reportes_export.php?..."
+            // Dejarla tal cual para que sea relativa desde la página actual
+        }
+        
         acciones.push({ 
             texto: label, 
             accion: () => {
-                const fullUrl = API_BASE + url;
-                window.open(fullUrl, '_blank');
+                // Usar la URL tal cual (es relativa)
+                window.open(url, '_blank');
             }
         });
     }
@@ -706,7 +714,7 @@ FUNCIONES:
 
 COMANDOS EJECUTABLES:
 1. ASIGNAR turno: Responde con ---COMANDO--- {"action":"assign","params":{"trabajador_id":12,"turno_id":1,"fecha":"2026-05-25","puesto_trabajo_id":5}} ---FIN COMANDO---
-2. GENERAR reporte: Incluye links como [📥 Descargar Excel](reportes_export.php?action=turnos_mes&formato=excel)
+2. GENERAR reporte: Incluye links como [📥 Descargar Excel](backend/api/reportes_export.php?action=turnos_mes&formato=excel)
 
 REGLAS DE TURNOS:
 • Turno 1: 06-14h | Turno 2: 14-22h | Turno 3: 22-06h (SOLO V1,V2,C,D3,F6,F11)

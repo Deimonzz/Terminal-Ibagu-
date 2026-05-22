@@ -1,22 +1,46 @@
 <?php
-require_once dirname(dirname(__DIR__)) . '/config/database.php';
-
+// Asegurar encoding
+header('Content-Type: application/json; charset=utf-8');
 header('Access-Control-Allow-Origin: *');
 header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
 header('Access-Control-Allow-Headers: Content-Type');
 
+// Manejar CORS preflight
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
     http_response_code(200);
     exit();
 }
 
-$action = $_GET['action'] ?? $_POST['action'] ?? '';
-$formato = $_GET['formato'] ?? $_POST['formato'] ?? 'json'; // json, excel, pdf
+// Si es GET, redirigir a POST para consistencia
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
+    $_POST = $_GET;
+}
 
 try {
+    // Intentar conectar a BD
+    require_once dirname(dirname(__DIR__)) . '/config/database.php';
     $db = Database::getInstance()->getConnection();
+    $dbReady = true;
+} catch (Exception $e) {
+    $db = null;
+    $dbReady = false;
+    error_log('DB Error en reportes_export.php: ' . $e->getMessage());
+}
+
+$action = $_POST['action'] ?? $_GET['action'] ?? '';
+$formato = $_POST['formato'] ?? $_GET['formato'] ?? 'html'; // html, excel
+
+try {
+    if (!$dbReady && $action !== 'test') {
+        throw new Exception('Base de datos no disponible');
+    }
     
     switch ($action) {
+        case 'test':
+            // Test endpoint para verificar que el archivo existe
+            echo json_encode(['success' => true, 'message' => 'Archivo reportes_export.php está funcionando']);
+            exit;
+            
         case 'turnos_mes':
             generarReporteTurnosMes($db, $formato);
             break;
@@ -30,7 +54,7 @@ try {
             break;
             
         case 'trabajador':
-            $trabajador_id = $_GET['trabajador_id'] ?? $_POST['trabajador_id'] ?? null;
+            $trabajador_id = $_POST['trabajador_id'] ?? $_GET['trabajador_id'] ?? null;
             if (!$trabajador_id) {
                 throw new Exception('trabajador_id requerido');
             }
@@ -39,7 +63,7 @@ try {
             
         default:
             http_response_code(400);
-            echo json_encode(['error' => 'Acción no válida']);
+            echo json_encode(['error' => 'Acción no válida: ' . $action]);
             break;
     }
 } catch (Exception $e) {
