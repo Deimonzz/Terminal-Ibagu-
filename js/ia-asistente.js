@@ -601,56 +601,70 @@ ${(() => {
 // Priorizamos: instrucciones + hoy + semana + incapacidades/vacaciones + resumen mes
 
 function truncarContexto(ctx) {
-    const MAX_CHARS = 12000; // ~4000 tokens aprox — margen seguro para Groq
+    // Limite MUY agresivo para evitar errores de tokens
+    // Groq: máx ~4000 tokens de entrada. Con systemPrompt, guardar solo ~2000-2500 tokens para contexto
+    // 1 token ≈ 4 caracteres en promedio
+    const MAX_CHARS = 8000; // ~2000 tokens aprox (margen seguro)
+    
     if (ctx.length <= MAX_CHARS) return ctx;
 
-    // Dividir el contexto en secciones por encabezados ---
-    const secciones = ctx.split('\n---').map((s, i) => i === 0 ? s : '---' + s);
-
-    // Prioridad de secciones (las primeras se mantienen, las últimas se recortan)
-    const PRIORIDAD = [
-        'ESTRUCTURA DE TURNOS',
-        'PUESTOS POR ÁREA',
-        'RESTRICCIONES TURNO',
-        'TRABAJADORES ACTIVOS',
-        'TURNOS ASIGNADOS HOY',
-        'PUESTOS SIN CUBRIR HOY',
-        'INCAPACIDADES ACTIVAS',
-        'VACACIONES EN EL MES',
-        'INCAPACIDADES EN EL MES',
-        'TRABAJADORES DISPONIBLES',
-        'DÍAS ESPECIALES ESTA SEMANA',
-        'OTROS DÍAS ESPECIALES',
-        'PUESTOS SIN CUBRIR POR DÍA',  // más pesado — va al final
-        'TRABAJADORES CON MÁS TURNOS',
-        'TRABAJADORES CON MENOS',
-        'TRABAJADORES SIN DÍA LIBRE',
-        'RESUMEN MES COMPLETO',
-    ];
-
-    // Ordenar secciones según prioridad
-    const ordenadas = [...secciones].sort((a, b) => {
-        const ia = PRIORIDAD.findIndex(p => a.includes(p));
-        const ib = PRIORIDAD.findIndex(p => b.includes(p));
-        return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
-    });
-
-    // Ir agregando secciones hasta llenar el límite
-    let resultado = '';
-    for (const sec of ordenadas) {
-        if ((resultado + sec).length > MAX_CHARS) {
-            // Intentar incluir al menos las primeras líneas de la sección
-            const lineas = sec.split('\n');
-            const cabecera = lineas.slice(0, 3).join('\n');
-            if ((resultado + cabecera).length <= MAX_CHARS) {
-                resultado += cabecera + '\n[... truncado por límite de tokens]\n';
-            }
-            break;
-        }
-        resultado += sec;
+    // ESTRATEGIA 1: Eliminar secciones menos críticas desde el final
+    let truncado = ctx;
+    
+    // Primero: Eliminar supervisores si están
+    truncado = truncado.replace(/--- SUPERVISORES ASIGNADOS.*?(?=---|\Z)/s, '');
+    if (truncado.length <= MAX_CHARS) return truncado;
+    
+    // Segundo: Eliminar otros especiales
+    truncado = truncado.replace(/--- OTROS ESPECIALES ESTA SEMANA.*?(?=---|\Z)/s, '');
+    if (truncado.length <= MAX_CHARS) return truncado;
+    
+    // Tercero: Resumir lista de trabajadores disponibles
+    truncado = truncado.replace(/--- TRABAJADORES DISPONIBLES HOY.*?\n[\s\S]*?(?=\n---)/,
+        '--- TRABAJADORES DISPONIBLES HOY ---\n(Lista disponible en UI del sistema)');
+    if (truncado.length <= MAX_CHARS) return truncado;
+    
+    // Cuarto: Limitar a TOP 10 trabajadores sin día libre
+    truncado = truncado.replace(/--- TRABAJADORES SIN DÍA LIBRE.*?\n([\s\S]*?)(?=\n---|$)/,
+        (match, content) => {
+            const lineas = content.split('\n').filter(l => l.trim()).slice(0, 10);
+            return '--- TRABAJADORES SIN DÍA LIBRE ---\n' + lineas.join('\n');
+        });
+    if (truncado.length <= MAX_CHARS) return truncado;
+    
+    // Quinto: Eliminar resumen de meses anteriores
+    truncado = truncado.replace(/--- RESUMEN MES ANTERIOR.*?(?=\Z)/s, '');
+    if (truncado.length <= MAX_CHARS) return truncado;
+    
+    // Sexto: Limitar lista de turnos asignados a TOP 15
+    truncado = truncado.replace(/--- TURNOS ASIGNADOS HOY.*?\n([\s\S]*?)(?=\n---)/,
+        (match, content) => {
+            const lineas = content.split('\n').filter(l => l.trim()).slice(0, 15);
+            return '--- TURNOS ASIGNADOS HOY ---\n' + lineas.join('\n') + 
+                   '\n(más datos disponibles en API)';
+        });
+    if (truncado.length <= MAX_CHARS) return truncado;
+    
+    // Séptimo: Resumir lista de trabajadores activos a TOP 20
+    truncado = truncado.replace(/--- TRABAJADORES ACTIVOS.*?\n([\s\S]*?)(?=\n---)/,
+        (match, content) => {
+            const lineas = content.split('\n').filter(l => l.trim()).slice(0, 20);
+            return '--- TRABAJADORES ACTIVOS (resumen) ---\n' + lineas.join('\n') + 
+                   '\n(lista completa en API)';
+        });
+    if (truncado.length <= MAX_CHARS) return truncado;
+    
+    // Octavo: Eliminar encabezado largo de estructura
+    truncado = truncado.replace(/--- ESTRUCTURA DE TURNOS ---[\s\S]*?(?=---|\Z)/, 
+        '--- ESTRUCTURA: T1(06-14h), T2(14-22h), T3(22-06h nocturno), L4(4h)');
+    if (truncado.length <= MAX_CHARS) return truncado;
+    
+    // Si aún es muy grande, truncar sin piedad
+    if (truncado.length > MAX_CHARS) {
+        truncado = truncado.substring(0, MAX_CHARS) + '\n... (contexto truncado por límite de tokens)';
     }
-
-    return resultado;
+    
+    return truncado;
 }
 
 // ─── ENVIAR MENSAJE AL ASISTENTE ────────────────────────────────────────────
@@ -681,79 +695,38 @@ async function enviarMensajeIA() {
         // Obtener contexto actualizado del sistema
         const contexto = await obtenerContextoSistema();
 
-        const systemPrompt = `Eres un asistente experto avanzado en gestión de turnos laborales para la Terminal de Transportes de Ibagué. Tienes acceso completo y en tiempo real a todos los datos del sistema.
+        const systemPrompt = `Eres un asistente de gestión de turnos para la Terminal de Transportes Ibagué.
 
-Tu objetivo es ayudar al jefe de turno con análisis profundos, recomendaciones inteligentes y acciones concretas:
-1. **Análisis predictivo**: Identificar problemas futuros antes de que ocurran
-2. **Optimización de asignaciones**: Sugerir las mejores combinaciones trabajador-puesto-turno
-3. **Reportes inteligentes**: Generar resúmenes ejecutivos con métricas clave
-4. **Alertas proactivas**: Detectar anomalías y situaciones de riesgo
-5. **Recomendaciones accionables**: Proporcionar soluciones específicas con pasos claros
-6. **Análisis de patrones**: Identificar sobrecargas, subutilización y tendencias
+FUNCIONES:
+✓ Analizar cobertura de turnos
+✓ Sugerir asignaciones óptimas  
+✓ Generar reportes descargables en Excel/PDF
+✓ Detectar problemas de equidad
+✓ Pronosticar déficits de cobertura
 
-FUNCIONES AVANZADAS QUE PUEDES REALIZAR:
-- **Asignaciones óptimas**: Analizar restricciones, preferencias y carga de trabajo para sugerir asignaciones perfectas
-- **Análisis de equidad**: Detectar trabajadores sobrecargados o con pocos turnos
-- **Predicciones de cobertura**: Calcular probabilidades de cobertura futura basadas en patrones históricos
-- **Reportes personalizados**: Generar informes en diferentes formatos (Excel, PDF, HTML)
-- **Simulaciones**: "Qué pasaría si" escenarios para cambios en el sistema
-- **Métricas avanzadas**: Eficiencia de asignación, rotación de personal, cumplimiento de reglas
-- **Descargas de reportes**: Exportar análisis a Excel o PDF para compartir
+COMANDOS EJECUTABLES:
+1. ASIGNAR turno: Responde con ---COMANDO--- {"action":"assign","params":{"trabajador_id":12,"turno_id":1,"fecha":"2026-05-25","puesto_trabajo_id":5}} ---FIN COMANDO---
+2. GENERAR reporte: Incluye links como [📥 Descargar Excel](reportes_export.php?action=turnos_mes&formato=excel)
 
-COMANDOS DE EJECUCIÓN DIRECTA:
+REGLAS DE TURNOS:
+• Turno 1: 06-14h | Turno 2: 14-22h | Turno 3: 22-06h (SOLO V1,V2,C,D3,F6,F11)
+• L4: 4 horas (F5/F15/D2/D1/F11) - REEMPLAZA turno normal
+• Cada trabajador DEBE tener 1 día libre/semana (L)
+• Incapacidades = NO asignar
+• TNR = trabajador no se presentó
 
-1. ASIGNAR TURNO - Si el usuario pide asignar un turno:
----COMANDO---
-{
-  "action": "assign",
-  "params": {
-     "trabajador_id": 12,
-     "puesto_trabajo_id": 5,
-     "turno_id": 3,
-     "fecha": "2026-05-04"
-  }
-}
----FIN COMANDO---
+AREAS: DELTA(D1-4), FOX(F4,5,6,11,14,15), VIGÍA(V1,2), TASA(C), EQUIPAJES(G)
 
-2. DESCARGAR REPORTES - Si el usuario pide reportes, sugiere descargas usando estos tipos:
-- Reportes de turnos del mes: [📥 Descargar Reporte de Turnos](reportes_export.php?action=turnos_mes&formato=excel)
-- Análisis de cobertura: [📥 Descargar Análisis de Cobertura](reportes_export.php?action=cobertura&formato=excel)
-- Análisis de equidad: [📥 Descargar Análisis de Equidad](reportes_export.php?action=equidad&formato=excel)
-- Reporte individual: [📥 Descargar Reporte de Trabajador](reportes_export.php?action=trabajador&trabajador_id=ID&formato=excel)
+RESPONDER CON:
+- **Resumen** del problema/estado
+- **Análisis** con números/% 
+- **Acción**: botón ejecutable o link descarga
+- **Alternativas** cuando sea relevante
 
-Puedes añadir texto normal antes o después de los bloques, pero cualquier bloque JSON o link debe ser válido y estar claramente formateado. El sistema ejecutará la acción automáticamente.
+Sé conciso, específico, usa emojis. Siempre ofrece descarga de reportes.
 
-FORMATO DE RESPUESTAS:
-- Usa **encabezados jerárquicos** (# ## ###) para organizar la información
-- **Listas numeradas** para pasos o prioridades
-- **Íconos descriptivos** (⚠️ 🚨 ✅ 📊 💡) para resaltar información importante
-- **Código inline** para nombres técnicos o códigos
-- **Enlaces clickeables** [texto](url) para reportes y acciones
-- **Tablas simples** cuando compares datos
-- **Resúmenes ejecutivos** al inicio de respuestas complejas
-
-REGLAS DEL SISTEMA que debes respetar SIEMPRE:
-- El Turno 3 (nocturno 22:00-06:00) SOLO opera en: V1, V2, C (Conduces), D3, F6, F11. Los demás puestos NO tienen Turno 3.
-- L4 solo aplica en F5, F15, D2, F11 con horarios específicos y SUSTITUYE turnos normales
-- Cada trabajador debe tener exactamente 1 día libre (L) por semana obligatoriamente
-- Los trabajadores con incapacidad activa NO pueden ser asignados
-- Respeta TODAS las restricciones individuales de cada trabajador
-- TNR = Turno No Realizado: cuenta como asignado pero no realizado
-- Los cumpleaños NO están registrados (no uses esa información)
-
-ESTRATEGIA DE RESPUESTAS:
-1. **Evalúa la urgencia**: Si hay problemas críticos, menciónalos PRIMERO con 🚨
-2. **Proporciona contexto**: Resume el estado actual antes de recomendaciones
-3. **Sé específico**: Nombra trabajadores, puestos y turnos concretos
-4. **Ofrece alternativas**: Cuando sugieras asignaciones, da opciones con pros/cons
-5. **Incluye métricas**: Usa porcentajes, conteos y ratios para respaldar recomendaciones
-6. **Termina con acciones**: Ofrece botones para descargar, asignar o ver más detalles
-7. **Genera descargas**: Cuando des análisis, incluye links para descargar en Excel o PDF
-
-DATOS ACTUALES DEL SISTEMA:
-${contexto}
-
-Responde en español, sé conciso pero completo. Si la respuesta es compleja, estructura con encabezados claros. Siempre termina ofreciendo ayuda adicional y opciones de descarga.`;
+DATOS ACTUALES:
+${contexto}`;
 
         // Construir mensajes para la API (últimos 10 de historial para no exceder tokens)
         const mensajesAPI = IA_HISTORIAL.slice(-10).map(m => ({

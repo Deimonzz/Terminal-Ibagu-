@@ -56,10 +56,10 @@ foreach ($mensajes as $m) {
 }
 
 $payload = json_encode([
-    'model'       => 'llama-3.3-70b-versatile', // Modelo gratuito de Groq, muy capaz
+    'model'       => 'llama-3.3-70b-versatile', // Modelo de Groq optimizado
     'messages'    => $messages,
-    'max_tokens'  => 2048,
-    'temperature' => 0.7,
+    'max_tokens'  => 1024,  // Respuestas concisas pero completas
+    'temperature' => 0.6,   // Más determinístico, menos errático
 ]);
 
 $ch = curl_init('https://api.groq.com/openai/v1/chat/completions');
