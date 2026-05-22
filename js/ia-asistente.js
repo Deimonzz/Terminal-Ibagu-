@@ -79,6 +79,21 @@ function agregarBotonesAccion(bubble, texto) {
         acciones.push({ texto: '🔮 Ver predicciones semana', accion: () => enviarMensajeIA_direct('Predice problemas de cobertura para los próximos 7 días') });
     }
 
+    // Detectar links de descarga en el texto
+    const linkRegex = /\[([^\]]+)\]\(([^)]+reportes_export[^)]*)\)/g;
+    let match;
+    while ((match = linkRegex.exec(texto)) !== null) {
+        const label = match[1];
+        const url = match[2];
+        acciones.push({ 
+            texto: label, 
+            accion: () => {
+                const fullUrl = API_BASE + url;
+                window.open(fullUrl, '_blank');
+            }
+        });
+    }
+
     if (acciones.length > 0) {
         const botonesDiv = document.createElement('div');
         botonesDiv.className = 'ia-action-buttons';
@@ -172,45 +187,71 @@ async function ejecutarComandoIA(comando) {
     if (comando.action === 'assign') {
         const params = comando.params || comando;
         const datos = {
-            trabajador_id: params.trabajador_id,
-            puesto_trabajo_id: params.puesto_trabajo_id,
-            turno_id: params.turno_id,
-            fecha: params.fecha,
+            trabajador_id: params.trabajador_id ? Number(params.trabajador_id) : null,
+            puesto_trabajo_id: params.puesto_trabajo_id ? Number(params.puesto_trabajo_id) : null,
+            turno_id: params.turno_id ? Number(params.turno_id) : null,
+            fecha: params.fecha || null,
             estado: params.estado || 'programado',
             created_by: params.created_by || 1
         };
 
-        if (!datos.trabajador_id || !datos.puesto_trabajo_id || !datos.turno_id || !datos.fecha) {
-            agregarMensaje('❌ No se pudo ejecutar la asignación: faltan datos obligatorios en el comando.', false);
+        // Validar datos obligatorios (turno y fecha siempre obligatorios, puesto es opcional)
+        if (!datos.trabajador_id || !datos.turno_id || !datos.fecha) {
+            const faltantes = [];
+            if (!datos.trabajador_id) faltantes.push('trabajador_id');
+            if (!datos.turno_id) faltantes.push('turno_id');
+            if (!datos.fecha) faltantes.push('fecha');
+            agregarMensaje('❌ No se pudo ejecutar la asignación. Faltan datos: ' + faltantes.join(', '), false);
             return false;
         }
 
-        agregarMensaje('🔄 Ejecutando asignación solicitada por IA...', false);
+        agregarMensaje('🔄 Validando asignación...', false);
 
         try {
+            // Primero validar
             const validacion = await fetch(`${API_BASE}turnos.php?action=validar`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(datos)
-            }).then(r => r.json());
+            }).then(r => {
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                return r.json();
+            });
 
-            if (!validacion.success || !validacion.data.valido) {
-                const errores = validacion.data?.errores || ['Error desconocido en validación'];
-                agregarMensaje('❌ La asignación no pasó la validación:\n' + errores.map(e => `- ${e}`).join('\n'), false);
+            if (!validacion.success) {
+                agregarMensaje('❌ Error en validación: ' + (validacion.message || 'Error desconocido'), false);
                 return false;
             }
 
+            if (!validacion.data?.valido) {
+                const errores = validacion.data?.errores || ['Error desconocido en validación'];
+                agregarMensaje('⚠️ La asignación no pasó la validación:\n' + errores.map(e => `- ${e}`).join('\n'), false);
+                return false;
+            }
+
+            agregarMensaje('✅ Validación exitosa. Ejecutando asignación...', false);
+
+            // Luego asignar
             const response = await fetch(`${API_BASE}turnos.php`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(datos)
             });
+            
+            if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+            }
+            
             const data = await response.json();
 
             if (data.success) {
-                agregarMensaje('✅ Asignación ejecutada correctamente.', false);
-                if (typeof cargarEstadisticasDashboard === 'function') cargarEstadisticasDashboard();
-                if (typeof limpiarFormulario === 'function') limpiarFormulario();
+                agregarMensaje('✅ ¡Asignación ejecutada correctamente! ID: ' + (data.id || 'N/A'), false);
+                if (typeof cargarEstadisticasDashboard === 'function') {
+                    setTimeout(() => cargarEstadisticasDashboard(), 500);
+                }
+                if (typeof limpiarFormulario === 'function') {
+                    setTimeout(() => limpiarFormulario(), 500);
+                }
                 return true;
             }
 
@@ -219,7 +260,7 @@ async function ejecutarComandoIA(comando) {
             return false;
         } catch (error) {
             console.error('Error ejecutando comando IA:', error);
-            agregarMensaje('❌ Error al ejecutar la asignación. Revisa la consola del navegador.', false);
+            agregarMensaje('❌ Error al ejecutar la asignación: ' + error.message, false);
             return false;
         }
     }
@@ -654,13 +695,14 @@ FUNCIONES AVANZADAS QUE PUEDES REALIZAR:
 - **Asignaciones óptimas**: Analizar restricciones, preferencias y carga de trabajo para sugerir asignaciones perfectas
 - **Análisis de equidad**: Detectar trabajadores sobrecargados o con pocos turnos
 - **Predicciones de cobertura**: Calcular probabilidades de cobertura futura basadas en patrones históricos
-- **Reportes personalizados**: Generar informes en diferentes formatos (resumen, detallado, ejecutivo)
+- **Reportes personalizados**: Generar informes en diferentes formatos (Excel, PDF, HTML)
 - **Simulaciones**: "Qué pasaría si" escenarios para cambios en el sistema
 - **Métricas avanzadas**: Eficiencia de asignación, rotación de personal, cumplimiento de reglas
+- **Descargas de reportes**: Exportar análisis a Excel o PDF para compartir
 
 COMANDOS DE EJECUCIÓN DIRECTA:
-Si el usuario pide asignar un turno, responde con un bloque JSON EXACTO entre las etiquetas ---COMANDO--- y ---FIN COMANDO---.
-El bloque debe tener esta forma:
+
+1. ASIGNAR TURNO - Si el usuario pide asignar un turno:
 ---COMANDO---
 {
   "action": "assign",
@@ -673,14 +715,20 @@ El bloque debe tener esta forma:
 }
 ---FIN COMANDO---
 
-Puedes añadir texto normal antes o después del bloque, pero el bloque JSON debe ser válido. El sistema ejecutará la acción si el JSON es correcto.
+2. DESCARGAR REPORTES - Si el usuario pide reportes, sugiere descargas usando estos tipos:
+- Reportes de turnos del mes: [📥 Descargar Reporte de Turnos](reportes_export.php?action=turnos_mes&formato=excel)
+- Análisis de cobertura: [📥 Descargar Análisis de Cobertura](reportes_export.php?action=cobertura&formato=excel)
+- Análisis de equidad: [📥 Descargar Análisis de Equidad](reportes_export.php?action=equidad&formato=excel)
+- Reporte individual: [📥 Descargar Reporte de Trabajador](reportes_export.php?action=trabajador&trabajador_id=ID&formato=excel)
+
+Puedes añadir texto normal antes o después de los bloques, pero cualquier bloque JSON o link debe ser válido y estar claramente formateado. El sistema ejecutará la acción automáticamente.
 
 FORMATO DE RESPUESTAS:
 - Usa **encabezados jerárquicos** (# ## ###) para organizar la información
 - **Listas numeradas** para pasos o prioridades
 - **Íconos descriptivos** (⚠️ 🚨 ✅ 📊 💡) para resaltar información importante
 - **Código inline** para nombres técnicos o códigos
-- **Enlaces simulados** [texto](acción) para sugerir acciones
+- **Enlaces clickeables** [texto](url) para reportes y acciones
 - **Tablas simples** cuando compares datos
 - **Resúmenes ejecutivos** al inicio de respuestas complejas
 
@@ -699,12 +747,13 @@ ESTRATEGIA DE RESPUESTAS:
 3. **Sé específico**: Nombra trabajadores, puestos y turnos concretos
 4. **Ofrece alternativas**: Cuando sugieras asignaciones, da opciones con pros/cons
 5. **Incluye métricas**: Usa porcentajes, conteos y ratios para respaldar recomendaciones
-6. **Termina con acciones**: "¿Quieres que implemente esta sugerencia?" o "¿Necesitas más detalles?"
+6. **Termina con acciones**: Ofrece botones para descargar, asignar o ver más detalles
+7. **Genera descargas**: Cuando des análisis, incluye links para descargar en Excel o PDF
 
 DATOS ACTUALES DEL SISTEMA:
 ${contexto}
 
-Responde en español, sé conciso pero completo. Si la respuesta es compleja, estructura con encabezados claros. Siempre termina ofreciendo ayuda adicional.`;
+Responde en español, sé conciso pero completo. Si la respuesta es compleja, estructura con encabezados claros. Siempre termina ofreciendo ayuda adicional y opciones de descarga.`;
 
         // Construir mensajes para la API (últimos 10 de historial para no exceder tokens)
         const mensajesAPI = IA_HISTORIAL.slice(-10).map(m => ({
