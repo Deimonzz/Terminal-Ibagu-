@@ -196,58 +196,30 @@ class AsignacionAutomatica {
                 case 'puesto_especifico':
                     // IMPORTANTE: Validar que puesto_trabajo_id no sea NULL
                     // Si es NULL, significa que la columna no existe en la BD
-                    if ($rest['puesto_trabajo_id'] !== null && $rest['puesto_trabajo_id'] == $puestoId) {
+                    if ($rest['puesto_trabajo_id'] !== null && (int)$rest['puesto_trabajo_id'] == (int)$puestoId) {
                         $bloqueados[$rest['trabajador_id']] = true;
                     }
                     break;
             }
         }
         
-        // Si NO tenemos datos de puesto en el prefetch, obtener restricciones de forma alternativa
-        $tieneDataoPuesto = false;
-        foreach ($ctx['restricciones'] as $rest) {
-            if ($rest['tipo_restriccion'] === 'puesto_especifico' && $rest['puesto_trabajo_id'] !== null) {
-                $tieneDataoPuesto = true;
-                break;
+        // VALIDACIÓN ADICIONAL: Consultar SIEMPRE la BD para restricciones de puesto_especifico
+        // Esto asegura que no haya gaps en la validación
+        try {
+            $stmtPuestoCheck = $this->db->prepare(
+                "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
+                 WHERE tipo_restriccion = 'puesto_especifico'
+                 AND activa = true
+                 AND fecha_inicio <= ?
+                 AND (fecha_fin IS NULL OR fecha_fin >= ?)
+                 AND (puesto_trabajo_id = ? OR puesto_id = ?)"
+            );
+            $stmtPuestoCheck->execute([$fecha, $fecha, $puestoId, $puestoId]);
+            foreach ($stmtPuestoCheck->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $bloqueados[$row['trabajador_id']] = true;
             }
-        }
-        
-        if (!$tieneDataoPuesto) {
-            // Obtener restricciones de puesto_especifico de forma alternativa
-            // Intentar primero con puesto_trabajo_id
-            try {
-                $stmtAlt = $this->db->prepare(
-                    "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
-                     WHERE tipo_restriccion = 'puesto_especifico'
-                     AND activa = true
-                     AND fecha_inicio <= ?
-                     AND (fecha_fin IS NULL OR fecha_fin >= ?)
-                     AND puesto_trabajo_id = ?"
-                );
-                $stmtAlt->execute([$fecha, $fecha, $puestoId]);
-                foreach ($stmtAlt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                    $bloqueados[$row['trabajador_id']] = true;
-                }
-            } catch (Exception $e) {
-                error_log("[AsignacionAutomatica] Error consulta puesto_trabajo_id: " . $e->getMessage());
-                // Si falla, intentar con puesto_id
-                try {
-                    $stmtAlt2 = $this->db->prepare(
-                        "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
-                         WHERE tipo_restriccion = 'puesto_especifico'
-                         AND activa = true
-                         AND fecha_inicio <= ?
-                         AND (fecha_fin IS NULL OR fecha_fin >= ?)
-                         AND puesto_id = ?"
-                    );
-                    $stmtAlt2->execute([$fecha, $fecha, $puestoId]);
-                    foreach ($stmtAlt2->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                        $bloqueados[$row['trabajador_id']] = true;
-                    }
-                } catch (Exception $e2) {
-                    error_log("[AsignacionAutomatica] Error consulta puesto_id: " . $e2->getMessage());
-                }
-            }
+        } catch (Exception $e) {
+            error_log("[AsignacionAutomatica::getDisponibles] Error en validación puesto_especifico: " . $e->getMessage());
         }
 
         // Flags del puesto (fuerza física, movilidad)
@@ -328,54 +300,29 @@ class AsignacionAutomatica {
         foreach ($ctx['restricciones'] as $rest) {
             if ($rest['tipo_restriccion'] !== 'puesto_especifico') continue;
             // IMPORTANTE: Validar que puesto_trabajo_id no sea NULL antes de comparar
-            if ($rest['puesto_trabajo_id'] !== null && $rest['puesto_trabajo_id'] == $puestoId) {
+            if ($rest['puesto_trabajo_id'] !== null && (int)$rest['puesto_trabajo_id'] == (int)$puestoId) {
                 $bloqueados[$rest['trabajador_id']] = true;
             }
             // Si es NULL, ignorar (la columna no existe en la BD)
         }
         
-        // Si NO tenemos datos de puesto, obtener restricciones de forma alternativa
-        $tieneDataoPuesto = false;
-        foreach ($ctx['restricciones'] as $rest) {
-            if ($rest['tipo_restriccion'] === 'puesto_especifico' && $rest['puesto_trabajo_id'] !== null) {
-                $tieneDataoPuesto = true;
-                break;
+        // VALIDACIÓN ADICIONAL: Consultar SIEMPRE la BD para restricciones de puesto_especifico
+        // Esto asegura que no haya gaps en la validación
+        try {
+            $stmtPuestoCheck = $this->db->prepare(
+                "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
+                 WHERE tipo_restriccion = 'puesto_especifico'
+                 AND activa = true
+                 AND fecha_inicio <= ?
+                 AND (fecha_fin IS NULL OR fecha_fin >= ?)
+                 AND (puesto_trabajo_id = ? OR puesto_id = ?)"
+            );
+            $stmtPuestoCheck->execute([$fecha, $fecha, $puestoId, $puestoId]);
+            foreach ($stmtPuestoCheck->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $bloqueados[$row['trabajador_id']] = true;
             }
-        }
-        
-        if (!$tieneDataoPuesto) {
-            try {
-                $stmtAlt = $this->db->prepare(
-                    "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
-                     WHERE tipo_restriccion = 'puesto_especifico'
-                     AND activa = true
-                     AND fecha_inicio <= ?
-                     AND (fecha_fin IS NULL OR fecha_fin >= ?)
-                     AND puesto_trabajo_id = ?"
-                );
-                $stmtAlt->execute([$fecha, $fecha, $puestoId]);
-                foreach ($stmtAlt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                    $bloqueados[$row['trabajador_id']] = true;
-                }
-            } catch (Exception $e) {
-                error_log("[AsignacionAutomatica L4] Error consulta puesto_trabajo_id: " . $e->getMessage());
-                try {
-                    $stmtAlt2 = $this->db->prepare(
-                        "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
-                         WHERE tipo_restriccion = 'puesto_especifico'
-                         AND activa = true
-                         AND fecha_inicio <= ?
-                         AND (fecha_fin IS NULL OR fecha_fin >= ?)
-                         AND puesto_id = ?"
-                    );
-                    $stmtAlt2->execute([$fecha, $fecha, $puestoId]);
-                    foreach ($stmtAlt2->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                        $bloqueados[$row['trabajador_id']] = true;
-                    }
-                } catch (Exception $e2) {
-                    error_log("[AsignacionAutomatica L4] Error consulta puesto_id: " . $e2->getMessage());
-                }
-            }
+        } catch (Exception $e) {
+            error_log("[AsignacionAutomatica::getDisponiblesL4] Error en validación puesto_especifico: " . $e->getMessage());
         }
 
         $disponibles = [];
