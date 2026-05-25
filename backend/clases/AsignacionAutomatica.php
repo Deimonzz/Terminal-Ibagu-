@@ -75,7 +75,15 @@ class AsignacionAutomatica {
         // 5. Restricciones de trabajadores vigentes en el mes
         // Detectar el nombre correcto de la columna puesto (puesto_trabajo_id o puesto_id)
         $puestoCol = Database::getColumnName('restricciones_trabajador', 'puesto_trabajo_id', 'puesto_id');
-        $selectPuesto = $puestoCol ? "$puestoCol as puesto_trabajo_id" : "NULL as puesto_trabajo_id";
+        
+        // CRÍTICO: Si la columna no existe, las restricciones de puesto_especifico no funcionarán
+        if (!$puestoCol) {
+            // Log warning
+            error_log("[AsignacionAutomatica] ADVERTENCIA: No se encontró columna puesto_trabajo_id o puesto_id en restricciones_trabajador. Las restricciones de puesto específico NO funcionarán.");
+            $selectPuesto = "NULL as puesto_trabajo_id";
+        } else {
+            $selectPuesto = "$puestoCol as puesto_trabajo_id";
+        }
         
         $stmtR = $this->db->prepare(
             "SELECT trabajador_id, tipo_restriccion,
@@ -186,9 +194,34 @@ class AsignacionAutomatica {
                     if ($numeroTurno == 3) $bloqueados[$rest['trabajador_id']] = true;
                     break;
                 case 'puesto_especifico':
-                    // FIX: usar puesto_trabajo_id
-                    if ($rest['puesto_trabajo_id'] == $puestoId) $bloqueados[$rest['trabajador_id']] = true;
+                    // IMPORTANTE: Validar que puesto_trabajo_id no sea NULL
+                    // Si es NULL, significa que la columna no existe en la BD
+                    if ($rest['puesto_trabajo_id'] !== null && $rest['puesto_trabajo_id'] == $puestoId) {
+                        $bloqueados[$rest['trabajador_id']] = true;
+                    }
                     break;
+            }
+        }
+        
+        // Si no tenemos puesto_trabajo_id de la BD, intentar obtener restricciones de forma alternativa
+        if (!isset($ctx['restricciones'][0]) || $ctx['restricciones'][0]['puesto_trabajo_id'] === null) {
+            // Obtener restricciones de puesto_especifico de forma alternativa
+            $stmtAlt = $this->db->prepare(
+                "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
+                 WHERE tipo_restriccion = 'puesto_especifico'
+                 AND activa = true
+                 AND fecha_inicio <= ?
+                 AND (fecha_fin IS NULL OR fecha_fin >= ?)
+                 AND (puesto_trabajo_id = ? OR puesto_id = ?)"
+            );
+            try {
+                $stmtAlt->execute([$fecha, $fecha, $puestoId, $puestoId]);
+                foreach ($stmtAlt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                    $bloqueados[$row['trabajador_id']] = true;
+                }
+            } catch (Exception $e) {
+                // Si falla, solo registrar el error. La restricción de puesto puede no estar disponible aún.
+                error_log("[AsignacionAutomatica] Error al obtener restricciones alternativas: " . $e->getMessage());
             }
         }
 
@@ -269,11 +302,32 @@ class AsignacionAutomatica {
         // Restricción puesto específico
         foreach ($ctx['restricciones'] as $rest) {
             if ($rest['tipo_restriccion'] !== 'puesto_especifico') continue;
-            // FIX: usar puesto_trabajo_id
-            if ($rest['puesto_trabajo_id'] != $puestoId) continue;
-            if ($fecha < $rest['fecha_inicio']) continue;
-            if ($rest['fecha_fin'] !== null && $fecha > $rest['fecha_fin']) continue;
-            $bloqueados[$rest['trabajador_id']] = true;
+            // IMPORTANTE: Validar que puesto_trabajo_id no sea NULL antes de comparar
+            if ($rest['puesto_trabajo_id'] !== null && $rest['puesto_trabajo_id'] == $puestoId) {
+                $bloqueados[$rest['trabajador_id']] = true;
+            }
+            // Si es NULL, ignorar (la columna no existe en la BD)
+        }
+        
+        // Si no tenemos puesto_trabajo_id de la BD, intentar obtener restricciones de forma alternativa
+        if (!isset($ctx['restricciones'][0]) || $ctx['restricciones'][0]['puesto_trabajo_id'] === null) {
+            $stmtAlt = $this->db->prepare(
+                "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
+                 WHERE tipo_restriccion = 'puesto_especifico'
+                 AND activa = true
+                 AND fecha_inicio <= ?
+                 AND (fecha_fin IS NULL OR fecha_fin >= ?)
+                 AND (puesto_trabajo_id = ? OR puesto_id = ?)"
+            );
+            try {
+                $stmtAlt->execute([$fecha, $fecha, $puestoId, $puestoId]);
+                foreach ($stmtAlt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                    $bloqueados[$row['trabajador_id']] = true;
+                }
+            } catch (Exception $e) {
+                // Si falla, solo registrar el error
+                error_log("[AsignacionAutomatica L4] Error al obtener restricciones alternativas: " . $e->getMessage());
+            }
         }
 
         $disponibles = [];
