@@ -302,7 +302,7 @@ class Trabajadores {
     }
 
     public function activar($id) {
-        $sql = "UPDATE trabajadores SET activo = 1 WHERE id = :id";
+        $sql = "UPDATE trabajadores SET activo = true WHERE id = :id";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':id' => $id]);
 
@@ -313,7 +313,7 @@ class Trabajadores {
     }
     
     public function desactivar($id) {
-        $sql = "UPDATE trabajadores SET activo = 0 WHERE id = :id";
+        $sql = "UPDATE trabajadores SET activo = false WHERE id = :id";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':id' => $id]);
         
@@ -509,7 +509,7 @@ class Trabajadores {
     }
     
     public function eliminarRestriccion($id) {
-        $sql = "UPDATE restricciones_trabajador SET activa = 0 WHERE id = :id";
+        $sql = "UPDATE restricciones_trabajador SET activa = false WHERE id = :id";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':id' => $id]);
         

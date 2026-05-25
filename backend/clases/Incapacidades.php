@@ -107,9 +107,9 @@ class Incapacidades {
                 ':descripcion' => $datos['descripcion'] ?? null,
                 ':documento' => $datos['documento_soporte'] ?? null,
                 ':eps' => $datos['eps'] ?? null,
-                ':genera_restriccion' => (int) filter_var($datos['genera_restriccion'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                ':genera_restriccion' => filter_var($datos['genera_restriccion'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 ':tipo_restriccion' => $datos['tipo_restriccion_generada'] ?? null,
-                ':restriccion_permanente' => (int) filter_var($datos['restriccion_permanente'] ?? false, FILTER_VALIDATE_BOOLEAN),
+                ':restriccion_permanente' => filter_var($datos['restriccion_permanente'] ?? false, FILTER_VALIDATE_BOOLEAN),
                 ':fecha_fin_restriccion' => $datos['fecha_fin_restriccion'] ?? null
             ]);
 
@@ -129,7 +129,7 @@ class Incapacidades {
                     ':descripcion' => 'Generada por incapacidad: ' . ($datos['descripcion'] ?? 'Cirugia'),
                     ':fecha_inicio' => $datos['fecha_fin'],
                     ':fecha_fin' => $restriccionPermanente ? null : $datos['fecha_fin_restriccion'],
-                    ':activa' => 1
+                    ':activa' => true
                 ]);
             }
 
