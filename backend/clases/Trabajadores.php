@@ -427,6 +427,15 @@ class Trabajadores {
     
     public function agregarRestriccion($datos) {
         $columnName = $this->restriccionPuestoColumn;
+        $puestoTrabId = $datos['puesto_trabajo_id'] ?? null;
+        
+        // Si es una restricción de puesto_especifico y no se detectó columna,
+        // intentar agregar la columna dinámicamente
+        if ($datos['tipo_restriccion'] === 'puesto_especifico' && $puestoTrabId && !$columnName) {
+            $this->asegurarColumnaRestricciones();
+            $columnName = Database::getColumnName('restricciones_trabajador', 'puesto_trabajo_id', 'puesto_id');
+        }
+        
         $fields = 'trabajador_id, tipo_restriccion, descripcion, fecha_inicio, fecha_fin, documento_soporte';
         $values = ':trabajador_id, :tipo, :descripcion, :fecha_inicio, :fecha_fin, :documento';
         if ($columnName) {
@@ -445,12 +454,17 @@ class Trabajadores {
                 ':fecha_fin' => $datos['fecha_fin'] ?? null,
                 ':documento' => $datos['documento_soporte'] ?? null
             ];
-            if ($this->restriccionPuestoColumn) {
-                $params[':puesto_id'] = $datos['puesto_trabajo_id'] ?? null;
+            if ($columnName) {
+                $params[':puesto_id'] = $puestoTrabId;
             }
 
             $stmt = $this->db->prepare($sql);
             $stmt->execute($params);
+            
+            // Log si se agregó restricción de puesto_especifico
+            if ($datos['tipo_restriccion'] === 'puesto_especifico' && $puestoTrabId && $columnName) {
+                error_log("[Trabajadores::agregarRestriccion] ✅ Restricción puesto_especifico guardada: trabajador={$datos['trabajador_id']}, puesto=$puestoTrabId en columna=$columnName");
+            }
             
             return [
                 'success' => true,
@@ -458,6 +472,7 @@ class Trabajadores {
                 'message' => 'Restricción agregada exitosamente'
             ];
         } catch (PDOException $e) {
+            error_log("[Trabajadores::agregarRestriccion] Error: " . $e->getMessage());
             return [
                 'success' => false,
                 'message' => 'Error: ' . $e->getMessage()
@@ -465,8 +480,45 @@ class Trabajadores {
         }
     }
     
+    /**
+     * Asegurar que existe la columna puesto_trabajo_id en restricciones_trabajador
+     */
+    private function asegurarColumnaRestricciones() {
+        try {
+            $columnExists = Database::hasColumn('restricciones_trabajador', 'puesto_trabajo_id') ||
+                           Database::hasColumn('restricciones_trabajador', 'puesto_id');
+            
+            if ($columnExists) {
+                return true; // Ya existe
+            }
+            
+            // Intentar crear la columna
+            if (DB_DRIVER === 'pgsql') {
+                $sql = "ALTER TABLE restricciones_trabajador ADD COLUMN IF NOT EXISTS puesto_trabajo_id INTEGER";
+            } else {
+                $sql = "ALTER TABLE `restricciones_trabajador` ADD COLUMN `puesto_trabajo_id` INT NULL AFTER `tipo_restriccion`";
+            }
+            
+            $this->db->exec($sql);
+            error_log("[Trabajadores::asegurarColumnaRestricciones] ✅ Columna puesto_trabajo_id creada");
+            return true;
+        } catch (Exception $e) {
+            error_log("[Trabajadores::asegurarColumnaRestricciones] Error al crear columna: " . $e->getMessage());
+            return false;
+        }
+    }
+    
     public function actualizarRestriccion($id, $datos) {
         $columnName = $this->restriccionPuestoColumn;
+        $puestoTrabId = $datos['puesto_trabajo_id'] ?? null;
+        
+        // Si es una restricción de puesto_especifico y no se detectó columna,
+        // intentar agregar la columna dinámicamente
+        if ($datos['tipo_restriccion'] === 'puesto_especifico' && $puestoTrabId && !$columnName) {
+            $this->asegurarColumnaRestricciones();
+            $columnName = Database::getColumnName('restricciones_trabajador', 'puesto_trabajo_id', 'puesto_id');
+        }
+        
         $puestoSql = '';
         if ($columnName) {
             $puestoSql = "{$columnName} = :puesto_id,";
@@ -490,17 +542,23 @@ class Trabajadores {
                 ':fecha_fin' => $datos['fecha_fin'] ?? null,
                 ':activa' => $datos['activa'] ?? true
             ];
-            if ($this->restriccionPuestoColumn) {
-                $params[':puesto_id'] = $datos['puesto_trabajo_id'] ?? null;
+            if ($columnName) {
+                $params[':puesto_id'] = $puestoTrabId;
             }
             $stmt = $this->db->prepare($sql);
             $stmt->execute($params);
+            
+            // Log si se actualizó restricción de puesto_especifico
+            if ($datos['tipo_restriccion'] === 'puesto_especifico' && $puestoTrabId && $columnName) {
+                error_log("[Trabajadores::actualizarRestriccion] ✅ Restricción puesto_especifico actualizada: id=$id, puesto=$puestoTrabId en columna=$columnName");
+            }
             
             return [
                 'success' => true,
                 'message' => 'Restricción actualizada'
             ];
         } catch (PDOException $e) {
+            error_log("[Trabajadores::actualizarRestriccion] Error: " . $e->getMessage());
             return [
                 'success' => false,
                 'message' => 'Error: ' . $e->getMessage()
