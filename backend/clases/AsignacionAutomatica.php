@@ -128,106 +128,27 @@ class AsignacionAutomatica {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // DISPONIBILIDAD EN MEMORIA (sin queries adicionales)
+    // DISPONIBILIDAD — delega en Trabajadores para aplicar TODAS las restricciones
     // ─────────────────────────────────────────────────────────────────────────
 
     /**
-     * Devuelve trabajadores disponibles para puesto+turno+fecha.
-     * Opera únicamente sobre estructuras en memoria.
-     * $ctx['asignadosPorDia'] se actualiza tras cada asignación exitosa,
-     * garantizando que el mismo trabajador no se asigne dos veces en el mismo día.
+     * Devuelve trabajadores disponibles para puesto+turnoId+fecha.
+     * Delega en Trabajadores::obtenerDisponibles() que aplica correctamente:
+     *   - turno ya asignado hoy
+     *   - incapacidad activa
+     *   - días especiales (libre, vacaciones, etc.)
+     *   - restricción no_turno_noche
+     *   - restricción puesto_especifico
+     *   - restricción no_fuerza_fisica (si el puesto la requiere)
+     *   - restricción movilidad_limitada (si el puesto la requiere)
+     *   - límite 7 turnos noche por mes
+     *   - no T1 si tuvo T3 el día anterior
+     *   - no T3 si tiene T1 el día siguiente
+     * Luego ordena por menor carga (balanceo equitativo).
      */
-    private function getDisponibles($puestoId, $numeroTurno, $fecha, &$ctx, &$conteoTurnos) {
-        $fechaAnterior  = date('Y-m-d', strtotime($fecha . ' -1 day'));
-        $fechaSiguiente = date('Y-m-d', strtotime($fecha . ' +1 day'));
-
-        $bloqueados = [];
-
-        // Ya tiene turno hoy
-        foreach ($ctx['asignadosPorDia'][$fecha] ?? [] as $trabId => $turnos) {
-            $bloqueados[$trabId] = true;
-        }
-
-        // Incapacidad activa
-        foreach ($ctx['incapacidades'] as $inc) {
-            if ($fecha >= $inc['fecha_inicio'] && $fecha <= $inc['fecha_fin']) {
-                $bloqueados[$inc['trabajador_id']] = true;
-            }
-        }
-
-        // Día especial (libre, vacaciones, etc.)
-        foreach ($ctx['diasEspeciales'] as $de) {
-            if ($fecha >= $de['fecha_inicio'] && $fecha <= $de['fecha_fin']) {
-                $bloqueados[$de['trabajador_id']] = true;
-            }
-        }
-
-        // Regla: T1 no si el día anterior tuvo T3
-        if ($numeroTurno == 1) {
-            foreach ($ctx['asignadosPorDia'][$fechaAnterior] ?? [] as $trabId => $turnos) {
-                if (in_array(3, $turnos)) $bloqueados[$trabId] = true;
-            }
-        }
-
-        // Regla: T3 no si el día siguiente tiene T1
-        if ($numeroTurno == 3) {
-            foreach ($ctx['asignadosPorDia'][$fechaSiguiente] ?? [] as $trabId => $turnos) {
-                if (in_array(1, $turnos)) $bloqueados[$trabId] = true;
-            }
-        }
-
-        // Restricciones individuales
-        foreach ($ctx['restricciones'] as $rest) {
-            if ($fecha < $rest['fecha_inicio']) continue;
-            if ($rest['fecha_fin'] !== null && $fecha > $rest['fecha_fin']) continue;
-
-            switch ($rest['tipo_restriccion']) {
-                case 'no_turno_noche':
-                    if ($numeroTurno == 3) $bloqueados[$rest['trabajador_id']] = true;
-                    break;
-                case 'puesto_especifico':
-                    // IMPORTANTE: Validar que puesto_trabajo_id no sea NULL
-                    // Si es NULL, significa que la columna no existe en la BD
-                    if ($rest['puesto_trabajo_id'] !== null && (int)$rest['puesto_trabajo_id'] == (int)$puestoId) {
-                        $bloqueados[$rest['trabajador_id']] = true;
-                    }
-                    break;
-            }
-        }
-        
-        // Todas las restricciones ya vienen del prefetch en $ctx['restricciones'].
-        // No se hacen queries adicionales aquí — todo opera en memoria.
-
-        // Flags del puesto (fuerza física, movilidad)
-        $puesto = $ctx['puestosFlags'][$puestoId] ?? null;
-        if ($puesto) {
-            foreach ($ctx['restricciones'] as $rest) {
-                if ($fecha < $rest['fecha_inicio']) continue;
-                if ($rest['fecha_fin'] !== null && $fecha > $rest['fecha_fin']) continue;
-                if (!empty($puesto['requiere_fuerza_fisica']) && $rest['tipo_restriccion'] === 'no_fuerza_fisica') {
-                    $bloqueados[$rest['trabajador_id']] = true;
-                }
-                if (!empty($puesto['requiere_movilidad']) && $rest['tipo_restriccion'] === 'movilidad_limitada') {
-                    $bloqueados[$rest['trabajador_id']] = true;
-                }
-            }
-        }
-
-        // Límite de 7 turnos noche por mes
-        if ($numeroTurno == 3) {
-            foreach ($ctx['nochesPorTrabajador'] as $trabId => $cnt) {
-                if ($cnt >= 7) $bloqueados[$trabId] = true;
-            }
-        }
-
-        // Construir lista y ordenar por menor carga
-        $disponibles = [];
-        foreach ($ctx['todosActivos'] as $trab) {
-            if (!isset($bloqueados[$trab['id']])) {
-                $disponibles[] = $trab;
-            }
-        }
-
+    private function getDisponibles($puestoId, $turnoId, $fecha, &$ctx, &$conteoTurnos) {
+        $disponibles = $this->trabajadores->obtenerDisponibles($puestoId, $turnoId, $fecha);
+        $numeroTurno = $ctx['turnoIdANumero'][$turnoId] ?? 0;
         if ($numeroTurno == 3) {
             usort($disponibles, function($a, $b) use ($conteoTurnos, $ctx) {
                 $nA = $ctx['nochesPorTrabajador'][$a['id']] ?? 0;
@@ -240,94 +161,20 @@ class AsignacionAutomatica {
                 return ($conteoTurnos[$a['id']] ?? 0) - ($conteoTurnos[$b['id']] ?? 0);
             });
         }
-
         return $disponibles;
     }
 
     /**
-     * Disponibles para L4: sin L4 hoy, sin libre/incapacidad.
-     * SÍ pueden tener T1/T2/T3 (L4 es compatible con turnos normales).
+     * Disponibles para L4: delega en Trabajadores::obtenerDisponiblesL4() que aplica:
+     *   - ya tiene L4 hoy
+     *   - incapacidad activa, días especiales
+     *   - restricción puesto_especifico
+     *   - restricción no_turno_noche
+     *   - restricción no_fuerza_fisica / movilidad_limitada según el puesto
      */
     private function getDisponiblesL4($puestoId, $fecha, &$ctx) {
-        $bloqueados = [];
-
-        // Ya tiene L4 (turno 4 o 5) hoy
-        foreach ($ctx['asignadosPorDia'][$fecha] ?? [] as $trabId => $turnos) {
-            if (in_array(4, $turnos) || in_array(5, $turnos)) {
-                $bloqueados[$trabId] = true;
-            }
-        }
-
-        // Incapacidad
-        foreach ($ctx['incapacidades'] as $inc) {
-            if ($fecha >= $inc['fecha_inicio'] && $fecha <= $inc['fecha_fin']) {
-                $bloqueados[$inc['trabajador_id']] = true;
-            }
-        }
-
-        // Día especial
-        foreach ($ctx['diasEspeciales'] as $de) {
-            if ($fecha >= $de['fecha_inicio'] && $fecha <= $de['fecha_fin']) {
-                $bloqueados[$de['trabajador_id']] = true;
-            }
-        }
-
-        // Restricción puesto específico
-        foreach ($ctx['restricciones'] as $rest) {
-            if ($rest['tipo_restriccion'] !== 'puesto_especifico') continue;
-            // IMPORTANTE: Validar que puesto_trabajo_id no sea NULL antes de comparar
-            if ($rest['puesto_trabajo_id'] !== null && (int)$rest['puesto_trabajo_id'] == (int)$puestoId) {
-                $bloqueados[$rest['trabajador_id']] = true;
-            }
-            // Si es NULL, ignorar (la columna no existe en la BD)
-        }
-
-        // L4 es siempre turno 4 (nocturno) - bloquear si tiene restricción no_turno_noche
-        foreach ($ctx['restricciones'] as $rest) {
-            if ($rest['tipo_restriccion'] !== 'no_turno_noche') continue;
-            if ($fecha >= $rest['fecha_inicio'] && (!$rest['fecha_fin'] || $fecha <= $rest['fecha_fin'])) {
-                $bloqueados[$rest['trabajador_id']] = true;
-            }
-        }
-
-        // Bloquear si el puesto requiere fuerza física y tiene restricción
-        $puesto = null;
-        foreach ($ctx['puestosFlags'] as $p) {
-            if ($p['id'] == $puestoId) {
-                $puesto = $p;
-                break;
-            }
-        }
-        
-        if ($puesto && $puesto['requiere_fuerza_fisica']) {
-            foreach ($ctx['restricciones'] as $rest) {
-                if ($rest['tipo_restriccion'] !== 'no_fuerza_fisica') continue;
-                if ($fecha >= $rest['fecha_inicio'] && (!$rest['fecha_fin'] || $fecha <= $rest['fecha_fin'])) {
-                    $bloqueados[$rest['trabajador_id']] = true;
-                }
-            }
-        }
-
-        // Bloquear si el puesto requiere movilidad y tiene restricción
-        if ($puesto && $puesto['requiere_movilidad']) {
-            foreach ($ctx['restricciones'] as $rest) {
-                if ($rest['tipo_restriccion'] !== 'movilidad_limitada') continue;
-                if ($fecha >= $rest['fecha_inicio'] && (!$rest['fecha_fin'] || $fecha <= $rest['fecha_fin'])) {
-                    $bloqueados[$rest['trabajador_id']] = true;
-                }
-            }
-        }
-        
-        // Todas las restricciones ya vienen del prefetch en $ctx['restricciones'].
-        // No se hacen queries adicionales aquí — todo opera en memoria.
-
-        $disponibles = [];
-        foreach ($ctx['todosActivos'] as $trab) {
-            if (!isset($bloqueados[$trab['id']])) {
-                $disponibles[] = $trab;
-            }
-        }
-        return $disponibles;
+        $turnoId = $ctx['puestosL4TurnoId'][$puestoId] ?? null;
+        return $this->trabajadores->obtenerDisponiblesL4($puestoId, $turnoId, $fecha);
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -379,6 +226,9 @@ class AsignacionAutomatica {
         }
         $turnos = array_keys($turnoIdPorNumero) ?: [1,2,3];
 
+        // Mapa inverso turnoId -> numeroTurno para getDisponibles
+        $ctx['turnoIdANumero'] = $numeroPorTurnoId;
+
         // Puestos L4
         $puestosL4Map   = ['F5'=>9,'F15'=>9,'D2'=>10,'D1'=>10,'F11'=>9];
         $puestosL4Turno = ['F5'=>1,'F15'=>1,'D2'=>2,'D1'=>2,'F11'=>1];
@@ -389,6 +239,12 @@ class AsignacionAutomatica {
         );
         $stmtPuestosL4->execute();
         $puestosL4Info = $stmtPuestosL4->fetchAll();
+
+        // Mapa puesto_id -> turnoId para L4, usado en getDisponiblesL4
+        $ctx['puestosL4TurnoId'] = [];
+        foreach ($puestosL4Info as $pl4) {
+            $ctx['puestosL4TurnoId'][$pl4['id']] = $puestosL4Map[$pl4['codigo']] ?? 9;
+        }
 
         $puestosNocturnos = ['V1','V2','C','D3','F6','F11'];
         $MAX_LIBRES_DIA   = 3;
@@ -579,8 +435,8 @@ class AsignacionAutomatica {
                             continue;
                         }
 
-                        // Disponibilidad en memoria, sin queries
-                        $disponibles = $this->getDisponibles($puesto['id'], $turno, $fecha, $ctx, $conteoTurnos);
+                        // Delega en Trabajadores::obtenerDisponibles con todas las restricciones
+                        $disponibles = $this->getDisponibles($puesto['id'], $turnoIdReal, $fecha, $ctx, $conteoTurnos);
 
                         if (empty($disponibles)) {
                             $errores[] = ['fecha'=>$fecha,'puesto'=>$puesto['codigo'],'turno'=>$turno,'error'=>'Sin trabajadores disponibles'];
