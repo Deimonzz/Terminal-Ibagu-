@@ -230,9 +230,7 @@ class TurnosAsignados {
             }
 
             if ($puesto) {
-                $columnName = Database::getColumnName('restricciones_trabajador', 'puesto_trabajo_id', 'puesto_id');
-                
-                // Intentar con COALESCE primero para manejar ambas columnas
+                // Intentar primero con COALESCE (funciona en MySQL)
                 try {
                     $sql = "SELECT COUNT(*) as count FROM restricciones_trabajador
                             WHERE trabajador_id = :trabajador_id
@@ -253,9 +251,11 @@ class TurnosAsignados {
                         $errores[] = 'El trabajador tiene restricción para este puesto específico';
                     }
                 } catch (Exception $e) {
-                    // Si falla COALESCE (ambas columnas no existen), intentar fallback
-                    if ($columnName) {
-                        try {
+                    // Si falla COALESCE (PostgreSQL sin puesto_id), intentar con detección de columna
+                    error_log("[TurnosAsignados::validarAsignacion] COALESCE falló: " . $e->getMessage());
+                    try {
+                        $columnName = Database::getColumnName('restricciones_trabajador', 'puesto_trabajo_id', 'puesto_id');
+                        if ($columnName) {
                             $sql = "SELECT COUNT(*) as count FROM restricciones_trabajador
                                     WHERE trabajador_id = :trabajador_id
                                     AND tipo_restriccion = 'puesto_especifico'
@@ -274,9 +274,9 @@ class TurnosAsignados {
                             if ($result['count'] > 0) {
                                 $errores[] = 'El trabajador tiene restricción para este puesto específico';
                             }
-                        } catch (Exception $e2) {
-                            error_log("[TurnosAsignados] Error validando restricción puesto específico: " . $e2->getMessage());
                         }
+                    } catch (Exception $e2) {
+                        error_log("[TurnosAsignados::validarAsignacion] Fallback también falló: " . $e2->getMessage());
                     }
                 }
             }

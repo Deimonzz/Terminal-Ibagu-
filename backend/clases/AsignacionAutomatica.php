@@ -73,11 +73,19 @@ class AsignacionAutomatica {
         $diasEspeciales = $stmtDE->fetchAll(PDO::FETCH_ASSOC);
 
         // 5. Restricciones de trabajadores vigentes en el mes
-        // Usar COALESCE para manejar dinámicamente ambas columnas (puesto_trabajo_id o puesto_id)
-        // Esto evita que las restricciones se carguen con NULL si no se detecta la columna
+        // Detectar qué columna existe (puesto_trabajo_id o puesto_id)
+        $puestoCol = Database::getColumnName('restricciones_trabajador', 'puesto_trabajo_id', 'puesto_id');
+        
+        // Construir SELECT dinámicamente según qué columna existe
+        if ($puestoCol) {
+            $selectPuesto = $puestoCol . " as puesto_trabajo_id";
+        } else {
+            $selectPuesto = "NULL as puesto_trabajo_id";
+        }
+        
         $stmtR = $this->db->prepare(
             "SELECT trabajador_id, tipo_restriccion,
-                    COALESCE(puesto_trabajo_id, puesto_id) as puesto_trabajo_id,
+                    " . $selectPuesto . ",
                     fecha_inicio, fecha_fin
              FROM restricciones_trabajador
              WHERE activa = true
@@ -196,36 +204,37 @@ class AsignacionAutomatica {
         // VALIDACIÓN ADICIONAL: Consultar SIEMPRE la BD para restricciones de puesto_especifico
         // Esto asegura que no haya gaps en la validación
         try {
-            // Usar COALESCE para evitar que NULL rompa la comparación
-            // Si puesto_trabajo_id es NULL, usa puesto_id; si ambas son NULL, retorna NULL (no matchea)
-            $sql = "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
-                    WHERE tipo_restriccion = 'puesto_especifico'
-                    AND activa = true
-                    AND fecha_inicio <= ?
-                    AND (fecha_fin IS NULL OR fecha_fin >= ?)
-                    AND COALESCE(puesto_trabajo_id, puesto_id) = ?";
-            
-            $stmtPuestoCheck = $this->db->prepare($sql);
+            // Intentar primero con COALESCE (funciona en MySQL)
+            $stmtPuestoCheck = $this->db->prepare(
+                "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
+                 WHERE tipo_restriccion = 'puesto_especifico'
+                 AND activa = true
+                 AND fecha_inicio <= ?
+                 AND (fecha_fin IS NULL OR fecha_fin >= ?)
+                 AND COALESCE(puesto_trabajo_id, puesto_id) = ?"
+            );
             $stmtPuestoCheck->execute([$fecha, $fecha, $puestoId]);
             foreach ($stmtPuestoCheck->fetchAll(PDO::FETCH_ASSOC) as $row) {
                 $bloqueados[$row['trabajador_id']] = true;
             }
         } catch (Exception $e) {
-            // Si la consulta con COALESCE falla (ej: ambas columnas no existen)
-            // intentar con fallback al método anterior
-            error_log("[AsignacionAutomatica::getDisponibles] Error con COALESCE, intentando fallback: " . $e->getMessage());
+            // Si falla COALESCE (PostgreSQL sin puesto_id), intentar con detección de columna
+            error_log("[AsignacionAutomatica::getDisponibles] COALESCE falló, intentando fallback: " . $e->getMessage());
             try {
-                $stmtPuestoCheck = $this->db->prepare(
-                    "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
-                     WHERE tipo_restriccion = 'puesto_especifico'
-                     AND activa = true
-                     AND fecha_inicio <= ?
-                     AND (fecha_fin IS NULL OR fecha_fin >= ?)
-                     AND (puesto_trabajo_id = ? OR puesto_id = ?)"
-                );
-                $stmtPuestoCheck->execute([$fecha, $fecha, $puestoId, $puestoId]);
-                foreach ($stmtPuestoCheck->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                    $bloqueados[$row['trabajador_id']] = true;
+                $columnName = Database::getColumnName('restricciones_trabajador', 'puesto_trabajo_id', 'puesto_id');
+                if ($columnName) {
+                    $stmtPuestoCheck = $this->db->prepare(
+                        "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
+                         WHERE tipo_restriccion = 'puesto_especifico'
+                         AND activa = true
+                         AND fecha_inicio <= ?
+                         AND (fecha_fin IS NULL OR fecha_fin >= ?)
+                         AND " . $columnName . " = ?"
+                    );
+                    $stmtPuestoCheck->execute([$fecha, $fecha, $puestoId]);
+                    foreach ($stmtPuestoCheck->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                        $bloqueados[$row['trabajador_id']] = true;
+                    }
                 }
             } catch (Exception $e2) {
                 error_log("[AsignacionAutomatica::getDisponibles] Fallback también falló: " . $e2->getMessage());
@@ -319,35 +328,37 @@ class AsignacionAutomatica {
         // VALIDACIÓN ADICIONAL: Consultar SIEMPRE la BD para restricciones de puesto_especifico
         // Esto asegura que no haya gaps en la validación
         try {
-            // Usar COALESCE para evitar que NULL rompa la comparación
-            $sql = "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
-                    WHERE tipo_restriccion = 'puesto_especifico'
-                    AND activa = true
-                    AND fecha_inicio <= ?
-                    AND (fecha_fin IS NULL OR fecha_fin >= ?)
-                    AND COALESCE(puesto_trabajo_id, puesto_id) = ?";
-            
-            $stmtPuestoCheck = $this->db->prepare($sql);
+            // Intentar primero con COALESCE (funciona en MySQL)
+            $stmtPuestoCheck = $this->db->prepare(
+                "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
+                 WHERE tipo_restriccion = 'puesto_especifico'
+                 AND activa = true
+                 AND fecha_inicio <= ?
+                 AND (fecha_fin IS NULL OR fecha_fin >= ?)
+                 AND COALESCE(puesto_trabajo_id, puesto_id) = ?"
+            );
             $stmtPuestoCheck->execute([$fecha, $fecha, $puestoId]);
             foreach ($stmtPuestoCheck->fetchAll(PDO::FETCH_ASSOC) as $row) {
                 $bloqueados[$row['trabajador_id']] = true;
             }
         } catch (Exception $e) {
-            // Si la consulta con COALESCE falla (ej: ambas columnas no existen)
-            // intentar con fallback al método anterior
-            error_log("[AsignacionAutomatica::getDisponiblesL4] Error con COALESCE, intentando fallback: " . $e->getMessage());
+            // Si falla COALESCE (PostgreSQL sin puesto_id), intentar con detección de columna
+            error_log("[AsignacionAutomatica::getDisponiblesL4] COALESCE falló, intentando fallback: " . $e->getMessage());
             try {
-                $stmtPuestoCheck = $this->db->prepare(
-                    "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
-                     WHERE tipo_restriccion = 'puesto_especifico'
-                     AND activa = true
-                     AND fecha_inicio <= ?
-                     AND (fecha_fin IS NULL OR fecha_fin >= ?)
-                     AND (puesto_trabajo_id = ? OR puesto_id = ?)"
-                );
-                $stmtPuestoCheck->execute([$fecha, $fecha, $puestoId, $puestoId]);
-                foreach ($stmtPuestoCheck->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                    $bloqueados[$row['trabajador_id']] = true;
+                $columnName = Database::getColumnName('restricciones_trabajador', 'puesto_trabajo_id', 'puesto_id');
+                if ($columnName) {
+                    $stmtPuestoCheck = $this->db->prepare(
+                        "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
+                         WHERE tipo_restriccion = 'puesto_especifico'
+                         AND activa = true
+                         AND fecha_inicio <= ?
+                         AND (fecha_fin IS NULL OR fecha_fin >= ?)
+                         AND " . $columnName . " = ?"
+                    );
+                    $stmtPuestoCheck->execute([$fecha, $fecha, $puestoId]);
+                    foreach ($stmtPuestoCheck->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                        $bloqueados[$row['trabajador_id']] = true;
+                    }
                 }
             } catch (Exception $e2) {
                 error_log("[AsignacionAutomatica::getDisponiblesL4] Fallback también falló: " . $e2->getMessage());
