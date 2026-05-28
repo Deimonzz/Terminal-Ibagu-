@@ -76,22 +76,16 @@ class AsignacionAutomatica {
         // Detectar qué columna existe (puesto_trabajo_id o puesto_id)
         $puestoCol = Database::getColumnName('restricciones_trabajador', 'puesto_trabajo_id', 'puesto_id');
         
-        // Construir SELECT dinámicamente según qué columna existe
-        if ($puestoCol) {
-            $selectPuesto = $puestoCol . " as puesto_trabajo_id";
-        } else {
-            $selectPuesto = "NULL as puesto_trabajo_id";
-        }
-        
-        $stmtR = $this->db->prepare(
-            "SELECT trabajador_id, tipo_restriccion,
-                    " . $selectPuesto . ",
+        // Construir SQL ANTES de prepare (no dentro)
+        $sqlRestriccion = "SELECT trabajador_id, tipo_restriccion,
+                    " . ($puestoCol ? $puestoCol : "NULL") . " as puesto_trabajo_id,
                     fecha_inicio, fecha_fin
              FROM restricciones_trabajador
              WHERE activa = true
              AND fecha_inicio <= ?
-             AND (fecha_fin IS NULL OR fecha_fin >= ?)"
-        );
+             AND (fecha_fin IS NULL OR fecha_fin >= ?)";
+        
+        $stmtR = $this->db->prepare($sqlRestriccion);
         $stmtR->execute([$fechaFin, $fechaInicio]);
         $restricciones = $stmtR->fetchAll(PDO::FETCH_ASSOC);
 
