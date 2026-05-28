@@ -73,21 +73,11 @@ class AsignacionAutomatica {
         $diasEspeciales = $stmtDE->fetchAll(PDO::FETCH_ASSOC);
 
         // 5. Restricciones de trabajadores vigentes en el mes
-        // Detectar el nombre correcto de la columna puesto (puesto_trabajo_id o puesto_id)
-        $puestoCol = Database::getColumnName('restricciones_trabajador', 'puesto_trabajo_id', 'puesto_id');
-        
-        // CRÍTICO: Si la columna no existe, las restricciones de puesto_especifico no funcionarán
-        if (!$puestoCol) {
-            // Log warning
-            error_log("[AsignacionAutomatica] ADVERTENCIA: No se encontró columna puesto_trabajo_id o puesto_id en restricciones_trabajador. Las restricciones de puesto específico NO funcionarán.");
-            $selectPuesto = "NULL as puesto_trabajo_id";
-        } else {
-            $selectPuesto = "$puestoCol as puesto_trabajo_id";
-        }
-        
+        // Usar COALESCE para manejar dinámicamente ambas columnas (puesto_trabajo_id o puesto_id)
+        // Esto evita que las restricciones se carguen con NULL si no se detecta la columna
         $stmtR = $this->db->prepare(
             "SELECT trabajador_id, tipo_restriccion,
-                    " . $selectPuesto . ",
+                    COALESCE(puesto_trabajo_id, puesto_id) as puesto_trabajo_id,
                     fecha_inicio, fecha_fin
              FROM restricciones_trabajador
              WHERE activa = true

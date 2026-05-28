@@ -386,6 +386,23 @@ class TurnosAsignados {
     }
 
     public function asignarDirecto($datos) {
+        // VALIDACIÓN CRÍTICA: Verificar restricciones ANTES de asignar
+        $validacion = $this->validarAsignacion(
+            $datos['trabajador_id'],
+            $datos['puesto_trabajo_id'] ?? null,
+            $datos['turno_id'] ?? null,
+            $datos['fecha'] ?? null
+        );
+        
+        if (!$validacion['valido']) {
+            error_log("[TurnosAsignados::asignarDirecto] VALIDACIÓN FALLIDA: " . json_encode($validacion['errores']));
+            return [
+                'success' => false,
+                'message' => 'No se puede asignar el turno: ' . implode(', ', $validacion['errores']),
+                'errores' => $validacion['errores']
+            ];
+        }
+        
         try {
             $this->db->beginTransaction();
             
@@ -428,6 +445,10 @@ class TurnosAsignados {
                                      $datos['turno_id'], $datos['fecha'], 'creado', $datos['created_by'] ?? null);
 
             $this->db->commit();
+            
+            error_log("[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=" . $datos['trabajador_id'] . 
+                     ", puesto=" . ($datos['puesto_trabajo_id'] ?? 'NULL') . ", fecha=" . $datos['fecha']);
+            
             return [
                 'success' => true,
                 'id' => $turno_id,
@@ -435,6 +456,7 @@ class TurnosAsignados {
             ];
         } catch (PDOException $e) {
             $this->db->rollBack();
+            error_log("[TurnosAsignados::asignarDirecto] ❌ Error: " . $e->getMessage());
             return [
                 'success' => false,
                 'message' => 'Error al asignar turno directamente: ' . $e->getMessage()
