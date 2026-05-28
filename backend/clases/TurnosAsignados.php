@@ -200,8 +200,32 @@ class TurnosAsignados {
             $puesto = $stmt->fetch();
             
             if ($puesto && $puesto['requiere_fuerza_fisica']) {
+                // Intentar primero con método puedeHacerFuerza
                 if (!$this->trabajadores->puedeHacerFuerza($trabajador_id, $fecha)) {
                     $errores[] = 'El puesto requiere fuerza física y el trabajador tiene restricción';
+                } else {
+                    // Validación adicional directa en BD para asegurar
+                    try {
+                        $sql = "SELECT COUNT(*) as count FROM restricciones_trabajador 
+                                WHERE trabajador_id = :trabajador_id 
+                                AND tipo_restriccion = 'no_fuerza_fisica'
+                                AND activa = true
+                                AND :fecha >= fecha_inicio
+                                AND (:fecha2 <= fecha_fin OR fecha_fin IS NULL)";
+                        $stmt = $this->db->prepare($sql);
+                        $stmt->execute([
+                            ':trabajador_id' => $trabajador_id, 
+                            ':fecha' => $fecha,
+                            ':fecha2' => $fecha
+                        ]);
+                        $result = $stmt->fetch();
+                        
+                        if ($result['count'] > 0) {
+                            $errores[] = 'El puesto requiere fuerza física y el trabajador tiene restricción';
+                        }
+                    } catch (Exception $e) {
+                        error_log("[TurnosAsignados::validarAsignacion] Error validando no_fuerza_fisica: " . $e->getMessage());
+                    }
                 }
             }
         } catch (Exception $e) {
@@ -210,22 +234,27 @@ class TurnosAsignados {
         
         try {
             if ($puesto && $puesto['requiere_movilidad']) {
-                $sql = "SELECT COUNT(*) as count FROM restricciones_trabajador 
-                        WHERE trabajador_id = :trabajador_id 
-                        AND tipo_restriccion = 'movilidad_limitada'
-                        AND activa = true
-                        AND :fecha >= fecha_inicio
-                        AND (:fecha2 <= fecha_fin OR fecha_fin IS NULL)";
-                $stmt = $this->db->prepare($sql);
-                $stmt->execute([
-                    ':trabajador_id' => $trabajador_id, 
-                    ':fecha' => $fecha,
-                    ':fecha2' => $fecha
-                ]);
-                $result = $stmt->fetch();
-                
-                if ($result['count'] > 0) {
-                    $errores[] = 'El puesto requiere movilidad y el trabajador tiene restricción';
+                // Validación directa en BD
+                try {
+                    $sql = "SELECT COUNT(*) as count FROM restricciones_trabajador 
+                            WHERE trabajador_id = :trabajador_id 
+                            AND tipo_restriccion = 'movilidad_limitada'
+                            AND activa = true
+                            AND :fecha >= fecha_inicio
+                            AND (:fecha2 <= fecha_fin OR fecha_fin IS NULL)";
+                    $stmt = $this->db->prepare($sql);
+                    $stmt->execute([
+                        ':trabajador_id' => $trabajador_id, 
+                        ':fecha' => $fecha,
+                        ':fecha2' => $fecha
+                    ]);
+                    $result = $stmt->fetch();
+                    
+                    if ($result['count'] > 0) {
+                        $errores[] = 'El puesto requiere movilidad y el trabajador tiene restricción';
+                    }
+                } catch (Exception $e) {
+                    error_log("[TurnosAsignados::validarAsignacion] Error validando movilidad_limitada: " . $e->getMessage());
                 }
             }
 

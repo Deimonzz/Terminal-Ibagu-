@@ -195,8 +195,65 @@ class AsignacionAutomatica {
             }
         }
         
-        // VALIDACIÓN ADICIONAL: Consultar SIEMPRE la BD para restricciones de puesto_especifico
-        // Esto asegura que no haya gaps en la validación
+        // VALIDACIÓN ADICIONAL en BD: no_turno_noche para turno T3 (nocturno)
+        if ($numeroTurno == 3) {
+            try {
+                $stmtNoche = $this->db->prepare(
+                    "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
+                     WHERE tipo_restriccion = 'no_turno_noche'
+                     AND activa = true
+                     AND fecha_inicio <= ?
+                     AND (fecha_fin IS NULL OR fecha_fin >= ?)"
+                );
+                $stmtNoche->execute([$fecha, $fecha]);
+                foreach ($stmtNoche->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                    $bloqueados[$row['trabajador_id']] = true;
+                }
+            } catch (Exception $e) {
+                error_log("[AsignacionAutomatica::getDisponibles] Error validando no_turno_noche: " . $e->getMessage());
+            }
+        }
+        
+        // VALIDACIÓN ADICIONAL en BD: no_fuerza_fisica (si el puesto la requiere)
+        $puesto = $ctx['puestosFlags'][$puestoId] ?? null;
+        if ($puesto && $puesto['requiere_fuerza_fisica']) {
+            try {
+                $stmtFuerza = $this->db->prepare(
+                    "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
+                     WHERE tipo_restriccion = 'no_fuerza_fisica'
+                     AND activa = true
+                     AND fecha_inicio <= ?
+                     AND (fecha_fin IS NULL OR fecha_fin >= ?)"
+                );
+                $stmtFuerza->execute([$fecha, $fecha]);
+                foreach ($stmtFuerza->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                    $bloqueados[$row['trabajador_id']] = true;
+                }
+            } catch (Exception $e) {
+                error_log("[AsignacionAutomatica::getDisponibles] Error validando no_fuerza_fisica: " . $e->getMessage());
+            }
+        }
+        
+        // VALIDACIÓN ADICIONAL en BD: movilidad_limitada (si el puesto la requiere)
+        if ($puesto && $puesto['requiere_movilidad']) {
+            try {
+                $stmtMovilidad = $this->db->prepare(
+                    "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
+                     WHERE tipo_restriccion = 'movilidad_limitada'
+                     AND activa = true
+                     AND fecha_inicio <= ?
+                     AND (fecha_fin IS NULL OR fecha_fin >= ?)"
+                );
+                $stmtMovilidad->execute([$fecha, $fecha]);
+                foreach ($stmtMovilidad->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                    $bloqueados[$row['trabajador_id']] = true;
+                }
+            } catch (Exception $e) {
+                error_log("[AsignacionAutomatica::getDisponibles] Error validando movilidad_limitada: " . $e->getMessage());
+            }
+        }
+        
+        // VALIDACIÓN ADICIONAL en BD: puesto_especifico
         try {
             // Intentar primero con COALESCE (funciona en MySQL)
             $stmtPuestoCheck = $this->db->prepare(
@@ -318,6 +375,42 @@ class AsignacionAutomatica {
             }
             // Si es NULL, ignorar (la columna no existe en la BD)
         }
+
+        // L4 es siempre turno 4 (nocturno) - bloquear si tiene restricción no_turno_noche
+        foreach ($ctx['restricciones'] as $rest) {
+            if ($rest['tipo_restriccion'] !== 'no_turno_noche') continue;
+            if ($fecha >= $rest['fecha_inicio'] && (!$rest['fecha_fin'] || $fecha <= $rest['fecha_fin'])) {
+                $bloqueados[$rest['trabajador_id']] = true;
+            }
+        }
+
+        // Bloquear si el puesto requiere fuerza física y tiene restricción
+        $puesto = null;
+        foreach ($ctx['puestosFlags'] as $p) {
+            if ($p['id'] == $puestoId) {
+                $puesto = $p;
+                break;
+            }
+        }
+        
+        if ($puesto && $puesto['requiere_fuerza_fisica']) {
+            foreach ($ctx['restricciones'] as $rest) {
+                if ($rest['tipo_restriccion'] !== 'no_fuerza_fisica') continue;
+                if ($fecha >= $rest['fecha_inicio'] && (!$rest['fecha_fin'] || $fecha <= $rest['fecha_fin'])) {
+                    $bloqueados[$rest['trabajador_id']] = true;
+                }
+            }
+        }
+
+        // Bloquear si el puesto requiere movilidad y tiene restricción
+        if ($puesto && $puesto['requiere_movilidad']) {
+            foreach ($ctx['restricciones'] as $rest) {
+                if ($rest['tipo_restriccion'] !== 'movilidad_limitada') continue;
+                if ($fecha >= $rest['fecha_inicio'] && (!$rest['fecha_fin'] || $fecha <= $rest['fecha_fin'])) {
+                    $bloqueados[$rest['trabajador_id']] = true;
+                }
+            }
+        }
         
         // VALIDACIÓN ADICIONAL: Consultar SIEMPRE la BD para restricciones de puesto_especifico
         // Esto asegura que no haya gaps en la validación
@@ -356,6 +449,61 @@ class AsignacionAutomatica {
                 }
             } catch (Exception $e2) {
                 error_log("[AsignacionAutomatica::getDisponiblesL4] Fallback también falló: " . $e2->getMessage());
+            }
+        }
+
+        // VALIDACIÓN ADICIONAL: Restricciones nocturnas directo en BD
+        try {
+            $stmtNoche = $this->db->prepare(
+                "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
+                 WHERE tipo_restriccion = 'no_turno_noche'
+                 AND activa = true
+                 AND fecha_inicio <= ?
+                 AND (fecha_fin IS NULL OR fecha_fin >= ?)"
+            );
+            $stmtNoche->execute([$fecha, $fecha]);
+            foreach ($stmtNoche->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $bloqueados[$row['trabajador_id']] = true;
+            }
+        } catch (Exception $e) {
+            error_log("[AsignacionAutomatica::getDisponiblesL4] Error validando no_turno_noche: " . $e->getMessage());
+        }
+
+        // VALIDACIÓN ADICIONAL: no_fuerza_fisica directo en BD (si el puesto la requiere)
+        if ($puesto && $puesto['requiere_fuerza_fisica']) {
+            try {
+                $stmtFuerza = $this->db->prepare(
+                    "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
+                     WHERE tipo_restriccion = 'no_fuerza_fisica'
+                     AND activa = true
+                     AND fecha_inicio <= ?
+                     AND (fecha_fin IS NULL OR fecha_fin >= ?)"
+                );
+                $stmtFuerza->execute([$fecha, $fecha]);
+                foreach ($stmtFuerza->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                    $bloqueados[$row['trabajador_id']] = true;
+                }
+            } catch (Exception $e) {
+                error_log("[AsignacionAutomatica::getDisponiblesL4] Error validando no_fuerza_fisica: " . $e->getMessage());
+            }
+        }
+
+        // VALIDACIÓN ADICIONAL: movilidad_limitada directo en BD (si el puesto la requiere)
+        if ($puesto && $puesto['requiere_movilidad']) {
+            try {
+                $stmtMovilidad = $this->db->prepare(
+                    "SELECT DISTINCT trabajador_id FROM restricciones_trabajador
+                     WHERE tipo_restriccion = 'movilidad_limitada'
+                     AND activa = true
+                     AND fecha_inicio <= ?
+                     AND (fecha_fin IS NULL OR fecha_fin >= ?)"
+                );
+                $stmtMovilidad->execute([$fecha, $fecha]);
+                foreach ($stmtMovilidad->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                    $bloqueados[$row['trabajador_id']] = true;
+                }
+            } catch (Exception $e) {
+                error_log("[AsignacionAutomatica::getDisponiblesL4] Error validando movilidad_limitada: " . $e->getMessage());
             }
         }
 
