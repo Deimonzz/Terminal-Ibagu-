@@ -1,7 +1,7 @@
 <?php
 
 //Gestión de Días Especiales
-//LC, L, L4, L8, SUS, VAC, ADMM, ADMT, ADM
+//LC, L, L4, L8, SUS, VAC, DLE, MLE, ADMM, ADMT, ADM
 
 require_once __DIR__ . '/../../config/database.php';
 
@@ -70,7 +70,7 @@ class DiasEspeciales {
     
     public function crear($datos) {
         // Validar solapamiento según el tipo
-        if (in_array($datos['tipo'], ['LC', 'L', 'L8', 'VAC', 'SUS', 'ADM', 'ADMM', 'ADMT'])) {
+        if (in_array($datos['tipo'], ['LC', 'L', 'L8', 'VAC', 'SUS', 'DLE', 'MLE', 'ADM', 'ADMM', 'ADMT'])) {
             $validacion = $this->validarSolapamiento($datos['trabajador_id'], $datos['fecha_inicio'], 
                                                      $datos['fecha_fin'] ?? $datos['fecha_inicio'], $datos['tipo']);
             if (!$validacion['valido']) {
@@ -118,7 +118,7 @@ class DiasEspeciales {
             $id = $this->db->lastInsertId();
             
             // Si es un día de descanso completo, cancelar turnos
-            if (in_array($datos['tipo'], ['LC', 'L', 'L8', 'VAC', 'SUS'])) {
+            if (in_array($datos['tipo'], ['LC', 'L', 'L8', 'VAC', 'SUS', 'DLE'])) {
                 $this->cancelarTurnos($datos['trabajador_id'], $datos['fecha_inicio'], 
                                      $datos['fecha_fin'] ?? $datos['fecha_inicio']);
             }
@@ -378,7 +378,7 @@ class DiasEspeciales {
         $sqlEspeciales = "SELECT COUNT(*) as count, " . Database::groupConcat('tipo', ', ') . " as tipos
                 FROM dias_especiales 
                 WHERE trabajador_id = :trabajador_id
-                AND tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS', 'ADM', 'ADMM', 'ADMT')
+                AND tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS', 'DLE', 'MLE', 'ADM', 'ADMM', 'ADMT')
                 AND :fecha BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                 AND estado IN ('programado', 'activo')";
         

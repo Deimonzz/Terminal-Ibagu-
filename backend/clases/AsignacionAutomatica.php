@@ -65,7 +65,7 @@ class AsignacionAutomatica {
             "SELECT trabajador_id, fecha_inicio,
                     COALESCE(fecha_fin, fecha_inicio) as fecha_fin
              FROM dias_especiales
-             WHERE tipo IN ('LC','L','L8','VAC','SUS','ADM','ADMM','ADMT')
+             WHERE tipo IN ('LC','L','L8','VAC','SUS','DLE','ADM','ADMM','ADMT')
              AND estado IN ('programado','activo')
              AND fecha_inicio <= ? AND COALESCE(fecha_fin, fecha_inicio) >= ?"
         );
@@ -552,7 +552,7 @@ class AsignacionAutomatica {
 
         $stmt = $this->db->prepare(
             "SELECT trabajador_id, fecha_inicio FROM dias_especiales
-             WHERE tipo IN ('L','L8','LC','VAC','SUS','ADM','ADMM','ADMT')
+             WHERE tipo IN ('L','L8','LC','VAC','SUS','DLE','ADM','ADMM','ADMT')
              AND fecha_inicio BETWEEN ? AND ?
              AND estado IN ('programado','activo')"
         );
@@ -664,7 +664,7 @@ class AsignacionAutomatica {
 
         $stmt = $this->db->prepare(
             "SELECT trabajador_id, fecha_inicio FROM dias_especiales
-             WHERE tipo IN ('L','L8','LC','VAC','SUS')
+             WHERE tipo IN ('L','L8','LC','VAC','SUS','DLE')
              AND fecha_inicio BETWEEN ? AND ?
              AND estado IN ('programado','activo')"
         );

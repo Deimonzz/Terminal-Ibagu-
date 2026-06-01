@@ -1619,8 +1619,8 @@ async function guardarTurnoEspecial(e) {
         return;
     }
 
-    // L, L8, LC, VAC, SUS, ADM, ADMM, ADMT → dias_especiales.php
-    const tiposDiasEspeciales = ['L','L8','LC','VAC','SUS','ADM','ADMM','ADMT'];
+    // L, L8, LC, VAC, SUS, DLE, MLE, ADM, ADMM, ADMT → dias_especiales.php
+    const tiposDiasEspeciales = ['L','L8','LC','VAC','SUS','DLE','MLE','ADM','ADMM','ADMT'];
     const esDiaEspecial = tiposDiasEspeciales.includes(tipo);
 
     const datos = { 
@@ -2290,7 +2290,7 @@ async function cargarGrillaMensual() {
             idx[tid][f].push(t);
         });
 
-        // Agregar días especiales (L, VAC, SUS, LC, L8) como entradas con tipo_especial
+        // Agregar días especiales (L, VAC, SUS, LC, L8, DLE, MLE) como entradas con tipo_especial
         if (dataDiasEsp.success && dataDiasEsp.data) {
             dataDiasEsp.data.forEach(de => {
                 if (!['programado','activo'].includes(de.estado)) return;
@@ -5635,6 +5635,8 @@ async function nuevoDiaEspecial() {
             <option value="LC">LC — Libre cumpleaños</option>
             <option value="VAC">VAC — Vacaciones</option>
             <option value="SUS">SUS — Suspensión</option>
+            <option value="DLE">DLE — Día Libre Elecciones</option>
+            <option value="MLE">MLE — Medio Día Libre Elecciones</option>
           </select>
         </div>
         <div class="form-grid">

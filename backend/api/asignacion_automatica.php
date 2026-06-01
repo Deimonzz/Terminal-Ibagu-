@@ -108,7 +108,7 @@ try {
                 $stmtT->execute([':fi' => $fechaInicio, ':ff' => $fechaFin]);
                 $turnosEliminados = $stmtT->rowCount();
                 
-                $stmtL = $db->prepare("DELETE FROM dias_especiales WHERE fecha_inicio BETWEEN :fi AND :ff AND tipo IN ('L','L8','LC','VAC','SUS','ADMM','ADMT','ADM')");
+                $stmtL = $db->prepare("DELETE FROM dias_especiales WHERE fecha_inicio BETWEEN :fi AND :ff AND tipo IN ('L','L8','LC','VAC','SUS','DLE','ADMM','ADMT','ADM')");
                 $stmtL->execute([':fi' => $fechaInicio, ':ff' => $fechaFin]);
                 $libresEliminados = $stmtL->rowCount();
                 
@@ -176,7 +176,7 @@ try {
             $stmtT->execute([':fi' => $fechaInicio, ':ff' => $fechaFin]);
             $turnosEliminados = $stmtT->rowCount();
 
-            $sqlL = "DELETE FROM dias_especiales WHERE fecha_inicio BETWEEN :fi AND :ff AND tipo IN ('L','L8','LC','VAC','SUS','ADMM','ADMT','ADM')";
+            $sqlL = "DELETE FROM dias_especiales WHERE fecha_inicio BETWEEN :fi AND :ff AND tipo IN ('L','L8','LC','VAC','SUS','DLE','ADMM','ADMT','ADM')";
             $stmtL = $db->prepare($sqlL);
             $stmtL->execute([':fi' => $fechaInicio, ':ff' => $fechaFin]);
             $libresEliminados = $stmtL->rowCount();
