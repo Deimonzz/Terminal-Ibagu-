@@ -14,10 +14,10 @@ if ($isRender) {
     define('DB_PORT', '5432');
 } else {
     // ========== CONFIGURACIÓN PARA LOCAL (XAMPP - MySQL) ==========
-    define('DB_HOST', '127.0.0.1');
-    define('DB_NAME', 'gestion_turnos_db');
-    define('DB_USER', 'root');
-    define('DB_PASS', '');
+    define('DB_HOST', 'sql300.infinityfree.com');
+    define('DB_NAME', 'if0_42018119_gestion_turnos');
+    define('DB_USER', 'if0_42018119');
+    define('DB_PASS', 'UObmwULK5bhn');
     define('DB_DRIVER', 'mysql');
     define('DB_PORT', '3306');
 }
