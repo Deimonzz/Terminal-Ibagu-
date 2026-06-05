@@ -271,6 +271,25 @@ class Incapacidades {
     }
     
     
+    //Eliminar incapacidad
+
+    public function eliminar($id) {
+        try {
+            $incapacidad = $this->obtenerPorId($id);
+            if (!$incapacidad) {
+                return ['success' => false, 'message' => 'Incapacidad no encontrada'];
+            }
+
+            $stmt = $this->db->prepare("DELETE FROM incapacidades WHERE id = :id");
+            $stmt->execute([':id' => $id]);
+
+            return ['success' => true, 'message' => 'Incapacidad eliminada'];
+        } catch (PDOException $e) {
+            return ['success' => false, 'message' => 'Error al eliminar: ' . $e->getMessage()];
+        }
+    }
+
+
     //Cancelar turnos en rango de fechas
     
     private function cancelarTurnosEnRango($trabajador_id, $fecha_inicio, $fecha_fin) {

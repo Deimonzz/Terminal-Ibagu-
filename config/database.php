@@ -1,26 +1,29 @@
 <?php
-// database.php - Este archivo funciona en LOCAL y en RENDER
+// database.php - Configuración para LOCAL y PRODUCCIÓN (MySQL)
 
 // Detectar automáticamente el entorno
-$isRender = getenv('RENDER') !== false || getenv('DB_HOST_RENDER') !== false;
+// Usa la variable de entorno APP_ENV. Por defecto usa LOCAL
+$appEnv = getenv('APP_ENV') ?: 'LOCAL';
+$isProduction = strtoupper($appEnv) === 'PRODUCTION';
 
-if ($isRender) {
-    // ========== CONFIGURACIÓN PARA RENDER (PostgreSQL) ==========
-    define('DB_HOST', getenv('DB_HOST_RENDER') ?: 'dpg-d7keg17avr4c73c8au2g-a');
-    define('DB_NAME', getenv('DB_NAME_RENDER') ?: 'gestion_turnos_vxle');
-    define('DB_USER', getenv('DB_USER_RENDER') ?: 'gestion_turnos_vxle_user');
-    define('DB_PASS', getenv('DB_PASS_RENDER') ?: 'mB1w3VK1c8NHwr500RzPOlr34sw1cb4g');
-    define('DB_DRIVER', 'pgsql');
-    define('DB_PORT', '5432');
+if ($isProduction) {
+    // ========== CONFIGURACIÓN PARA PRODUCCIÓN (MySQL) ==========
+    define('DB_HOST', getenv('DB_HOST') ?: 'sql300.infinityfree.com');
+    define('DB_NAME', getenv('DB_NAME') ?: 'if0_42018119_gestion_turnos');
+    define('DB_USER', getenv('DB_USER') ?: 'if0_42018119');
+    define('DB_PASS', getenv('DB_PASS') ?: 'UObmwULK5bhn');
+    define('DB_PORT', getenv('DB_PORT') ?: '3306');
 } else {
     // ========== CONFIGURACIÓN PARA LOCAL (XAMPP - MySQL) ==========
-    define('DB_HOST', 'sql300.infinityfree.com');
-    define('DB_NAME', 'if0_42018119_gestion_turnos');
-    define('DB_USER', 'if0_42018119');
-    define('DB_PASS', 'UObmwULK5bhn');
-    define('DB_DRIVER', 'mysql');
-    define('DB_PORT', '3306');
+    define('DB_HOST', getenv('DB_HOST') ?: 'localhost');
+    define('DB_NAME', getenv('DB_NAME') ?: 'gestion_turnos_db');
+    define('DB_USER', getenv('DB_USER') ?: 'root');
+    define('DB_PASS', getenv('DB_PASS') ?: '');
+    define('DB_PORT', getenv('DB_PORT') ?: '3306');
 }
+
+// Driver (MySQL para ambos ambientes)
+define('DB_DRIVER', 'mysql');
 
 define('DB_CHARSET', 'utf8mb4');
 
@@ -32,12 +35,8 @@ class Database {
 
     private function __construct() {
         try {
-            // Construir DSN según el driver
-            if (DB_DRIVER === 'pgsql') {
-                $dsn = "pgsql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME;
-            } else {
-                $dsn = "mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
-            }
+            // Conectar a MySQL
+            $dsn = "mysql:host=" . DB_HOST . ";port=" . DB_PORT . ";dbname=" . DB_NAME . ";charset=" . DB_CHARSET;
             
             $this->connection = new PDO($dsn, DB_USER, DB_PASS, [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
@@ -45,8 +44,8 @@ class Database {
                 PDO::ATTR_EMULATE_PREPARES => false
             ]);
         } catch (PDOException $e) {
-            $isRender = getenv('RENDER') !== false;
-            $errorMsg = $isRender ? 'Error de conexión con la base de datos' : 'Error de conexión: ' . $e->getMessage();
+            $isProduction = strtoupper(getenv('APP_ENV') ?: 'LOCAL') === 'PRODUCTION';
+            $errorMsg = $isProduction ? 'Error de conexión con la base de datos' : 'Error de conexión: ' . $e->getMessage();
             die(json_encode(['success' => false, 'message' => $errorMsg]));
         }
     }
@@ -65,17 +64,10 @@ class Database {
     public static function hasColumn($table, $column) {
         try {
             $db = self::getInstance()->getConnection();
-            if (DB_DRIVER === 'pgsql') {
-                $sql = "SELECT COUNT(*) FROM information_schema.columns 
-                        WHERE table_name = :table 
-                        AND column_name = :column 
-                        AND table_schema = ANY (current_schemas(false))";
-            } else {
-                $sql = "SELECT COUNT(*) FROM information_schema.columns 
-                        WHERE table_schema = DATABASE() 
-                        AND table_name = :table 
-                        AND column_name = :column";
-            }
+            $sql = "SELECT COUNT(*) FROM information_schema.columns 
+                    WHERE table_schema = DATABASE() 
+                    AND table_name = :table 
+                    AND column_name = :column";
             $stmt = $db->prepare($sql);
             $stmt->execute([':table' => $table, ':column' => $column]);
             return (int)$stmt->fetchColumn() > 0;
@@ -104,62 +96,43 @@ class Database {
             $column = substr($column, 9);
         }
 
-        if (DB_DRIVER === 'pgsql') {
-            return "STRING_AGG(" . ($distinct ? 'DISTINCT ' : '') . "CAST($column AS VARCHAR), '$separator')";
-        }
-
         return "GROUP_CONCAT(" . ($distinct ? 'DISTINCT ' : '') . "$column SEPARATOR '$separator')";
     }
 
     public static function currentDate() {
-        return DB_DRIVER === 'pgsql' ? 'CURRENT_DATE' : 'CURDATE()';
+        return 'CURDATE()';
     }
 
     public static function year($column) {
-        return DB_DRIVER === 'pgsql' ? "EXTRACT(YEAR FROM $column)" : "YEAR($column)";
+        return "YEAR($column)";
     }
+    
     public static function month($column) {
-        return DB_DRIVER === 'pgsql' ? "EXTRACT(MONTH FROM $column)" : "MONTH($column)";
+        return "MONTH($column)";
     }
 
     public static function day($column) {
-        return DB_DRIVER === 'pgsql' ? "EXTRACT(DAY FROM $column)" : "DAY($column)";
+        return "DAY($column)";
     }
 
     public static function dateFormat($column, $format) {
-        if (DB_DRIVER === 'pgsql') {
-            $format = str_replace(
-                ['%d', '%m', '%Y', '%y', '%H', '%i', '%s'],
-                ['DD', 'MM', 'YYYY', 'YY', 'HH24', 'MI', 'SS'],
-                $format
-            );
-            return "TO_CHAR($column, '$format')";
-        }
         return "DATE_FORMAT($column, '$format')";
     }
+    
     public static function dateDiff($date1, $date2) {
-        if (DB_DRIVER === 'pgsql') {
-            return "(($date1)::date - ($date2)::date)";
-        }
         return "DATEDIFF($date1, $date2)";
     }
 
     public static function ifNull($column, $default) {
-        if (DB_DRIVER === 'pgsql') {
-            return "COALESCE($column, '$default')";
-        }
         return "IFNULL($column, '$default')";
     }
 
     public static function concat(...$parts) {
-        if (DB_DRIVER === 'pgsql') {
-            return implode(" || ", $parts);
-        }
         return "CONCAT(" . implode(", ", $parts) . ")";
     }
 
     public static function now() {
-        return DB_DRIVER === 'pgsql' ? 'CURRENT_TIMESTAMP' : 'NOW()';
+        return 'NOW()';
     }
 }
 
