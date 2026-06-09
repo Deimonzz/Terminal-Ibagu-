@@ -3093,136 +3093,314 @@ async function exportarMesExcel() {
 
     ws1['!rows'] = ws1_data.map((_, i) => ({ hpt: i === 0 ? 24 : 15 }));
 
-    // ── Hoja 2: Grilla trabajador × día ─────────────────────────────────
+    // ── Hoja 2: Vista Mensual (replica grilla visual de la app) ───────────
     const resTrab = await fetch(API_BASE + 'trabajadores.php');
-    const dataTrab = await resTrab.json();
-    let trabajadores = (dataTrab.success ? dataTrab.data : []).filter(t => t.activo);
+    const resDiasEspXls = await fetch(API_BASE + 'dias_especiales.php?fecha_inicio=' + primerDia + '&fecha_fin=' + ultimoDia);
+    const resIncXls     = await fetch(API_BASE + 'incapacidades.php?fecha_inicio='   + primerDia + '&fecha_fin=' + ultimoDia);
+    const dataTrab       = await resTrab.json();
+    const dataDiasEspXls = await resDiasEspXls.json();
+    const dataIncXls     = await resIncXls.json();
 
-    // Agregar supervisores que no estén en la lista de trabajadores
-    supervisores.forEach(s => {
-      if (!trabajadores.find(t => t.id === s.trabajador_id)) {
-        trabajadores.push({
-          id: s.trabajador_id,
-          nombre: s.trabajador,
-          activo: 1
-        });
-      }
+    let trabajadores = (dataTrab.success ? dataTrab.data : []).filter(t => t.activo);
+    trabajadores.sort((a, b) => {
+      const aSup = String(a.cargo || '').toLowerCase() === 'supervisor';
+      const bSup = String(b.cargo || '').toLowerCase() === 'supervisor';
+      if (aSup !== bSup) return aSup ? -1 : 1;
+      return a.nombre.localeCompare(b.nombre, 'es', { sensitivity: 'base' });
     });
-    
-    trabajadores = trabajadores.sort((a,b) => a.nombre.localeCompare(b.nombre));
 
     const diasMesGrilla = [];
     const totalDias = new Date(anio, mes, 0).getDate();
     for (let d = 1; d <= totalDias; d++) {
       const dt = new Date(anio, mes - 1, d);
-      diasMesGrilla.push({ num: d, fecha: dt.toISOString().split('T')[0], dia: ['D','L','M','X','J','V','S'][dt.getDay()] });
+      const dow = dt.getDay(); // 0=dom,6=sab
+      diasMesGrilla.push({
+        num:    d,
+        fecha:  dt.toISOString().split('T')[0],
+        dia:    ['D','L','M','X','J','V','S'][dow],
+        esFin:  dow === 0 || dow === 6
+      });
     }
 
-    // Índice de turnos por trabajador y fecha
-    const idx = {};
+    // ── Construir índice igual que la grilla visual ──────────────────────
+    const idxXls = {};
+
+    // Turnos normales
     turnos.forEach(t => {
-      const tid = t.trabajador_id;
-      const f   = t.fecha;
-      if (!idx[tid]) idx[tid] = {};
-      if (!idx[tid][f]) idx[tid][f] = [];
-      idx[tid][f].push(t);
+      const tid = t.trabajador_id, f = t.fecha;
+      if (!idxXls[tid]) idxXls[tid] = {};
+      if (!idxXls[tid][f]) idxXls[tid][f] = [];
+      idxXls[tid][f].push(t);
     });
 
-    // Agregar supervisores al índice
-    supervisores.forEach(s => {
-      const tid = s.trabajador_id;
-      const f   = s.fecha;
-      if (!idx[tid]) idx[tid] = {};
-      if (!idx[tid][f]) idx[tid][f] = [];
-      idx[tid][f].push({
-        tipo_especial: 'SUP',
-        hora_inicio: s.hora_inicio,
-        hora_fin: s.hora_fin
+    // Días especiales expandidos (L, VAC, SUS, LC, L8, ADM, ADMM, ADMT)
+    if (dataDiasEspXls.success && dataDiasEspXls.data) {
+      dataDiasEspXls.data.forEach(de => {
+        if (!['programado','activo'].includes(de.estado)) return;
+        const inicio = new Date(de.fecha_inicio + 'T00:00:00');
+        const fin    = de.fecha_fin ? new Date(de.fecha_fin + 'T00:00:00') : new Date(inicio);
+        for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
+          const f   = d.toISOString().split('T')[0];
+          const tid = de.trabajador_id;
+          if (!idxXls[tid]) idxXls[tid] = {};
+          if (!idxXls[tid][f]) idxXls[tid][f] = [];
+          if (!idxXls[tid][f].some(x => x.tipo_especial === de.tipo)) {
+            idxXls[tid][f].push({ tipo_especial: de.tipo, descripcion: de.descripcion || '' });
+          }
+        }
       });
+    }
+
+    // Incapacidades expandidas
+    if (dataIncXls.success && dataIncXls.data) {
+      dataIncXls.data.forEach(inc => {
+        if (inc.estado !== 'activa') return;
+        const inicio = new Date(inc.fecha_inicio + 'T00:00:00');
+        const fin    = new Date(inc.fecha_fin    + 'T00:00:00');
+        const tid    = inc.trabajador_id;
+        for (let d = new Date(inicio); d <= fin; d.setDate(d.getDate() + 1)) {
+          const f = d.toISOString().split('T')[0];
+          if (!idxXls[tid]) idxXls[tid] = {};
+          if (!idxXls[tid][f]) idxXls[tid][f] = [];
+          if (!idxXls[tid][f].some(x => x.tipo_especial === 'INC')) {
+            idxXls[tid][f].push({ tipo_especial: 'INC', descripcion: inc.tipo || 'Incapacidad' });
+          }
+        }
+      });
+    }
+
+    // Supervisores
+    supervisores.forEach(s => {
+      const tid = s.trabajador_id, f = s.fecha;
+      if (!idxXls[tid]) idxXls[tid] = {};
+      if (!idxXls[tid][f]) idxXls[tid][f] = [];
+      if (!idxXls[tid][f].some(x => x.tipo_especial === 'SUP')) {
+        idxXls[tid][f].push({
+          tipo_especial: 'SUP',
+          descripcion: (s.hora_inicio||'').substring(0,5) + '→' + (s.hora_fin||'').substring(0,5)
+        });
+      }
     });
 
-    const hdrGrilla = ['Trabajador', ...diasMesGrilla.map(d => d.num + '\n' + d.dia)];
+    // ── Paleta de colores (mismos que la grilla visual) ─────────────────
+    const PAL = {
+      T1:   { fill: { fgColor: { rgb: 'D1ECF1' } }, font: '0C5460' },
+      T2:   { fill: { fgColor: { rgb: 'FFF3CD' } }, font: '856404' },
+      T3:   { fill: { fgColor: { rgb: '1A1A2E' } }, font: 'E0E0E0' },
+      L4:   { fill: { fgColor: { rgb: 'E2D9F3' } }, font: '6F42C1' },
+      L:    { fill: { fgColor: { rgb: 'CCE5FF' } }, font: '004085' },
+      L8:   { fill: { fgColor: { rgb: 'CCE5FF' } }, font: '004085' },
+      LC:   { fill: { fgColor: { rgb: 'B8DAFF' } }, font: '003580' },
+      VAC:  { fill: { fgColor: { rgb: 'D4EDDA' } }, font: '155724' },
+      SUS:  { fill: { fgColor: { rgb: 'FFF3CD' } }, font: '856404' },
+      INC:  { fill: { fgColor: { rgb: 'F8D7DA' } }, font: '721C24' },
+      ADMM: { fill: { fgColor: { rgb: 'FDE8D8' } }, font: '7D3800' },
+      ADMT: { fill: { fgColor: { rgb: 'FDE8D8' } }, font: '7D3800' },
+      ADM:  { fill: { fgColor: { rgb: 'FDE8D8' } }, font: '7D3800' },
+      SUP:  { fill: { fgColor: { rgb: 'F3E8FF' } }, font: '6B21A8' },
+      TNR:  { fill: { fgColor: { rgb: 'DC3545' } }, font: 'FFFFFF' },
+      FIN:  { fill: { fgColor: { rgb: 'E8F5E9' } }, font: '1B5E20' }, // fin de semana vacío
+      ALT0: { fill: { fgColor: { rgb: 'FFFFFF' } }, font: '212529' },
+      ALT1: { fill: { fgColor: { rgb: 'F8F9FA' } }, font: '212529' },
+      HDR:  { fill: { fgColor: { rgb: '025B2D' } }, font: 'FFFFFF' },
+      HDR2: { fill: { fgColor: { rgb: '495057' } }, font: 'FFFFFF' },
+      HDRFIN: { fill: { fgColor: { rgb: 'C8E6C9' } }, font: '1B5E20' },
+      TODAY: { fill: { fgColor: { rgb: 'FFF176' } }, font: '333333' },
+    };
+
+    const hoy = new Date().toISOString().split('T')[0];
+    const borderThin = {
+      top:    { style: 'thin', color: { rgb: 'DEE2E6' } },
+      bottom: { style: 'thin', color: { rgb: 'DEE2E6' } },
+      left:   { style: 'thin', color: { rgb: 'DEE2E6' } },
+      right:  { style: 'thin', color: { rgb: 'DEE2E6' } }
+    };
+    const borderFin = {
+      top:    { style: 'thin',   color: { rgb: 'A5D6A7' } },
+      bottom: { style: 'thin',   color: { rgb: 'A5D6A7' } },
+      left:   { style: 'thin',   color: { rgb: 'A5D6A7' } },
+      right:  { style: 'medium', color: { rgb: 'A5D6A7' } }
+    };
+    const cCenter = { horizontal: 'center', vertical: 'center', wrapText: true };
+    const cLeft   = { horizontal: 'left',   vertical: 'center' };
+
+    // Helper: obtener etiqueta y paleta para una asignación
+    function getCelda(a) {
+      if (a.tipo_especial) {
+        if (a.estado === 'no_presentado') return { etiqueta: 'TNR', pal: PAL.TNR };
+        const esAutoL = a.tipo_especial === 'L' && (a.descripcion||'').startsWith('AUTO:');
+        const etiqueta = a.tipo_especial === 'SUP'
+          ? (a.descripcion || 'SUP')
+          : esAutoL ? 'L⚡' : a.tipo_especial;
+        const pal = esAutoL
+          ? { fill: { fgColor: { rgb: 'FD7E14' } }, font: 'FFFFFF' }
+          : (PAL[a.tipo_especial] || { fill: { fgColor: { rgb: 'E9ECEF' } }, font: '495057' });
+        return { etiqueta, pal };
+      }
+      const orig = Number(a.numero_turno) || 0;
+      const base = orig === 4 ? 1 : orig === 5 ? 2 : orig;
+      const etiqueta = orig >= 4
+        ? String(base) + (a.puesto_codigo||'') + 'L4'
+        : String(base) + (a.puesto_codigo||'');
+      const pal = orig >= 4 ? PAL.L4
+                : base === 1 ? PAL.T1
+                : base === 2 ? PAL.T2
+                : base === 3 ? PAL.T3
+                : { fill: { fgColor: { rgb: 'E9ECEF' } }, font: '495057' };
+      return { etiqueta, pal };
+    }
+
+    // ── Armar datos de la hoja ───────────────────────────────────────────
+    // Fila 0: título
+    // Fila 1: encabezados (Trabajador | 1\nL | 2\nM | ...)
+    const hdrRow = ['Trabajador', ...diasMesGrilla.map(d => d.num + '\n' + d.dia)];
     const ws2_data = [
-      [mesNombre + ' ' + anio + ' — Vista mensual por trabajador', ...Array(totalDias).fill('')],
-      hdrGrilla
+      [mesNombre + ' ' + anio + ' — Vista Mensual por Trabajador', ...Array(totalDias).fill('')],
+      hdrRow
     ];
     const merges2 = [{ s: { r: 0, c: 0 }, e: { r: 0, c: totalDias } }];
 
+    // Una fila por trabajador — cada celda = etiquetas unidas por "/"
     trabajadores.forEach(trab => {
       const fila = [trab.nombre];
       diasMesGrilla.forEach(d => {
-        const asigs = (idx[trab.id] && idx[trab.id][d.fecha]) || [];
+        const asigs = (idxXls[trab.id] && idxXls[trab.id][d.fecha]) || [];
         if (asigs.length === 0) {
           fila.push('');
         } else {
-          const etiq = asigs.map(a => {
-            if (a.tipo_especial === 'SUP') {
-              return (formatoHora((a.hora_inicio||'').substring(0,5)) + '-' + formatoHora((a.hora_fin||'').substring(0,5)));
-            } else if (a.tipo_especial) {
-              return a.tipo_especial;
-            }
-            const orig = Number(a.numero_turno) || 0;
-            const base = orig === 4 ? 1 : orig === 5 ? 2 : orig;
-            return orig >= 4 ? String(base) + (a.puesto_codigo||'') + 'L4' : String(base) + (a.puesto_codigo||'');
-          }).join('/');
-          fila.push(etiq);
+          fila.push(asigs.map(a => getCelda(a).etiqueta).join('/'));
         }
       });
-      // Solo agregar filas que tengan al menos una asignación
-      if (fila.some((cell, i) => i > 0 && cell !== '')) {
-        ws2_data.push(fila);
-      }
+      if (fila.some((c, i) => i > 0 && c !== '')) ws2_data.push(fila);
     });
 
     const ws2 = XLSX.utils.aoa_to_sheet(ws2_data);
     ws2['!merges'] = merges2;
-    ws2['!cols'] = [{ wch: 28 }, ...Array(totalDias).fill({ wch: 12 })];
+    ws2['!cols']   = [{ wch: 26 }, ...diasMesGrilla.map(d => ({ wch: d.esFin ? 7 : 9 }))];
+    ws2['!rows']   = ws2_data.map((_, i) => ({ hpt: i <= 1 ? 22 : 16 }));
 
-    const colsG = ['A', ...diasMes.map((_, i) => {
-      const n = i + 1;
-      return n <= 25 ? String.fromCharCode(65 + n) : 'A' + String.fromCharCode(65 + n - 26);
-    })];
+    // Generar letras de columna (A, B, ... Z, AA, AB, ...)
+    const colLetras = ws2_data[0].map((_, ci) => {
+      if (ci === 0) return 'A';
+      if (ci <= 25) return String.fromCharCode(65 + ci);
+      return 'A' + String.fromCharCode(65 + ci - 26);
+    });
 
     ws2_data.forEach((row, ri) => {
-      colsG.forEach((col, ci) => {
+      colLetras.forEach((col, ci) => {
         const addr = col + (ri + 1);
         if (!ws2[addr]) ws2[addr] = { v: '', t: 's' };
 
         if (ri === 0) {
-          ws2[addr].s = { font: { bold: true, sz: 13, name: 'Arial', color: { rgb: 'FFFFFF' } }, fill: FILL_HDR, alignment: center };
-        } else if (ri === 1) {
-          const esFin = row[ci] && (String(row[ci]).endsWith('D') || String(row[ci]).endsWith('S'));
+          // Título
           ws2[addr].s = {
-            font: { bold: true, sz: 9, name: 'Arial', color: { rgb: esFin ? '1B5E20' : 'FFFFFF' } },
-            fill: ci === 0 ? { fgColor: { rgb: '495057' } } : (esFin ? { fgColor: { rgb: 'C8E6C9' } } : { fgColor: { rgb: '495057' } }),
-            alignment: center, border
+            font: { bold: true, sz: 13, name: 'Calibri', color: { rgb: PAL.HDR.font } },
+            fill: PAL.HDR.fill, alignment: cCenter
           };
-        } else {
-          const val = String(row[ci] || '');
-          let fill = ri % 2 === 0 ? FILL_ALT : { fgColor: { rgb: 'FFFFFF' } };
-          let fontColor = '212529';
+        } else if (ri === 1) {
+          // Encabezado de días
           if (ci === 0) {
-            ws2[addr].s = { font: { bold: true, sz: 9, name: 'Arial', color: { rgb: fontColor } }, fill, alignment: left, border };
+            ws2[addr].s = {
+              font: { bold: true, sz: 9, name: 'Calibri', color: { rgb: PAL.HDR2.font } },
+              fill: PAL.HDR2.fill, alignment: cLeft, border: borderThin
+            };
           } else {
-            const hdrDia = String(hdrGrilla[ci] || '');
-            const esFin = hdrDia.endsWith('D') || hdrDia.endsWith('S');
-            if (val.startsWith('1')) fill = FILL_T1;
-            else if (val.startsWith('2')) fill = FILL_T2;
-            else if (val.startsWith('3')) { fill = FILL_T3; fontColor = 'E0E0E0'; }
-            else if (val === 'SUP') { fill = { fgColor: { rgb: 'D4AF37' } }; fontColor = '212529'; }
-            else if (['L','ADMM','ADMT','ADM'].includes(val)) fill = FILL_ESP;
-            else if (esFin && !val) fill = { fgColor: { rgb: 'E8F5E9' } };
+            const dInfo = diasMesGrilla[ci - 1];
+            const esHoyCol = dInfo.fecha === hoy;
+            const esFin    = dInfo.esFin;
+            const hdrPal   = esHoyCol ? PAL.TODAY : esFin ? PAL.HDRFIN : PAL.HDR2;
+            ws2[addr].s = {
+              font: { bold: true, sz: 9, name: 'Calibri', color: { rgb: hdrPal.font } },
+              fill: hdrPal.fill, alignment: cCenter,
+              border: esFin ? borderFin : borderThin
+            };
+          }
+        } else {
+          // Filas de trabajadores
+          const altPal  = ri % 2 === 0 ? PAL.ALT1 : PAL.ALT0;
+          const val     = String(row[ci] || '');
+
+          if (ci === 0) {
+            // Columna nombre
+            ws2[addr].s = {
+              font: { bold: true, sz: 9, name: 'Calibri', color: { rgb: altPal.font } },
+              fill: altPal.fill, alignment: cLeft, border: borderThin
+            };
+          } else {
+            const dInfo = diasMesGrilla[ci - 1];
+            const asigs = (idxXls[trabajadores[ri - 2] && trabajadores[ri - 2].id]
+                          && idxXls[trabajadores[ri - 2].id][dInfo.fecha]) || [];
+
+            let cellFill = altPal.fill;
+            let cellFont = altPal.font;
+            let cellBold = false;
+
+            if (val === '') {
+              // Celda vacía: fin de semana con tinte verde suave
+              if (dInfo.esFin) cellFill = PAL.FIN.fill;
+            } else {
+              // Determinar color por la primera asignación
+              const primerA = asigs[0];
+              if (primerA) {
+                const { pal } = getCelda(primerA);
+                cellFill = pal.fill;
+                cellFont = pal.font;
+                cellBold = true;
+              }
+            }
 
             ws2[addr].s = {
-              font: { bold: false, sz: 8, name: 'Arial', color: { rgb: fontColor } },
-              fill, alignment: center, border
+              font: { bold: cellBold, sz: 8, name: 'Calibri', color: { rgb: cellFont } },
+              fill: cellFill,
+              alignment: cCenter,
+              border: dInfo.esFin ? borderFin : borderThin
             };
           }
         }
       });
     });
 
-    ws2['!rows'] = ws2_data.map((_, i) => ({ hpt: i <= 1 ? 20 : 14 }));
+    // ── Fila de leyenda debajo de la tabla ───────────────────────────────
+    const leyendaRow = ws2_data.length; // siguiente fila libre (0-indexed)
+    const leyendaItems = [
+      { label: 'T1 - Mañana',  pal: PAL.T1  },
+      { label: 'T2 - Tarde',   pal: PAL.T2  },
+      { label: 'T3 - Noche',   pal: PAL.T3  },
+      { label: 'L4',           pal: PAL.L4  },
+      { label: 'L - Libre',    pal: PAL.L   },
+      { label: 'VAC',          pal: PAL.VAC },
+      { label: 'INC',          pal: PAL.INC },
+      { label: 'SUS',          pal: PAL.SUS },
+      { label: 'ADM',          pal: PAL.ADM },
+      { label: 'SUP',          pal: PAL.SUP },
+      { label: 'TNR',          pal: PAL.TNR },
+    ];
+
+    // Fila vacía de separación
+    ws2['!rows'].push({ hpt: 6 });
+    ws2['!rows'].push({ hpt: 16 });
+
+    leyendaItems.forEach((item, li) => {
+      const colIdx = li;
+      const colL = colIdx === 0 ? 'A' : colIdx <= 25 ? String.fromCharCode(65 + colIdx) : 'A' + String.fromCharCode(65 + colIdx - 26);
+      const addrL = colL + (leyendaRow + 2); // +1 fila vacía +1 base-1
+      ws2[addrL] = {
+        v: item.label, t: 's',
+        s: {
+          font: { bold: true, sz: 8, name: 'Calibri', color: { rgb: item.pal.font } },
+          fill: item.pal.fill,
+          alignment: cCenter,
+          border: borderThin
+        }
+      };
+    });
+
+    // Actualizar rango de la hoja para incluir leyenda
+    const lastDataCol = colLetras[colLetras.length - 1];
+    const lastLeyCol  = leyendaItems.length <= 25
+      ? String.fromCharCode(65 + leyendaItems.length - 1)
+      : 'A' + String.fromCharCode(65 + leyendaItems.length - 26);
+    ws2['!ref'] = 'A1:' + lastDataCol + (leyendaRow + 2);
 
     // ── Hoja 3: Novedades del mes ────────────────────────────────────────
     const ws3_data = [

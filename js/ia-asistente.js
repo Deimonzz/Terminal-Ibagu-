@@ -60,46 +60,33 @@ function agregarMensaje(texto, esUsuario) {
 }
 
 function agregarBotonesAccion(bubble, texto) {
-    // Detectar sugerencias de acción en el texto
     const acciones = [];
 
     if (texto.includes('asignar') || texto.includes('Asignar')) {
         acciones.push({ texto: '📝 Ver interfaz de asignación', accion: () => window.location.href = '#asignar-turnos' });
     }
-
-    if (texto.includes('reporte') || texto.includes('Reporte') || texto.includes('📊')) {
-        acciones.push({ texto: '📊 Generar reporte completo', accion: () => enviarMensajeIA_direct('Genera un reporte detallado del estado actual') });
-    }
-
     if (texto.includes('equidad') || texto.includes('Equidad') || texto.includes('⚖️')) {
         acciones.push({ texto: '⚖️ Análisis detallado de equidad', accion: () => enviarMensajeIA_direct('Realiza un análisis completo de equidad en turnos') });
     }
-
     if (texto.includes('predicción') || texto.includes('Predicción') || texto.includes('🔮')) {
         acciones.push({ texto: '🔮 Ver predicciones semana', accion: () => enviarMensajeIA_direct('Predice problemas de cobertura para los próximos 7 días') });
     }
 
-    // Detectar links de descarga en el texto
-    const linkRegex = /\[([^\]]+)\]\(([^)]+reportes_export[^)]*)\)/g;
-    let match;
-    while ((match = linkRegex.exec(texto)) !== null) {
-        const label = match[1];
-        let url = match[2];
-        
-        // Si el URL ya es absoluto o comienza con http, usarlo tal cual
-        // Si no, asumir que es relativo desde la raíz (backend/api/...)
-        if (!url.startsWith('http') && !url.startsWith('/')) {
-            // Es una ruta relativa como "backend/api/reportes_export.php?..."
-            // Dejarla tal cual para que sea relativa desde la página actual
-        }
-        
-        acciones.push({ 
-            texto: label, 
-            accion: () => {
-                // Usar la URL tal cual (es relativa)
-                window.open(url, '_blank');
-            }
-        });
+    // Detectar comandos EXCEL embebidos en la respuesta
+    const excelRegex = /---EXCEL---\s*([\s\S]*?)---FIN EXCEL---/g;
+    let excelMatch;
+    while ((excelMatch = excelRegex.exec(texto)) !== null) {
+        try {
+            const cfg = JSON.parse(excelMatch[1].trim());
+            acciones.push({
+                texto: cfg.boton || '📥 Descargar Excel',
+                accion: () => generarExcelIA(cfg)
+            });
+        } catch(e) { console.warn('Excel cmd parse error:', e); }
+    }
+
+    if (acciones.length === 0 && (texto.includes('reporte') || texto.includes('Reporte') || texto.includes('📊'))) {
+        acciones.push({ texto: '📊 Generar reporte Excel', accion: () => enviarMensajeIA_direct('Genera el reporte en Excel con todos los datos del mes actual') });
     }
 
     if (acciones.length > 0) {
@@ -186,6 +173,229 @@ function extraerComandoIA(texto) {
     } catch (e) {
         console.warn('No se pudo parsear comando IA:', e);
         return null;
+    }
+}
+
+// ─── GENERADOR DE EXCEL INTELIGENTE ─────────────────────────────────────────
+async function generarExcelIA(cfg) {
+    const hoy    = new Date();
+    const mes    = cfg.mes    || (hoy.getMonth() + 1);
+    const anio   = cfg.anio   || hoy.getFullYear();
+    const MESES  = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const mesNom = MESES[mes - 1];
+    const primerDia = `${anio}-${String(mes).padStart(2,'0')}-01`;
+    const ultimoDia = new Date(anio, mes, 0).toISOString().split('T')[0];
+
+    agregarMensaje(`⏳ Generando Excel "${cfg.titulo || cfg.tipo}"...`, false);
+
+    try {
+        const [rTurnos, rTrab, rDiasEsp, rInc] = await Promise.all([
+            fetch(API_BASE + 'turnos.php?fecha_inicio=' + primerDia + '&fecha_fin=' + ultimoDia).then(r => r.json()),
+            fetch(API_BASE + 'trabajadores.php').then(r => r.json()),
+            fetch(API_BASE + 'dias_especiales.php?fecha_inicio=' + primerDia + '&fecha_fin=' + ultimoDia).then(r => r.json()).catch(() => ({success:false})),
+            fetch(API_BASE + 'incapacidades.php?fecha_inicio=' + primerDia + '&fecha_fin=' + ultimoDia).then(r => r.json()).catch(() => ({success:false}))
+        ]);
+
+        const todosTurnos   = rTurnos.success  ? (rTurnos.data  || []) : [];
+        const turnos        = todosTurnos.filter(t => t.estado !== 'cancelado');
+        const trabajadores  = (rTrab.success   ? rTrab.data    : []).filter(t => t.activo);
+        const diasEsp       = rDiasEsp.success ? (rDiasEsp.data || []) : [];
+        const incapacidades = rInc.success     ? (rInc.data    || []) : [];
+
+        const wb = XLSX.utils.book_new();
+
+        const HDR    = { font:{bold:true,sz:12,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'025B2D'}}, alignment:{horizontal:'center',vertical:'center'} };
+        const SUBHDR = { font:{bold:true,sz:10,color:{rgb:'FFFFFF'}}, fill:{fgColor:{rgb:'495057'}}, alignment:{horizontal:'center',vertical:'center'}, border:{top:{style:'thin',color:{rgb:'DEE2E6'}},bottom:{style:'thin',color:{rgb:'DEE2E6'}},left:{style:'thin',color:{rgb:'DEE2E6'}},right:{style:'thin',color:{rgb:'DEE2E6'}}} };
+        const CELDA  = (ri) => ({ font:{sz:9,name:'Calibri'}, fill:{fgColor:{rgb: ri%2===0?'F8F9FA':'FFFFFF'}}, alignment:{horizontal:'left',vertical:'center'}, border:{top:{style:'thin',color:{rgb:'DEE2E6'}},bottom:{style:'thin',color:{rgb:'DEE2E6'}},left:{style:'thin',color:{rgb:'DEE2E6'}},right:{style:'thin',color:{rgb:'DEE2E6'}}} });
+        const NUM    = (ri) => ({ ...CELDA(ri), alignment:{horizontal:'center',vertical:'center'} });
+        const WARN   = { font:{bold:true,sz:9,color:{rgb:'721C24'}}, fill:{fgColor:{rgb:'F8D7DA'}}, alignment:{horizontal:'center',vertical:'center'}, border:{top:{style:'thin',color:{rgb:'F5C6CB'}},bottom:{style:'thin',color:{rgb:'F5C6CB'}},left:{style:'thin',color:{rgb:'F5C6CB'}},right:{style:'thin',color:{rgb:'F5C6CB'}}} };
+        const OK     = { font:{bold:true,sz:9,color:{rgb:'155724'}}, fill:{fgColor:{rgb:'D4EDDA'}}, alignment:{horizontal:'center',vertical:'center'}, border:{top:{style:'thin',color:{rgb:'C3E6CB'}},bottom:{style:'thin',color:{rgb:'C3E6CB'}},left:{style:'thin',color:{rgb:'C3E6CB'}},right:{style:'thin',color:{rgb:'C3E6CB'}}} };
+        const MED    = { font:{bold:true,sz:9,color:{rgb:'856404'}}, fill:{fgColor:{rgb:'FFF3CD'}}, alignment:{horizontal:'center',vertical:'center'}, border:{top:{style:'thin',color:{rgb:'FFE083'}},bottom:{style:'thin',color:{rgb:'FFE083'}},left:{style:'thin',color:{rgb:'FFE083'}},right:{style:'thin',color:{rgb:'FFE083'}}} };
+        const TNR_ST = { font:{bold:true,sz:9,color:{rgb:'721C24'}}, fill:{fgColor:{rgb:'F8D7DA'}}, alignment:{horizontal:'center',vertical:'center'}, border:{top:{style:'thin',color:{rgb:'F5C6CB'}},bottom:{style:'thin',color:{rgb:'F5C6CB'}},left:{style:'thin',color:{rgb:'F5C6CB'}},right:{style:'thin',color:{rgb:'F5C6CB'}}} };
+
+        function colLetrasArr(n) {
+            return Array.from({length: n}, (_, i) =>
+                i === 0 ? 'A' : i <= 25 ? String.fromCharCode(65+i) : 'A'+String.fromCharCode(65+i-26));
+        }
+        function setSheet(ws, data, cols, rowH, merges) {
+            ws['!cols'] = cols;
+            ws['!rows'] = rowH || data.map(() => ({hpt:15}));
+            if (merges) ws['!merges'] = merges;
+        }
+
+        const titulo = cfg.titulo || `Reporte ${mesNom} ${anio}`;
+        const DIAS_SEMANA = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
+
+        // ── EQUIDAD ──────────────────────────────────────────────────────────
+        if (cfg.tipo === 'equidad' || cfg.tipo === 'general') {
+            const cT={}, cN={}, cL={};
+            trabajadores.forEach(t => { cT[t.id]=0; cN[t.id]=0; cL[t.id]=0; });
+            turnos.forEach(t => { if(cT[t.trabajador_id]!==undefined){ cT[t.trabajador_id]++; if(Number(t.numero_turno)===3) cN[t.trabajador_id]++; }});
+            diasEsp.filter(d => ['L','L8','LC'].includes(d.tipo)).forEach(d => { if(cL[d.trabajador_id]!==undefined) cL[d.trabajador_id]++; });
+            const prom = turnos.length / Math.max(trabajadores.length,1);
+            const rows = [[titulo,'','','','',''],[`Período: ${primerDia} al ${ultimoDia}`,'','','','',''],['','','','','',''],['Trabajador','Turnos','Turnos noche','Días libres','vs Promedio','Estado']];
+            const merges = [{s:{r:0,c:0},e:{r:0,c:5}},{s:{r:1,c:0},e:{r:1,c:5}}];
+            [...trabajadores].sort((a,b)=>(cT[b.id]||0)-(cT[a.id]||0)).forEach(t => {
+                const ct=cT[t.id]||0, dif=ct-Math.round(prom);
+                rows.push([t.nombre,ct,cN[t.id]||0,cL[t.id]||0,(dif>=0?'+':'')+dif,ct===0?'Sin asignar':dif>3?'Exceso':dif<-3?'Déficit':'Equilibrado']);
+            });
+            rows.push(['','','','','','']);
+            rows.push([`Promedio: ${prom.toFixed(1)} turnos/trabajador`,'','','','','']);
+            const ws=XLSX.utils.aoa_to_sheet(rows); const cls=colLetrasArr(6);
+            rows.forEach((row,ri) => cls.forEach((col,ci) => {
+                const addr=col+(ri+1); if(!ws[addr]) ws[addr]={v:row[ci]??'',t:'s'};
+                if(ri===0||ri===1) ws[addr].s=HDR;
+                else if(ri===3) ws[addr].s=SUBHDR;
+                else if(ri>3&&row[0]){ const e=row[5]; if(ci===5) ws[addr].s=e==='Sin asignar'?WARN:e==='Exceso'?MED:e==='Déficit'?WARN:OK; else if(ci===4){ const v=Number(row[4]); ws[addr].s=v>3?MED:v<-3?WARN:NUM(ri); } else ws[addr].s=ci===0?{...CELDA(ri),font:{bold:true,sz:9}}:NUM(ri); }
+            }));
+            setSheet(ws,rows,[{wch:30},{wch:10},{wch:14},{wch:12},{wch:14},{wch:12}],rows.map((_,i)=>({hpt:i===0||i===1?18:i===3?16:14})),merges);
+            XLSX.utils.book_append_sheet(wb,ws,'Equidad');
+        }
+
+        // ── COBERTURA ─────────────────────────────────────────────────────────
+        if (cfg.tipo === 'cobertura' || cfg.tipo === 'general') {
+            const SOLO_NOCHE=new Set(['V1','V2','C','D3','F6','F11']);
+            const PUESTOS_ALL=['D1','D2','D3','D4','F4','F5','F6','F11','F14','F15','V1','V2','C','G'];
+            const totalDias=new Date(anio,mes,0).getDate();
+            const rows=[[titulo+' — Cobertura diaria','','','',''],[`Período: ${primerDia} al ${ultimoDia}`,'','','',''],['','','','',''],['Fecha','Día','Cubiertos','Faltantes','%']];
+            const merges=[{s:{r:0,c:0},e:{r:0,c:4}},{s:{r:1,c:0},e:{r:1,c:4}}];
+            let totC=0,totE=0;
+            for(let d=1;d<=totalDias;d++){
+                const fecha=`${anio}-${String(mes).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const dt=new Date(fecha+'T00:00:00');
+                const cub=new Set(turnos.filter(t=>t.fecha===fecha).map(t=>{const n=Number(t.numero_turno);const b=[4,9].includes(n)?1:[5,10].includes(n)?2:n;return b+'|'+(t.puesto_codigo||'');}));
+                let esp=0,falt=[];
+                PUESTOS_ALL.forEach(p=>[1,2,3].forEach(tn=>{if(tn===3&&!SOLO_NOCHE.has(p))return;esp++;if(!cub.has(tn+'|'+p))falt.push('T'+tn+p);}));
+                totC+=(esp-falt.length);totE+=esp;
+                const pct=Math.round(((esp-falt.length)/esp)*100);
+                rows.push([fecha,DIAS_SEMANA[dt.getDay()],esp-falt.length,falt.length>0?falt.slice(0,8).join(', ')+(falt.length>8?' +'+(falt.length-8):''):'—',pct+'%']);
+            }
+            rows.push(['','','','','']);
+            rows.push(['TOTAL MES','',totC,totE-totC,Math.round((totC/totE)*100)+'%']);
+            const ws2=XLSX.utils.aoa_to_sheet(rows); const cls2=colLetrasArr(5);
+            rows.forEach((row,ri)=>cls2.forEach((col,ci)=>{
+                const addr=col+(ri+1);if(!ws2[addr])ws2[addr]={v:row[ci]??'',t:'s'};
+                if(ri===0||ri===1)ws2[addr].s=HDR; else if(ri===3)ws2[addr].s=SUBHDR;
+                else if(ri>3&&row[0]){if(ci===4){const p=parseInt(row[4]);ws2[addr].s=p<50?WARN:p<80?MED:OK;}else ws2[addr].s=ci<=1?NUM(ri):CELDA(ri);}
+            }));
+            setSheet(ws2,rows,[{wch:12},{wch:6},{wch:12},{wch:55},{wch:8}],rows.map((_,i)=>({hpt:i===0||i===1?18:i===3?16:14})),merges);
+            XLSX.utils.book_append_sheet(wb,ws2,'Cobertura');
+        }
+
+        // ── INCAPACIDADES ─────────────────────────────────────────────────────
+        if (cfg.tipo === 'incapacidades' || cfg.tipo === 'general') {
+            const rows=[[titulo+' — Incapacidades','','','','',''],[`Período: ${primerDia} al ${ultimoDia}`,'','','','',''],['','','','','',''],['Trabajador','Tipo','Desde','Hasta','Días','Estado']];
+            const merges=[{s:{r:0,c:0},e:{r:0,c:5}},{s:{r:1,c:0},e:{r:1,c:5}}];
+            if(incapacidades.length===0){rows.push(['Sin incapacidades en el período','','','','','']);}
+            else incapacidades.forEach(i=>rows.push([i.trabajador||i.trabajador_nombre||'?',i.tipo||i.tipo_incapacidad||'General',i.fecha_inicio,i.fecha_fin,i.dias_incapacidad||'?',i.estado||'activa']));
+            const ws3=XLSX.utils.aoa_to_sheet(rows);const cls3=colLetrasArr(6);
+            rows.forEach((row,ri)=>cls3.forEach((col,ci)=>{
+                const addr=col+(ri+1);if(!ws3[addr])ws3[addr]={v:row[ci]??'',t:'s'};
+                if(ri===0||ri===1)ws3[addr].s=HDR;else if(ri===3)ws3[addr].s=SUBHDR;
+                else if(ri>3){if(ci===5)ws3[addr].s=row[5]==='activa'?WARN:OK;else ws3[addr].s=CELDA(ri);}
+            }));
+            setSheet(ws3,rows,[{wch:30},{wch:16},{wch:12},{wch:12},{wch:8},{wch:12}],rows.map((_,i)=>({hpt:i===0||i===1?18:i===3?16:14})),merges);
+            XLSX.utils.book_append_sheet(wb,ws3,'Incapacidades');
+        }
+
+        // ── NOCTURNO ──────────────────────────────────────────────────────────
+        if (cfg.tipo === 'nocturno') {
+            const cN={};trabajadores.forEach(t=>{cN[t.id]=0;});
+            turnos.filter(t=>Number(t.numero_turno)===3).forEach(t=>{if(cN[t.trabajador_id]!==undefined)cN[t.trabajador_id]++;});
+            const rows=[[titulo+' — Turnos Nocturnos','','',''],[`Período: ${primerDia} al ${ultimoDia}`,'','',''],['','','',''],['Trabajador','Turnos noche','Estado','Observación']];
+            const merges=[{s:{r:0,c:0},e:{r:0,c:3}},{s:{r:1,c:0},e:{r:1,c:3}}];
+            [...trabajadores].sort((a,b)=>(cN[b.id]||0)-(cN[a.id]||0)).forEach(t=>{
+                const cn=cN[t.id]||0;rows.push([t.nombre,cn,cn>7?'Exceso':cn===0?'Sin noche':'Normal',cn>7?'Supera límite de 7/mes':cn===0?'No asignado a noche':'']);
+            });
+            const ws4=XLSX.utils.aoa_to_sheet(rows);const cls4=colLetrasArr(4);
+            rows.forEach((row,ri)=>cls4.forEach((col,ci)=>{
+                const addr=col+(ri+1);if(!ws4[addr])ws4[addr]={v:row[ci]??'',t:'s'};
+                if(ri===0||ri===1)ws4[addr].s=HDR;else if(ri===3)ws4[addr].s=SUBHDR;
+                else if(ri>3){if(ci===2)ws4[addr].s=row[2]==='Exceso'?WARN:row[2]==='Sin noche'?MED:OK;else ws4[addr].s=ci===1?NUM(ri):CELDA(ri);}
+            }));
+            setSheet(ws4,rows,[{wch:30},{wch:14},{wch:12},{wch:36}],rows.map((_,i)=>({hpt:i===0||i===1?18:i===3?16:14})),merges);
+            XLSX.utils.book_append_sheet(wb,ws4,'Nocturnos');
+        }
+
+        // ── TNR — Turnos No Realizados ────────────────────────────────────────
+        if (cfg.tipo === 'tnr') {
+            const tnrTurnos = todosTurnos.filter(t => t.estado === 'no_presentado');
+            const rows=[[titulo+' — Turnos No Realizados (TNR)','','','','',''],[`Período: ${primerDia} al ${ultimoDia}`,'','','','',''],['','','','','',''],['Trabajador','Fecha','Día','Puesto','Turno','Área']];
+            const merges=[{s:{r:0,c:0},e:{r:0,c:5}},{s:{r:1,c:0},e:{r:1,c:5}}];
+            if(tnrTurnos.length===0){
+                rows.push(['Sin turnos no realizados en el período','','','','','']);
+            } else {
+                tnrTurnos.sort((a,b)=>{const nc=(a.trabajador||'').localeCompare(b.trabajador||'');return nc!==0?nc:a.fecha.localeCompare(b.fecha);});
+                tnrTurnos.forEach(t=>{
+                    const origN=Number(t.numero_turno);const numN=[4,9].includes(origN)?1:[5,10].includes(origN)?2:origN;const esL4=[4,5,9,10].includes(origN);
+                    const dt=new Date(t.fecha+'T00:00:00');
+                    rows.push([t.trabajador||'?',t.fecha,DIAS_SEMANA[dt.getDay()],t.puesto_codigo||'?','T'+numN+(esL4?' L4':''),t.area||'?']);
+                });
+                // Resumen por trabajador
+                rows.push(['','','','','','']);
+                rows.push(['── RESUMEN POR TRABAJADOR ──','','','','','']);
+                rows.push(['Trabajador','Total TNR','','','','']);
+                const porTrab={};
+                tnrTurnos.forEach(t=>{porTrab[t.trabajador||'?']=(porTrab[t.trabajador||'?']||0)+1;});
+                Object.entries(porTrab).sort((a,b)=>b[1]-a[1]).forEach(([nombre,total])=>rows.push([nombre,total,'','','','']));
+                rows.push(['','','','','','']);
+                rows.push(['TOTAL TNR EN EL PERÍODO',tnrTurnos.length,'','','','']);
+            }
+            const ws5=XLSX.utils.aoa_to_sheet(rows);const cls5=colLetrasArr(6);
+            rows.forEach((row,ri)=>cls5.forEach((col,ci)=>{
+                const addr=col+(ri+1);if(!ws5[addr])ws5[addr]={v:row[ci]??'',t:'s'};
+                if(ri===0||ri===1)ws5[addr].s=HDR;
+                else if(ri===3)ws5[addr].s=SUBHDR;
+                else if(ri>3){
+                    const isResumen=String(row[0]).startsWith('──')||row[0]==='TOTAL TNR EN EL PERÍODO';
+                    const isSubHdr=row[0]==='Trabajador'&&row[1]==='Total TNR';
+                    if(isResumen)ws5[addr].s={...SUBHDR,fill:{fgColor:{rgb:'343A40'}}};
+                    else if(isSubHdr)ws5[addr].s=SUBHDR;
+                    else if(ci===1&&typeof row[1]==='number')ws5[addr].s=TNR_ST;
+                    else ws5[addr].s=CELDA(ri);
+                }
+            }));
+            setSheet(ws5,rows,[{wch:30},{wch:12},{wch:6},{wch:10},{wch:10},{wch:16}],rows.map((_,i)=>({hpt:i===0||i===1?18:i===3?16:14})),merges);
+            XLSX.utils.book_append_sheet(wb,ws5,'TNR');
+        }
+
+        // ── TRABAJADOR individual ─────────────────────────────────────────────
+        if (cfg.tipo === 'trabajador' && cfg.trabajador_id) {
+            const tid=Number(cfg.trabajador_id);const trab=trabajadores.find(t=>t.id===tid);
+            const misTurnos=turnos.filter(t=>Number(t.trabajador_id)===tid);
+            const misLibres=diasEsp.filter(d=>Number(d.trabajador_id)===tid);
+            const misInc=incapacidades.filter(i=>Number(i.trabajador_id)===tid);
+            const nombre=trab?trab.nombre:'Trabajador #'+tid;
+            const rows=[[`${nombre} — ${mesNom} ${anio}`,'','','',''],[`Período: ${primerDia} al ${ultimoDia}`,'','','',''],['','','','',''],['Fecha','Tipo','Puesto','Turno','Estado']];
+            const merges=[{s:{r:0,c:0},e:{r:0,c:4}},{s:{r:1,c:0},e:{r:1,c:4}}];
+            misTurnos.sort((a,b)=>a.fecha.localeCompare(b.fecha)).forEach(t=>{
+                const n=Number(t.numero_turno);const b2=[4,9].includes(n)?1:[5,10].includes(n)?2:n;
+                rows.push([t.fecha,'Turno T'+b2+([4,5,9,10].includes(n)?' L4':''),t.puesto_codigo||'?',t.turno_nombre||'?',t.estado]);
+            });
+            misLibres.forEach(d=>rows.push([d.fecha_inicio,d.tipo,'—','—',d.estado]));
+            misInc.forEach(i=>rows.push([i.fecha_inicio+'→'+i.fecha_fin,'INCAPACIDAD','—','—',i.estado]));
+            if(rows.length===4)rows.push(['Sin registros en este período','','','','']);
+            const ws6=XLSX.utils.aoa_to_sheet(rows);const cls6=colLetrasArr(5);
+            rows.forEach((row,ri)=>cls6.forEach((col,ci)=>{
+                const addr=col+(ri+1);if(!ws6[addr])ws6[addr]={v:row[ci]??'',t:'s'};
+                if(ri===0||ri===1)ws6[addr].s=HDR;else if(ri===3)ws6[addr].s=SUBHDR;else if(ri>3)ws6[addr].s=CELDA(ri);
+            }));
+            setSheet(ws6,rows,[{wch:24},{wch:16},{wch:10},{wch:20},{wch:14}],rows.map((_,i)=>({hpt:i===0||i===1?18:i===3?16:14})),merges);
+            XLSX.utils.book_append_sheet(wb,ws6,nombre.substring(0,28));
+        }
+
+        if (wb.SheetNames.length === 0) {
+            agregarMensaje('⚠️ No hay datos suficientes para generar el reporte.', false);
+            return;
+        }
+
+        const fileName = `Reporte_IA_${cfg.tipo||'general'}_${mesNom}_${anio}.xlsx`;
+        XLSX.writeFile(wb, fileName);
+        agregarMensaje(`✅ Excel **"${titulo}"** descargado (${wb.SheetNames.join(', ')})`, false);
+
+    } catch(err) {
+        console.error('generarExcelIA error:', err);
+        agregarMensaje('❌ Error generando Excel: ' + err.message, false);
     }
 }
 
@@ -714,7 +924,13 @@ FUNCIONES:
 
 COMANDOS EJECUTABLES:
 1. ASIGNAR turno: Responde con ---COMANDO--- {"action":"assign","params":{"trabajador_id":12,"turno_id":1,"fecha":"2026-05-25","puesto_trabajo_id":5}} ---FIN COMANDO---
-2. GENERAR reporte: Incluye links como [📥 Descargar Excel](backend/api/reportes_export.php?action=turnos_mes&formato=excel)
+2. GENERAR EXCEL: Cuando el usuario pida reporte, Excel, TNR, incapacidades, cobertura, equidad o descarga de datos, responde SIEMPRE con:
+---EXCEL---
+{"tipo":"tnr","mes":5,"anio":2026,"titulo":"TNR Mayo 2026","boton":"📥 Descargar Excel TNR"}
+---FIN EXCEL---
+Tipos: "equidad" (turnos/trabajador+libres), "cobertura" (puestos sin cubrir día a día), "incapacidades", "nocturno" (turnos noche), "trabajador" (historial individual, requiere "trabajador_id":12), "general" (equidad+cobertura+incapacidades), "tnr" (trabajadores que NO se presentaron a su turno).
+Detecta el mes/año que pide el usuario. Si dice "mayo" usa mes:5, "el mes pasado" calcula el mes anterior, "este mes" usa el mes actual.
+SIEMPRE incluye el bloque ---EXCEL--- cuando el usuario pida TNR, ausentismo, no presentados, reporte, datos o descarga.
 
 REGLAS DE TURNOS:
 • Turno 1: 06-14h | Turno 2: 14-22h | Turno 3: 22-06h (SOLO V1,V2,C,D3,F6,F11)
