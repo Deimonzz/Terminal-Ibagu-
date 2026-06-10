@@ -12,13 +12,13 @@ if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     exit();
 }
 
-// ─── API KEY desde .env (nunca hardcodear aquí) ──────────────────────────────
+// ─── API KEY ─────────────────────────────────────────────────────────────────
 $envFile = dirname(dirname(__DIR__)) . '/.env';
 if (file_exists($envFile)) {
     foreach (file($envFile, FILE_IGNORE_NEW_LINES | FILE_SKIP_EMPTY_LINES) as $line) {
         if (strpos(trim($line), '#') === 0) continue;
-        [$key, $val] = array_map('trim', explode('=', $line, 2));
-        $_ENV[$key] = $val;
+        $parts = explode('=', $line, 2);
+        if (count($parts) === 2) $_ENV[trim($parts[0])] = trim($parts[1]);
     }
 }
 $GROQ_API_KEY = $_ENV['GROQ_API_KEY'] ?? getenv('GROQ_API_KEY') ?? '';
@@ -27,8 +27,8 @@ if (!$GROQ_API_KEY) {
     echo json_encode(['error' => 'API key no configurada. Revisa el archivo .env']);
     exit();
 }
-// ─────────────────────────────────────────────────────────────────────────────
 
+// ─── Leer body ───────────────────────────────────────────────────────────────
 $input = file_get_contents('php://input');
 $datos = json_decode($input, true);
 
@@ -41,25 +41,27 @@ if (!$datos || !isset($datos['messages'])) {
 $systemPrompt = $datos['system'] ?? '';
 $mensajes     = $datos['messages'];
 
-// Construir mensajes en formato OpenAI (compatible con Groq)
-$messages = [];
+// ─── Truncar system prompt si es muy largo (límite seguro Groq ~24k chars) ───
+$MAX_SYSTEM = 24000;
+if (strlen($systemPrompt) > $MAX_SYSTEM) {
+    $systemPrompt = substr($systemPrompt, 0, $MAX_SYSTEM) . "\n... (contexto truncado)";
+}
 
+// ─── Construir mensajes ───────────────────────────────────────────────────────
+$messages = [];
 if ($systemPrompt) {
     $messages[] = ['role' => 'system', 'content' => $systemPrompt];
 }
-
 foreach ($mensajes as $m) {
-    $messages[] = [
-        'role'    => $m['role'], // 'user' o 'assistant'
-        'content' => $m['content']
-    ];
+    $messages[] = ['role' => $m['role'], 'content' => $m['content']];
 }
 
+// ─── Llamar a Groq ────────────────────────────────────────────────────────────
 $payload = json_encode([
-    'model'       => 'llama-3.3-70b-versatile', // Modelo de Groq optimizado
+    'model'       => 'llama-3.3-70b-versatile',
     'messages'    => $messages,
-    'max_tokens'  => 1024,  // Respuestas concisas pero completas
-    'temperature' => 0.6,   // Más determinístico, menos errático
+    'max_tokens'  => 1024,
+    'temperature' => 0.6,
 ]);
 
 $ch = curl_init('https://api.groq.com/openai/v1/chat/completions');
@@ -82,24 +84,37 @@ curl_close($ch);
 
 if ($curlError) {
     http_response_code(500);
-    echo json_encode(['error' => 'curl error: ' . $curlError]);
+    echo json_encode(['error' => 'Error de conexión: ' . $curlError]);
     exit();
 }
 
 $groqData = json_decode($response, true);
 
+// ─── Respuesta exitosa ────────────────────────────────────────────────────────
 if (isset($groqData['choices'][0]['message']['content'])) {
-    $texto = $groqData['choices'][0]['message']['content'];
-    // Devolver en el mismo formato que espera ia-asistente.js
     echo json_encode([
-        'content' => [['type' => 'text', 'text' => $texto]]
+        'content' => [['type' => 'text', 'text' => $groqData['choices'][0]['message']['content']]]
     ]);
-} else {
-    http_response_code(500);
-    echo json_encode([
-        'error'    => 'Error de Groq',
-        'httpCode' => $httpCode,
-        'respuesta'=> $groqData
-    ]);
+    exit();
 }
-?>
+
+// ─── Error de Groq — devolver mensaje legible sin 500 ────────────────────────
+// Retornamos 200 con mensaje de error para que el JS lo muestre en el chat
+$errorMsg = $groqData['error']['message'] ?? 'Error desconocido de Groq';
+
+// Detectar error de tokens
+if (strpos($errorMsg, 'token') !== false || $httpCode === 413) {
+    $errorMsg = 'El contexto enviado es demasiado largo. Intenta una pregunta más específica.';
+}
+// Detectar rate limit
+if ($httpCode === 429) {
+    $errorMsg = 'Límite de solicitudes alcanzado. Espera unos segundos e intenta de nuevo.';
+}
+// Detectar API key inválida
+if ($httpCode === 401) {
+    $errorMsg = 'API key de Groq inválida o expirada.';
+}
+
+echo json_encode([
+    'content' => [['type' => 'text', 'text' => '⚠️ ' . $errorMsg]]
+]);
