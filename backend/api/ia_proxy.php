@@ -23,12 +23,11 @@ if (file_exists($envFile)) {
 }
 $GROQ_API_KEY = $_ENV['GROQ_API_KEY'] ?? getenv('GROQ_API_KEY') ?? '';
 if (!$GROQ_API_KEY) {
-    http_response_code(500);
-    echo json_encode(['error' => 'API key no configurada. Revisa el archivo .env']);
+    echo json_encode(['content' => [['type' => 'text', 'text' => '⚠️ API key de Groq no configurada.']]]);
     exit();
 }
 
-// ─── Leer body ───────────────────────────────────────────────────────────────
+// ─── Leer body ────────────────────────────────────────────────────────────────
 $input = file_get_contents('php://input');
 $datos = json_decode($input, true);
 
@@ -38,13 +37,10 @@ if (!$datos || !isset($datos['messages'])) {
     exit();
 }
 
+// ─── Truncar system prompt (límite seguro ~24k chars) ─────────────────────────
 $systemPrompt = $datos['system'] ?? '';
-$mensajes     = $datos['messages'];
-
-// ─── Truncar system prompt si es muy largo (límite seguro Groq ~24k chars) ───
-$MAX_SYSTEM = 24000;
-if (strlen($systemPrompt) > $MAX_SYSTEM) {
-    $systemPrompt = substr($systemPrompt, 0, $MAX_SYSTEM) . "\n... (contexto truncado)";
+if (strlen($systemPrompt) > 24000) {
+    $systemPrompt = substr($systemPrompt, 0, 24000) . "\n... (contexto truncado)";
 }
 
 // ─── Construir mensajes ───────────────────────────────────────────────────────
@@ -52,11 +48,10 @@ $messages = [];
 if ($systemPrompt) {
     $messages[] = ['role' => 'system', 'content' => $systemPrompt];
 }
-foreach ($mensajes as $m) {
+foreach (($datos['messages'] ?? []) as $m) {
     $messages[] = ['role' => $m['role'], 'content' => $m['content']];
 }
 
-// ─── Llamar a Groq ────────────────────────────────────────────────────────────
 $payload = json_encode([
     'model'       => 'llama-3.3-70b-versatile',
     'messages'    => $messages,
@@ -64,33 +59,72 @@ $payload = json_encode([
     'temperature' => 0.6,
 ]);
 
-$ch = curl_init('https://api.groq.com/openai/v1/chat/completions');
-curl_setopt_array($ch, [
-    CURLOPT_RETURNTRANSFER => true,
-    CURLOPT_POST           => true,
-    CURLOPT_POSTFIELDS     => $payload,
-    CURLOPT_HTTPHEADER     => [
-        'Content-Type: application/json',
-        'Authorization: Bearer ' . $GROQ_API_KEY
-    ],
-    CURLOPT_TIMEOUT        => 60,
-    CURLOPT_SSL_VERIFYPEER => false,
-]);
+$groqUrl = 'https://api.groq.com/openai/v1/chat/completions';
+$headers = [
+    'Content-Type: application/json',
+    'Authorization: Bearer ' . $GROQ_API_KEY,
+];
 
-$response  = curl_exec($ch);
-$httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-$curlError = curl_error($ch);
-curl_close($ch);
+// ─── Intentar con curl primero, luego file_get_contents ───────────────────────
+$response  = false;
+$httpCode  = 0;
 
-if ($curlError) {
-    http_response_code(500);
-    echo json_encode(['error' => 'Error de conexión: ' . $curlError]);
+if (function_exists('curl_init')) {
+    $ch = curl_init($groqUrl);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_POST           => true,
+        CURLOPT_POSTFIELDS     => $payload,
+        CURLOPT_HTTPHEADER     => $headers,
+        CURLOPT_TIMEOUT        => 60,
+        CURLOPT_SSL_VERIFYPEER => false,
+        CURLOPT_SSL_VERIFYHOST => false,
+    ]);
+    $response  = curl_exec($ch);
+    $httpCode  = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    $curlError = curl_error($ch);
+    curl_close($ch);
+
+    if ($curlError || $response === false) {
+        $response = false; // fallback a file_get_contents
+    }
+}
+
+// Fallback: file_get_contents con stream_context
+if ($response === false && ini_get('allow_url_fopen')) {
+    $context = stream_context_create([
+        'http' => [
+            'method'  => 'POST',
+            'header'  => implode("\r\n", $headers),
+            'content' => $payload,
+            'timeout' => 60,
+            'ignore_errors' => true,
+        ],
+        'ssl' => [
+            'verify_peer'      => false,
+            'verify_peer_name' => false,
+        ]
+    ]);
+    $response = @file_get_contents($groqUrl, false, $context);
+    // Obtener HTTP code de los headers de respuesta
+    if (isset($http_response_header)) {
+        foreach ($http_response_header as $h) {
+            if (preg_match('/HTTP\/\d+\.\d+\s+(\d+)/', $h, $m)) {
+                $httpCode = (int)$m[1];
+            }
+        }
+    }
+}
+
+// Si ninguno funcionó
+if ($response === false || $response === '') {
+    echo json_encode(['content' => [['type' => 'text', 'text' => '⚠️ No se pudo conectar con Groq. Este hosting puede tener bloqueadas las conexiones externas. Considera mover el proxy a Render.']]]);
     exit();
 }
 
+// ─── Procesar respuesta ───────────────────────────────────────────────────────
 $groqData = json_decode($response, true);
 
-// ─── Respuesta exitosa ────────────────────────────────────────────────────────
 if (isset($groqData['choices'][0]['message']['content'])) {
     echo json_encode([
         'content' => [['type' => 'text', 'text' => $groqData['choices'][0]['message']['content']]]
@@ -98,22 +132,12 @@ if (isset($groqData['choices'][0]['message']['content'])) {
     exit();
 }
 
-// ─── Error de Groq — devolver mensaje legible sin 500 ────────────────────────
-// Retornamos 200 con mensaje de error para que el JS lo muestre en el chat
-$errorMsg = $groqData['error']['message'] ?? 'Error desconocido de Groq';
-
-// Detectar error de tokens
-if (strpos($errorMsg, 'token') !== false || $httpCode === 413) {
-    $errorMsg = 'El contexto enviado es demasiado largo. Intenta una pregunta más específica.';
-}
-// Detectar rate limit
-if ($httpCode === 429) {
-    $errorMsg = 'Límite de solicitudes alcanzado. Espera unos segundos e intenta de nuevo.';
-}
-// Detectar API key inválida
-if ($httpCode === 401) {
-    $errorMsg = 'API key de Groq inválida o expirada.';
-}
+// Error de Groq — mensaje legible
+$errorMsg = $groqData['error']['message'] ?? 'Error desconocido';
+if ($httpCode === 429)       $errorMsg = 'Límite de solicitudes alcanzado. Espera unos segundos.';
+if ($httpCode === 401)       $errorMsg = 'API key de Groq inválida o expirada.';
+if ($httpCode === 413 || strpos($errorMsg, 'token') !== false)
+                             $errorMsg = 'Contexto demasiado largo. Intenta una pregunta más específica.';
 
 echo json_encode([
     'content' => [['type' => 'text', 'text' => '⚠️ ' . $errorMsg]]
