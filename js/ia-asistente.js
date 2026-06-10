@@ -109,7 +109,10 @@ function enviarMensajeIA_direct(texto) {
 }
 
 function formatearMarkdown(texto) {
-    // Mejorar el formateo con más elementos visuales
+    // Limpiar bloques técnicos antes de mostrar
+    texto = texto.replace(/---EXCEL---[\s\S]*?---FIN EXCEL---/g, '');
+    texto = texto.replace(/---COMANDO---[\s\S]*?---FIN COMANDO---/g, '');
+    texto = texto.trim();
     return texto
         // Headers con mejor styling
         .replace(/^### (.+)$/gm, '<div class="ia-header-3"><i class="fas fa-info-circle"></i> $1</div>')
