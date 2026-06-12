@@ -126,7 +126,17 @@ try {
                 }
                 $resultado = $turnos->cancelar($id, $datos['motivo'] ?? null, $datos['usuario_id'] ?? null);
                 echo json_encode($resultado);
-            } else {
+            }
+            elseif ($action === 'eliminar') {
+                $id = $datos['id'] ?? null;
+                if (!$id) {
+                    echo json_encode(['success' => false, 'message' => 'ID requerido']);
+                    break;
+                }
+                $resultado = $turnos->eliminar($id);
+                echo json_encode($resultado); 
+            }
+            else {
                 $resultado = $turnos->asignar($datos);
                 echo json_encode($resultado);
             }
@@ -154,7 +164,7 @@ try {
             break;
             
         case 'DELETE':
-            $resultado = $turnos->cancelar($_GET['id'], 'Eliminado');
+            $resultado = $turnos->eliminar($_GET['id'], 'Eliminado');
             echo json_encode($resultado);
             break;
             

@@ -4348,7 +4348,7 @@ async function cambiarTurnoMensual(trabId, fecha, nombre, turnoAsigId, puestoCod
                 await fetch(API_BASE + 'turnos.php', {
                     method: 'POST',
                     headers: {'Content-Type':'application/json'},
-                    body: JSON.stringify({ action: 'cancelar', id: turnoAsigId })
+                    body: JSON.stringify({ action: 'eliminar', id: turnoAsigId })
                 });
             }
 
@@ -5392,7 +5392,7 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
           // Mover a otro puesto: cancelar el actual + crear en el nuevo
           await fetch(`${API_BASE}turnos.php`, {
             method: 'POST', headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ action: 'cancelar', id: turnoId })
+            body: JSON.stringify({ action: 'eliminar', id: turnoId })
           });
           const res = await fetch(`${API_BASE}turnos.php`, {
             method: 'POST', headers: {'Content-Type':'application/json'},

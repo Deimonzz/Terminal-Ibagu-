@@ -652,6 +652,23 @@ class TurnosAsignados {
             'message' => 'Turno cancelado'
         ];
     }
+
+    public function eliminar($id) {
+        try {
+            // Verificar que existe
+            $turno = $this->obtenerPorId($id);
+            if (!$turno) {
+                return ['success' => false, 'message' => 'Turno no encontrado'];
+            }
+
+            $stmt = $this->db->prepare("DELETE FROM turnos_asignados WHERE id = :id");
+            $stmt->execute([':id' => $id]);
+
+            return ['success' => true, 'message' => 'Turno eliminado'];
+        } catch (PDOException $e) {
+            return ['success' => false, 'message' => 'Error al eliminar: ' . $e->getMessage()];
+        }
+    }
     
     
     //Obtener turno por ID
