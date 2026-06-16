@@ -3,7 +3,7 @@
 
 // Detectar automáticamente el entorno
 // Usa la variable de entorno APP_ENV. Por defecto usa LOCAL
-$appEnv = getenv('APP_ENV') ?: 'PRODUCTION';
+$appEnv = getenv('APP_ENV') ?: 'ENV';
 $isProduction = strtoupper($appEnv) === 'PRODUCTION';
 
 if ($isProduction) {

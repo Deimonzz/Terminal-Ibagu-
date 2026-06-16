@@ -164,7 +164,7 @@ try {
             break;
             
         case 'DELETE':
-            $resultado = $turnos->eliminar($_GET['id'], 'Eliminado');
+            $resultado = $turnos->eliminar($_GET['id']);
             echo json_encode($resultado);
             break;
             
