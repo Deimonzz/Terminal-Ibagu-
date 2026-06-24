@@ -1058,6 +1058,7 @@ async function asignacionAutomaticaMes() {
     
     htmlContent += '<div class="alert alert-warning" style="margin-top: 1rem;">';
     htmlContent += '<strong>⚠️ Advertencia:</strong> Si ya existen turnos asignados para este mes, NO se sobrescribirán. Solo se llenarán los espacios vacíos.';
+    htmlContent += '<br><strong>Nota:</strong> Es necesario hacer la asignación automática varias veces, para cubrir la mayor cantidad de turnos posible.';
     htmlContent += '</div>';
     
     htmlContent += '<div class="form-actions">';

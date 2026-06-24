@@ -175,7 +175,6 @@ class Trabajadores {
                 ) as restricciones
                 FROM trabajadores t";
 
-        // Por defecto solo activos, pero se puede incluir inactivos mediante filtro
         if (empty($filtros['incluir_inactivos'])) {
             $sql .= " WHERE t.activo = true";
         } else {
@@ -278,7 +277,6 @@ class Trabajadores {
     }
 
     public function eliminar($id) {
-        // Verificar si tiene turnos asignados
         $sql = "SELECT COUNT(*) as count FROM turnos_asignados WHERE trabajador_id = :id";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':id' => $id]);
@@ -305,22 +303,14 @@ class Trabajadores {
         $sql = "UPDATE trabajadores SET activo = true WHERE id = :id";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':id' => $id]);
-
-        return [
-            'success' => true,
-            'message' => 'Trabajador activado'
-        ];
+        return ['success' => true, 'message' => 'Trabajador activado'];
     }
     
     public function desactivar($id) {
         $sql = "UPDATE trabajadores SET activo = false WHERE id = :id";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':id' => $id]);
-        
-        return [
-            'success' => true,
-            'message' => 'Trabajador desactivado'
-        ];
+        return ['success' => true, 'message' => 'Trabajador desactivado'];
     }
     
     public function obtenerRestricciones($trabajador_id) {
@@ -339,17 +329,13 @@ class Trabajadores {
         
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':id' => $trabajador_id]);
-        
         $resultados = $stmt->fetchAll();
         
-        // Post-procesar: si es restricción de puesto específico sin información del puesto, intentar obtenerla
         if (!empty($resultados) && $this->restriccionPuestoColumn) {
             foreach ($resultados as $key => $restriccion) {
                 if (isset($restriccion['tipo_restriccion']) && $restriccion['tipo_restriccion'] === 'puesto_especifico') {
-                    // Si no tiene info del puesto pero tiene el ID de puesto
                     if ((empty($restriccion['puesto_codigo']) && empty($restriccion['puesto_nombre'])) 
                         && !empty($restriccion[$this->restriccionPuestoColumn])) {
-                        
                         try {
                             $puesto = $this->getPuesto($restriccion[$this->restriccionPuestoColumn]);
                             if ($puesto) {
@@ -357,9 +343,7 @@ class Trabajadores {
                                 $resultados[$key]['puesto_codigo'] = $puesto['codigo'] ?? null;
                                 $resultados[$key]['puesto_nombre'] = $puesto['nombre'] ?? null;
                             }
-                        } catch (Exception $e) {
-                            // Silenciar errores de consulta individual
-                        }
+                        } catch (Exception $e) {}
                     }
                 }
             }
@@ -396,17 +380,13 @@ class Trabajadores {
         $sql .= " ORDER BY rt.fecha_inicio DESC";
         $stmt = $this->db->prepare($sql);
         $stmt->execute($params);
-        
         $resultados = $stmt->fetchAll();
         
-        // Post-procesar: si es restricción de puesto específico sin información del puesto, intentar obtenerla
         if (!empty($resultados) && $this->restriccionPuestoColumn) {
             foreach ($resultados as $key => $restriccion) {
                 if (isset($restriccion['tipo_restriccion']) && $restriccion['tipo_restriccion'] === 'puesto_especifico') {
-                    // Si no tiene info del puesto pero tiene el ID de puesto
                     if ((empty($restriccion['puesto_codigo']) && empty($restriccion['puesto_nombre'])) 
                         && !empty($restriccion[$this->restriccionPuestoColumn])) {
-                        
                         try {
                             $puesto = $this->getPuesto($restriccion[$this->restriccionPuestoColumn]);
                             if ($puesto) {
@@ -414,9 +394,7 @@ class Trabajadores {
                                 $resultados[$key]['puesto_codigo'] = $puesto['codigo'] ?? null;
                                 $resultados[$key]['puesto_nombre'] = $puesto['nombre'] ?? null;
                             }
-                        } catch (Exception $e) {
-                            // Silenciar errores de consulta individual
-                        }
+                        } catch (Exception $e) {}
                     }
                 }
             }
@@ -429,8 +407,6 @@ class Trabajadores {
         $columnName = $this->restriccionPuestoColumn;
         $puestoTrabId = $datos['puesto_trabajo_id'] ?? null;
         
-        // Si es una restricción de puesto_especifico y no se detectó columna,
-        // intentar agregar la columna dinámicamente
         if ($datos['tipo_restriccion'] === 'puesto_especifico' && $puestoTrabId && !$columnName) {
             $this->asegurarColumnaRestricciones();
             $columnName = Database::getColumnName('restricciones_trabajador', 'puesto_trabajo_id', 'puesto_id');
@@ -461,11 +437,6 @@ class Trabajadores {
             $stmt = $this->db->prepare($sql);
             $stmt->execute($params);
             
-            // Log si se agregó restricción de puesto_especifico
-            if ($datos['tipo_restriccion'] === 'puesto_especifico' && $puestoTrabId && $columnName) {
-                error_log("[Trabajadores::agregarRestriccion] ✅ Restricción puesto_especifico guardada: trabajador={$datos['trabajador_id']}, puesto=$puestoTrabId en columna=$columnName");
-            }
-            
             return [
                 'success' => true,
                 'id' => $this->db->lastInsertId(),
@@ -473,37 +444,25 @@ class Trabajadores {
             ];
         } catch (PDOException $e) {
             error_log("[Trabajadores::agregarRestriccion] Error: " . $e->getMessage());
-            return [
-                'success' => false,
-                'message' => 'Error: ' . $e->getMessage()
-            ];
+            return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
         }
     }
     
-    /**
-     * Asegurar que existe la columna puesto_trabajo_id en restricciones_trabajador
-     */
     private function asegurarColumnaRestricciones() {
         try {
             $columnExists = Database::hasColumn('restricciones_trabajador', 'puesto_trabajo_id') ||
                            Database::hasColumn('restricciones_trabajador', 'puesto_id');
+            if ($columnExists) return true;
             
-            if ($columnExists) {
-                return true; // Ya existe
-            }
-            
-            // Intentar crear la columna
             if (DB_DRIVER === 'pgsql') {
                 $sql = "ALTER TABLE restricciones_trabajador ADD COLUMN IF NOT EXISTS puesto_trabajo_id INTEGER";
             } else {
                 $sql = "ALTER TABLE `restricciones_trabajador` ADD COLUMN `puesto_trabajo_id` INT NULL AFTER `tipo_restriccion`";
             }
-            
             $this->db->exec($sql);
-            error_log("[Trabajadores::asegurarColumnaRestricciones] ✅ Columna puesto_trabajo_id creada");
             return true;
         } catch (Exception $e) {
-            error_log("[Trabajadores::asegurarColumnaRestricciones] Error al crear columna: " . $e->getMessage());
+            error_log("[Trabajadores::asegurarColumnaRestricciones] Error: " . $e->getMessage());
             return false;
         }
     }
@@ -512,8 +471,6 @@ class Trabajadores {
         $columnName = $this->restriccionPuestoColumn;
         $puestoTrabId = $datos['puesto_trabajo_id'] ?? null;
         
-        // Si es una restricción de puesto_especifico y no se detectó columna,
-        // intentar agregar la columna dinámicamente
         if ($datos['tipo_restriccion'] === 'puesto_especifico' && $puestoTrabId && !$columnName) {
             $this->asegurarColumnaRestricciones();
             $columnName = Database::getColumnName('restricciones_trabajador', 'puesto_trabajo_id', 'puesto_id');
@@ -547,22 +504,10 @@ class Trabajadores {
             }
             $stmt = $this->db->prepare($sql);
             $stmt->execute($params);
-            
-            // Log si se actualizó restricción de puesto_especifico
-            if ($datos['tipo_restriccion'] === 'puesto_especifico' && $puestoTrabId && $columnName) {
-                error_log("[Trabajadores::actualizarRestriccion] ✅ Restricción puesto_especifico actualizada: id=$id, puesto=$puestoTrabId en columna=$columnName");
-            }
-            
-            return [
-                'success' => true,
-                'message' => 'Restricción actualizada'
-            ];
+            return ['success' => true, 'message' => 'Restricción actualizada'];
         } catch (PDOException $e) {
             error_log("[Trabajadores::actualizarRestriccion] Error: " . $e->getMessage());
-            return [
-                'success' => false,
-                'message' => 'Error: ' . $e->getMessage()
-            ];
+            return ['success' => false, 'message' => 'Error: ' . $e->getMessage()];
         }
     }
     
@@ -570,11 +515,7 @@ class Trabajadores {
         $sql = "UPDATE restricciones_trabajador SET activa = false WHERE id = :id";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':id' => $id]);
-        
-        return [
-            'success' => true,
-            'message' => 'Restricción desactivada'
-        ];
+        return ['success' => true, 'message' => 'Restricción desactivada'];
     }
     
     public function puedeTrabajarNoche($trabajador_id, $fecha) {
@@ -584,14 +525,8 @@ class Trabajadores {
                 AND activa = true
                 AND :fecha >= fecha_inicio
                 AND (:fecha2 <= fecha_fin OR fecha_fin IS NULL)";
-        
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([
-            ':id' => $trabajador_id,
-            ':fecha' => $fecha,
-            ':fecha2' => $fecha
-        ]);
-        
+        $stmt->execute([':id' => $trabajador_id, ':fecha' => $fecha, ':fecha2' => $fecha]);
         $result = $stmt->fetch();
         return $result['count'] == 0;
     }
@@ -603,14 +538,8 @@ class Trabajadores {
                 AND activa = true
                 AND :fecha >= fecha_inicio
                 AND (:fecha2 <= fecha_fin OR fecha_fin IS NULL)";
-        
         $stmt = $this->db->prepare($sql);
-        $stmt->execute([
-            ':id' => $trabajador_id,
-            ':fecha' => $fecha,
-            ':fecha2' => $fecha
-        ]);
-        
+        $stmt->execute([':id' => $trabajador_id, ':fecha' => $fecha, ':fecha2' => $fecha]);
         $result = $stmt->fetch();
         return $result['count'] == 0;
     }
@@ -635,6 +564,140 @@ class Trabajadores {
             $disponibles = array_values(array_filter($disponibles, function ($t) use ($bloqueados) {
                 return !in_array($t['id'], $bloqueados);
             }));
+        }
+
+        return $disponibles;
+    }
+
+    /**
+     * Versión relajada de obtenerDisponibles para fallback de cobertura.
+     *
+     * Modos:
+     *  - 'ignorar_limite_noches': quita el HAVING COUNT(*) >= 7 para turno 3
+     *  - 'ignorar_consecutivo':   quita restricción T1↔T3 entre días consecutivos
+     *  - 'minimo':                solo bloquea incapacidad activa y día libre (último recurso)
+     */
+    public function obtenerDisponiblesRelajado($puesto_id, $turno_id, $fecha, $modo = 'minimo') {
+        $turno       = $this->getTurno($turno_id);
+        $numeroTurno = $turno['numero_turno'] ?? null;
+        $fechaSig    = date('Y-m-d', strtotime($fecha . ' +1 day'));
+        $fechaAnt    = date('Y-m-d', strtotime($fecha . ' -1 day'));
+        $fechaIniMes = date('Y-m-01', strtotime($fecha));
+        $fechaFinMes = date('Y-m-t',  strtotime($fecha));
+
+        // Bloqueos siempre activos (incapacidad + día libre + ya asignado hoy)
+        $sql = "SELECT DISTINCT t.id, t.nombre
+                FROM trabajadores t
+                WHERE t.activo = true
+                AND LOWER(COALESCE(t.cargo, '')) != 'supervisor'
+                AND t.id NOT IN (
+                    SELECT trabajador_id FROM turnos_asignados
+                    WHERE fecha = :fecha_assigned
+                    AND estado IN ('programado','activo')
+                )
+                AND t.id NOT IN (
+                    SELECT trabajador_id FROM incapacidades
+                    WHERE :fecha_inca BETWEEN fecha_inicio AND fecha_fin
+                    AND estado = 'activa'
+                )
+                AND t.id NOT IN (
+                    SELECT trabajador_id FROM dias_especiales
+                    WHERE tipo IN ('LC','L','L8','VAC','SUS','ADM','ADMM','ADMT')
+                    AND :fecha_lib BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
+                    AND estado IN ('programado','activo')
+                )";
+
+        $params = [
+            ':fecha_assigned' => $fecha,
+            ':fecha_inca'     => $fecha,
+            ':fecha_lib'      => $fecha,
+        ];
+
+        // Restricción no_turno_noche: se mantiene excepto en modo 'minimo'
+        if ($numeroTurno == 3 && $modo !== 'minimo') {
+            $sql .= "
+                AND t.id NOT IN (
+                    SELECT trabajador_id FROM restricciones_trabajador
+                    WHERE tipo_restriccion = 'no_turno_noche'
+                    AND activa = true
+                    AND :fecha_noche >= fecha_inicio
+                    AND (:fecha_noche2 <= fecha_fin OR fecha_fin IS NULL)
+                )";
+            $params[':fecha_noche']  = $fecha;
+            $params[':fecha_noche2'] = $fecha;
+        }
+
+        // Límite 7 noches: solo se aplica en modo 'ignorar_consecutivo' (no en los otros relajados)
+        if ($numeroTurno == 3 && $modo === 'ignorar_consecutivo') {
+            $sql .= "
+                AND t.id NOT IN (
+                    SELECT ta.trabajador_id FROM turnos_asignados ta
+                    INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
+                    WHERE ct.numero_turno = 3
+                    AND ta.fecha BETWEEN :mes_inicio AND :mes_fin
+                    AND ta.estado IN ('programado','activo')
+                    GROUP BY ta.trabajador_id
+                    HAVING COUNT(*) >= 7
+                )";
+            $params[':mes_inicio'] = $fechaIniMes;
+            $params[':mes_fin']    = $fechaFinMes;
+        }
+
+        // Restricción T3→T1: no asignar T3 si mañana tiene T1
+        // Se mantiene en 'ignorar_limite_noches', se quita en 'ignorar_consecutivo' y 'minimo'
+        if ($numeroTurno == 3 && $modo === 'ignorar_limite_noches') {
+            $sql .= "
+                AND t.id NOT IN (
+                    SELECT ta2.trabajador_id FROM turnos_asignados ta2
+                    INNER JOIN configuracion_turnos ct2 ON ta2.turno_id = ct2.id
+                    WHERE ta2.fecha = :fecha_next
+                    AND ct2.numero_turno = 1
+                    AND ta2.estado IN ('programado','activo')
+                )";
+            $params[':fecha_next'] = $fechaSig;
+        }
+
+        // Restricción T1→T3: no asignar T1 si ayer tuvo T3
+        // Se mantiene en 'ignorar_limite_noches', se quita en 'ignorar_consecutivo' y 'minimo'
+        if ($numeroTurno == 1 && $modo === 'ignorar_limite_noches') {
+            $sql .= "
+                AND t.id NOT IN (
+                    SELECT ta2.trabajador_id FROM turnos_asignados ta2
+                    INNER JOIN configuracion_turnos ct2 ON ta2.turno_id = ct2.id
+                    WHERE ta2.fecha = :fecha_prev
+                    AND ct2.numero_turno = 3
+                    AND ta2.estado IN ('programado','activo')
+                )";
+            $params[':fecha_prev'] = $fechaAnt;
+        }
+
+        $sql .= " ORDER BY t.nombre ASC";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $disponibles = $stmt->fetchAll();
+
+        // Restricciones de puesto: se aplican en todos los modos excepto 'minimo'
+        if ($modo !== 'minimo' && !empty($disponibles)) {
+            $puesto     = $this->getPuesto($puesto_id);
+            $bloqueados = [];
+            if ($puesto && $this->restriccionPuestoColumn) {
+                $bloqueados = array_merge($bloqueados,
+                    $this->obtenerTrabajadoresConRestriccionPuestoEspecifico($puesto_id, $fecha));
+            }
+            if ($puesto && !empty($puesto['requiere_fuerza_fisica'])) {
+                $bloqueados = array_merge($bloqueados,
+                    $this->obtenerTrabajadoresConRestriccionTipoFecha('no_fuerza_fisica', $fecha));
+            }
+            if ($puesto && !empty($puesto['requiere_movilidad'])) {
+                $bloqueados = array_merge($bloqueados,
+                    $this->obtenerTrabajadoresConRestriccionTipoFecha('movilidad_limitada', $fecha));
+            }
+            if (!empty($bloqueados)) {
+                $bloqueados  = array_unique($bloqueados);
+                $disponibles = array_values(array_filter($disponibles,
+                    fn($t) => !in_array($t['id'], $bloqueados)));
+            }
         }
 
         return $disponibles;
@@ -679,7 +742,6 @@ class Trabajadores {
 
     public function tieneTurnoNocheDiaAnterior($trabajador_id, $fecha) {
         $fechaAnterior = date('Y-m-d', strtotime($fecha . ' -1 day'));
-
         $sql = "SELECT COUNT(*) as count FROM turnos_asignados ta
                 INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
                 WHERE ta.trabajador_id = :id
@@ -694,7 +756,6 @@ class Trabajadores {
 
     public function tieneTurnoMananaDiaSiguiente($trabajador_id, $fecha) {
         $fechaSiguiente = date('Y-m-d', strtotime($fecha . ' +1 day'));
-
         $sql = "SELECT COUNT(*) as count FROM turnos_asignados ta
                 INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
                 WHERE ta.trabajador_id = :id
@@ -707,8 +768,6 @@ class Trabajadores {
         return (int)($row['count'] ?? 0) > 0;
     }
 
-    // Disponibles para L4: trabajadores activos sin L4 ese día, sin día libre/incapacidad
-    // Pueden tener turno normal (T1/T2/T3) — el L4 es compatible con ellos
     public function obtenerDisponiblesL4($puesto_id, $turno_id, $fecha) {
         $cacheKey = $fecha;
         if (!isset($this->disponiblesL4Cache[$cacheKey])) {

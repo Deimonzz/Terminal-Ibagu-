@@ -20,8 +20,6 @@ class AsignacionAutomatica {
 
     // ─────────────────────────────────────────────────────────────────────────
     // PREFETCH MASIVO
-    // Carga toda la información del mes en memoria con ~6 queries.
-    // Elimina las N×M×D queries individuales del método original.
     // ─────────────────────────────────────────────────────────────────────────
     private function prefetchDisponibilidadMes($mes, $anio) {
         $fechaInicio = sprintf('%04d-%02d-01', $anio, $mes);
@@ -29,14 +27,12 @@ class AsignacionAutomatica {
         $fechaFinExt = date('Y-m-d', strtotime($fechaFin    . ' +1 day'));
         $fechaIniExt = date('Y-m-d', strtotime($fechaInicio . ' -1 day'));
 
-        // 1. Trabajadores activos (no supervisores)
         $todosActivos = $this->db->query(
             "SELECT id, nombre FROM trabajadores
              WHERE activo = true AND LOWER(COALESCE(cargo,'')) != 'supervisor'
              ORDER BY nombre"
         )->fetchAll(PDO::FETCH_ASSOC);
 
-        // 2. Turnos ya asignados en el rango extendido
         $stmtTA = $this->db->prepare(
             "SELECT ta.trabajador_id, ta.fecha, ct.numero_turno
              FROM turnos_asignados ta
@@ -50,7 +46,6 @@ class AsignacionAutomatica {
             $asignadosPorDia[$row['fecha']][$row['trabajador_id']][] = (int)$row['numero_turno'];
         }
 
-        // 3. Incapacidades activas que se solapan con el mes
         $stmtI = $this->db->prepare(
             "SELECT trabajador_id, fecha_inicio, fecha_fin
              FROM incapacidades
@@ -60,7 +55,6 @@ class AsignacionAutomatica {
         $stmtI->execute([$fechaFin, $fechaInicio]);
         $incapacidades = $stmtI->fetchAll(PDO::FETCH_ASSOC);
 
-        // 4. Días especiales (libres, vacaciones, etc.)
         $stmtDE = $this->db->prepare(
             "SELECT trabajador_id, fecha_inicio,
                     COALESCE(fecha_fin, fecha_inicio) as fecha_fin
@@ -72,11 +66,7 @@ class AsignacionAutomatica {
         $stmtDE->execute([$fechaFin, $fechaInicio]);
         $diasEspeciales = $stmtDE->fetchAll(PDO::FETCH_ASSOC);
 
-        // 5. Restricciones de trabajadores vigentes en el mes
-        // Detectar qué columna existe (puesto_trabajo_id o puesto_id)
         $puestoCol = Database::getColumnName('restricciones_trabajador', 'puesto_trabajo_id', 'puesto_id');
-        
-        // Construir SQL ANTES de prepare (no dentro)
         $sqlRestriccion = "SELECT trabajador_id, tipo_restriccion,
                     " . ($puestoCol ? $puestoCol : "NULL") . " as puesto_trabajo_id,
                     fecha_inicio, fecha_fin
@@ -84,12 +74,10 @@ class AsignacionAutomatica {
              WHERE activa = true
              AND fecha_inicio <= ?
              AND (fecha_fin IS NULL OR fecha_fin >= ?)";
-        
         $stmtR = $this->db->prepare($sqlRestriccion);
         $stmtR->execute([$fechaFin, $fechaInicio]);
         $restricciones = $stmtR->fetchAll(PDO::FETCH_ASSOC);
 
-        // 6. Flags de puestos (fuerza física, movilidad)
         $stmtP = $this->db->prepare(
             "SELECT id, codigo, requiere_fuerza_fisica, requiere_movilidad
              FROM puestos_trabajo WHERE activo = TRUE"
@@ -100,7 +88,6 @@ class AsignacionAutomatica {
             $puestosFlags[$p['id']] = $p;
         }
 
-        // 7. Conteo de turnos noche del mes (límite 7 noches)
         $stmtN = $this->db->prepare(
             "SELECT ta.trabajador_id, COUNT(*) as cnt
              FROM turnos_asignados ta
@@ -128,24 +115,8 @@ class AsignacionAutomatica {
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // DISPONIBILIDAD — delega en Trabajadores para aplicar TODAS las restricciones
+    // DISPONIBILIDAD NORMAL
     // ─────────────────────────────────────────────────────────────────────────
-
-    /**
-     * Devuelve trabajadores disponibles para puesto+turnoId+fecha.
-     * Delega en Trabajadores::obtenerDisponibles() que aplica correctamente:
-     *   - turno ya asignado hoy
-     *   - incapacidad activa
-     *   - días especiales (libre, vacaciones, etc.)
-     *   - restricción no_turno_noche
-     *   - restricción puesto_especifico
-     *   - restricción no_fuerza_fisica (si el puesto la requiere)
-     *   - restricción movilidad_limitada (si el puesto la requiere)
-     *   - límite 7 turnos noche por mes
-     *   - no T1 si tuvo T3 el día anterior
-     *   - no T3 si tiene T1 el día siguiente
-     * Luego ordena por menor carga (balanceo equitativo).
-     */
     private function getDisponibles($puestoId, $turnoId, $fecha, &$ctx, &$conteoTurnos) {
         $disponibles = $this->trabajadores->obtenerDisponibles($puestoId, $turnoId, $fecha);
         $numeroTurno = $ctx['turnoIdANumero'][$turnoId] ?? 0;
@@ -164,17 +135,55 @@ class AsignacionAutomatica {
         return $disponibles;
     }
 
-    /**
-     * Disponibles para L4: delega en Trabajadores::obtenerDisponiblesL4() que aplica:
-     *   - ya tiene L4 hoy
-     *   - incapacidad activa, días especiales
-     *   - restricción puesto_especifico
-     *   - restricción no_turno_noche
-     *   - restricción no_fuerza_fisica / movilidad_limitada según el puesto
-     */
     private function getDisponiblesL4($puestoId, $fecha, &$ctx) {
         $turnoId = $ctx['puestosL4TurnoId'][$puestoId] ?? null;
         return $this->trabajadores->obtenerDisponiblesL4($puestoId, $turnoId, $fecha);
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // DISPONIBILIDAD CON FALLBACK POR NIVELES (mejora de cobertura)
+    //
+    // Nivel 1 — Normal: todos los filtros activos
+    // Nivel 2 — ignorar_limite_noches: quita HAVING COUNT(*) >= 7 (solo T3)
+    // Nivel 3 — ignorar_consecutivo: quita restricción T1↔T3 entre días
+    // Nivel 4 — minimo: solo incapacidad y día libre (último recurso)
+    // ─────────────────────────────────────────────────────────────────────────
+    private function getDisponiblesConFallback($puestoId, $turnoId, $numeroTurno, $fecha, &$ctx, &$conteoTurnos) {
+
+        // Nivel 1: normal, todos los filtros
+        $disponibles = $this->getDisponibles($puestoId, $turnoId, $fecha, $ctx, $conteoTurnos);
+        if (!empty($disponibles)) return ['lista' => $disponibles, 'nivel' => 1];
+
+        // Nivel 2: ignorar límite de 7 noches (solo aplica a turno 3)
+        if ($numeroTurno == 3) {
+            $disponibles = $this->trabajadores->obtenerDisponiblesRelajado(
+                $puestoId, $turnoId, $fecha, 'ignorar_limite_noches'
+            );
+            if (!empty($disponibles)) {
+                usort($disponibles, fn($a, $b) => ($conteoTurnos[$a['id']] ?? 0) - ($conteoTurnos[$b['id']] ?? 0));
+                return ['lista' => $disponibles, 'nivel' => 2];
+            }
+        }
+
+        // Nivel 3: ignorar restricción T1↔T3 consecutivos
+        $disponibles = $this->trabajadores->obtenerDisponiblesRelajado(
+            $puestoId, $turnoId, $fecha, 'ignorar_consecutivo'
+        );
+        if (!empty($disponibles)) {
+            usort($disponibles, fn($a, $b) => ($conteoTurnos[$a['id']] ?? 0) - ($conteoTurnos[$b['id']] ?? 0));
+            return ['lista' => $disponibles, 'nivel' => 3];
+        }
+
+        // Nivel 4: mínimo absoluto, solo incapacidad y día libre
+        $disponibles = $this->trabajadores->obtenerDisponiblesRelajado(
+            $puestoId, $turnoId, $fecha, 'minimo'
+        );
+        if (!empty($disponibles)) {
+            usort($disponibles, fn($a, $b) => ($conteoTurnos[$a['id']] ?? 0) - ($conteoTurnos[$b['id']] ?? 0));
+            return ['lista' => $disponibles, 'nivel' => 4];
+        }
+
+        return ['lista' => [], 'nivel' => 0];
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -186,14 +195,14 @@ class AsignacionAutomatica {
         $errores         = [];
         $libresAsignados = [];
         $libresErrores   = [];
+        // Registro de cuántas veces se usó cada nivel de fallback
+        $fallbackStats   = [1 => 0, 2 => 0, 3 => 0, 4 => 0];
 
         $fechaInicioMes = sprintf('%04d-%02d-01', $anio, $mes);
         $fechaFinMes    = date('Y-m-t', strtotime($fechaInicioMes));
 
-        // Prefetch masivo
         $ctx = $this->prefetchDisponibilidadMes($mes, $anio);
 
-        // Conteo de turnos en memoria para balanceo equitativo
         $stmtConteo = $this->db->prepare(
             "SELECT ta.trabajador_id, COUNT(*) as total FROM turnos_asignados ta
              WHERE ta.fecha BETWEEN :fi AND :ff AND ta.estado IN ('programado','activo')
@@ -205,14 +214,12 @@ class AsignacionAutomatica {
             $conteoTurnos[$row['trabajador_id']] = (int)$row['total'];
         }
 
-        // Patrón de libres del mes anterior (continuidad entre meses)
         $mesAnterior  = $mes == 1 ? 12 : $mes - 1;
         $anioAnterior = $mes == 1 ? $anio - 1 : $anio;
         $patronLibres = $this->obtenerPatronLibresMesAnterior($mesAnterior, $anioAnterior, $ctx['todosActivos']);
 
         $puestos = $this->obtenerPuestos();
 
-        // Configuración de turnos
         $turnosConfig = $this->db->query(
             "SELECT id, numero_turno FROM configuracion_turnos ORDER BY numero_turno"
         )->fetchAll();
@@ -226,10 +233,8 @@ class AsignacionAutomatica {
         }
         $turnos = array_keys($turnoIdPorNumero) ?: [1,2,3];
 
-        // Mapa inverso turnoId -> numeroTurno para getDisponibles
         $ctx['turnoIdANumero'] = $numeroPorTurnoId;
 
-        // Puestos L4
         $puestosL4Map   = ['F5'=>9,'F15'=>9,'D2'=>10,'D1'=>10,'F11'=>9];
         $puestosL4Turno = ['F5'=>1,'F15'=>1,'D2'=>2,'D1'=>2,'F11'=>1];
 
@@ -240,7 +245,6 @@ class AsignacionAutomatica {
         $stmtPuestosL4->execute();
         $puestosL4Info = $stmtPuestosL4->fetchAll();
 
-        // Mapa puesto_id -> turnoId para L4, usado en getDisponiblesL4
         $ctx['puestosL4TurnoId'] = [];
         foreach ($puestosL4Info as $pl4) {
             $ctx['puestosL4TurnoId'][$pl4['id']] = $puestosL4Map[$pl4['codigo']] ?? 9;
@@ -256,7 +260,6 @@ class AsignacionAutomatica {
 
             $semanas = $this->calcularSemanas($mes, $anio);
 
-            // Prefetch extendido -14 días para continuidad con mes anterior
             $diasEspecialesPrefetch = $this->prefetchDiasEspeciales($mes, $anio);
             $libresPorTrabajador    = $diasEspecialesPrefetch['libresPorTrabajador'];
             $cargaPorFecha          = $diasEspecialesPrefetch['cargaPorFecha'];
@@ -307,13 +310,9 @@ class AsignacionAutomatica {
                     try {
                         $stmtInsLibre->execute([$trab['id'], $mejorDia]);
                         $libresAsignados[] = ['trabajador' => $trab['nombre'], 'fecha' => $mejorDia];
-
-                        // Actualizar estado en memoria
                         $libresPorTrabajador[$trab['id']][] = ['fecha_inicio' => $mejorDia, 'fecha_fin' => null];
                         usort($libresPorTrabajador[$trab['id']], fn($a,$b) => strcmp($a['fecha_inicio'], $b['fecha_inicio']));
                         $cargaPorFecha[$mejorDia] = ($cargaPorFecha[$mejorDia] ?? 0) + 1;
-
-                        // Sincronizar con contexto de disponibilidad para pasos 2 y 3
                         $ctx['diasEspeciales'][] = [
                             'trabajador_id' => $trab['id'],
                             'fecha_inicio'  => $mejorDia,
@@ -329,7 +328,6 @@ class AsignacionAutomatica {
             // PASO 2 — TURNOS L4
             // ════════════════════════════════════════════════════════════════
 
-            // Prefetch extendido -7 días para la primera semana del mes
             $turnosAsignadosPrefetch   = $this->prefetchTurnosAsignados($mes, $anio);
             $turnosPorTrabajadorSemana = $turnosAsignadosPrefetch['turnosPorTrabajadorSemana'];
             $turnosPorPuestoFecha      = $turnosAsignadosPrefetch['turnosPorPuestoFecha'];
@@ -384,8 +382,6 @@ class AsignacionAutomatica {
                                     $turnosPorTrabajadorSemana[$trab['id']][$semana['lunes']] = [];
                                 }
                                 $turnosPorTrabajadorSemana[$trab['id']][$semana['lunes']][] = $numeroTurnoL4;
-
-                                // Actualizar contexto en memoria
                                 $ctx['asignadosPorDia'][$fechaL4][$trab['id']][] = $numeroTurnoL4;
                                 $conteoTurnos[$trab['id']] = ($conteoTurnos[$trab['id']] ?? 0) + 1;
                                 $asignado = true;
@@ -401,11 +397,7 @@ class AsignacionAutomatica {
             }
 
             // ════════════════════════════════════════════════════════════════
-            // PASO 3 — TURNOS NORMALES (T1, T2, T3)
-            //
-            // $ctx['asignadosPorDia'] se actualiza inmediatamente tras cada
-            // asignación exitosa → el mismo trabajador no puede ser asignado
-            // a otro puesto en la misma fecha dentro del mismo bucle.
+            // PASO 3 — TURNOS NORMALES (T1, T2, T3) CON FALLBACK POR NIVELES
             // ════════════════════════════════════════════════════════════════
 
             for ($dia = 1; $dia <= $diasMes; $dia++) {
@@ -435,35 +427,57 @@ class AsignacionAutomatica {
                             continue;
                         }
 
-                        // Delega en Trabajadores::obtenerDisponibles con todas las restricciones
-                        $disponibles = $this->getDisponibles($puesto['id'], $turnoIdReal, $fecha, $ctx, $conteoTurnos);
+                        // ── FALLBACK POR NIVELES ──────────────────────────
+                        $resultado_busqueda = $this->getDisponiblesConFallback(
+                            $puesto['id'], $turnoIdReal, $turno, $fecha, $ctx, $conteoTurnos
+                        );
+                        $disponibles = $resultado_busqueda['lista'];
+                        $nivelUsado  = $resultado_busqueda['nivel'];
+                        // ─────────────────────────────────────────────────
 
                         if (empty($disponibles)) {
-                            $errores[] = ['fecha'=>$fecha,'puesto'=>$puesto['codigo'],'turno'=>$turno,'error'=>'Sin trabajadores disponibles'];
+                            $errores[] = [
+                                'fecha'  => $fecha,
+                                'puesto' => $puesto['codigo'],
+                                'turno'  => $turno,
+                                'error'  => 'Sin trabajadores disponibles (todos los niveles agotados)'
+                            ];
                             continue;
                         }
 
-                        $sel = $disponibles[0]; // Menor carga primero
+                        $fallbackStats[$nivelUsado] = ($fallbackStats[$nivelUsado] ?? 0) + 1;
+
+                        $sel = $disponibles[0];
+
+                        // Observación indica si se usó fallback
+                        $obs = 'Asignacion automatica';
+                        if ($nivelUsado == 2) $obs .= ' [fallback: ignorar limite noches]';
+                        if ($nivelUsado == 3) $obs .= ' [fallback: ignorar consecutivo]';
+                        if ($nivelUsado == 4) $obs .= ' [fallback: minimo]';
 
                         $resultado = $this->turnosAsignados->asignarDirecto([
                             'trabajador_id'     => $sel['id'],
                             'puesto_trabajo_id' => $puesto['id'],
                             'turno_id'          => $turnoIdReal,
                             'fecha'             => $fecha,
-                            'observaciones'     => 'Asignacion automatica'
+                            'observaciones'     => $obs
                         ]);
 
                         if ($resultado['success']) {
-                            // Actualizar contexto en memoria INMEDIATAMENTE
                             $ctx['asignadosPorDia'][$fecha][$sel['id']][] = $turno;
-
                             if ($turno == 3) {
                                 $ctx['nochesPorTrabajador'][$sel['id']] = ($ctx['nochesPorTrabajador'][$sel['id']] ?? 0) + 1;
                             }
                             $conteoTurnos[$sel['id']] = ($conteoTurnos[$sel['id']] ?? 0) + 1;
                             $turnosPorPuestoFecha[$puesto['id'].'|'.$turno.'|'.$fecha] = true;
 
-                            $asignaciones[] = ['fecha'=>$fecha,'puesto'=>$puesto['codigo'],'turno'=>$turno,'trabajador'=>$sel['nombre']];
+                            $asignaciones[] = [
+                                'fecha'      => $fecha,
+                                'puesto'     => $puesto['codigo'],
+                                'turno'      => $turno,
+                                'trabajador' => $sel['nombre'],
+                                'nivel'      => $nivelUsado
+                            ];
                         } else {
                             $errores[] = ['fecha'=>$fecha,'puesto'=>$puesto['codigo'],'turno'=>$turno,'error'=>$resultado['message']];
                         }
@@ -478,7 +492,14 @@ class AsignacionAutomatica {
                 'libres_asignados' => count($libresAsignados),
                 'libres_errores'   => count($libresErrores),
                 'detalle_errores'  => $errores,
-                'detalle_libres'   => $libresAsignados
+                'detalle_libres'   => $libresAsignados,
+                // Estadísticas de fallback para diagnóstico
+                'fallback_stats'   => [
+                    'nivel_1_normal'              => $fallbackStats[1] ?? 0,
+                    'nivel_2_ignorar_lim_noches'  => $fallbackStats[2] ?? 0,
+                    'nivel_3_ignorar_consecutivo' => $fallbackStats[3] ?? 0,
+                    'nivel_4_minimo'              => $fallbackStats[4] ?? 0,
+                ]
             ];
 
         } catch (Throwable $e) {
@@ -490,12 +511,6 @@ class AsignacionAutomatica {
     // HELPERS
     // ─────────────────────────────────────────────────────────────────────────
 
-    /**
-     * 3 niveles de búsqueda para candidatos de día libre:
-     * 1. Respeta separación de 6 días + carga máxima
-     * 2. Solo respeta carga máxima
-     * 3. Cualquier día entre semana del mes (fallback final)
-     */
     private function buscarCandidatosLibre($trabajadorId, $semana, $mes, $tsUltimoLibre, $cargaPorFecha, $maxLibresDia) {
         for ($nivel = 1; $nivel <= 3; $nivel++) {
             $candidatos = [];
@@ -603,8 +618,7 @@ class AsignacionAutomatica {
         $fechaFin        = date('Y-m-t', strtotime($fechaInicio));
         $fechaInicioPrev = date('Y-m-d', strtotime($fechaInicio . ' -7 days'));
 
-        // Detectar si la columna es puesto_trabajo_id o puesto_id
-        $puestoCol = Database::getColumnName('turnos_asignados', 'puesto_trabajo_id', 'puesto_id');
+        $puestoCol    = Database::getColumnName('turnos_asignados', 'puesto_trabajo_id', 'puesto_id');
         $selectPuesto = $puestoCol ? "ta.$puestoCol as puesto_trabajo_id" : "NULL as puesto_trabajo_id";
 
         $stmt = $this->db->prepare(
