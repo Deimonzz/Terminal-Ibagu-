@@ -1218,7 +1218,7 @@ async function ejecutarAsignacionAutomatica(e) {
                 // Agrupar puestos sin cubrir por fecha
                 const sinCubrir = {};
                 result.detalle_errores
-                    .filter(e => e.error === 'Sin trabajadores disponibles')
+                    .filter(e => e.error && e.error.includes('Sin trabajadores disponibles'))
                     .forEach(e => {
                         if (!sinCubrir[e.fecha]) sinCubrir[e.fecha] = [];
                         sinCubrir[e.fecha].push('T' + e.turno + ' · ' + e.puesto);
