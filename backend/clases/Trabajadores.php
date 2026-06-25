@@ -63,7 +63,7 @@ class Trabajadores {
                 )
                 AND t.id NOT IN (
                     SELECT trabajador_id FROM dias_especiales
-                    WHERE tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS', 'ADM', 'ADMM', 'ADMT')
+                    WHERE tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS', 'ADM')
                     AND :fecha_lib BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                     AND estado IN ('programado', 'activo')
                 )";
@@ -73,6 +73,30 @@ class Trabajadores {
             ':fecha_inca' => $fecha,
             ':fecha_lib' => $fecha
         ];
+
+        // ADMM (admin mañana): solo disponible para T1 → bloquear T2 y T3
+        if ($numeroTurno == 2 || $numeroTurno == 3) {
+            $sql .= "
+                AND t.id NOT IN (
+                    SELECT trabajador_id FROM dias_especiales
+                    WHERE tipo = 'ADMM'
+                    AND :fecha_admm BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
+                    AND estado IN ('programado','activo')
+                )";
+            $params[':fecha_admm'] = $fecha;
+        }
+
+        // ADMT (admin tarde): solo disponible para T2 → bloquear T1 y T3
+        if ($numeroTurno == 1 || $numeroTurno == 3) {
+            $sql .= "
+                AND t.id NOT IN (
+                    SELECT trabajador_id FROM dias_especiales
+                    WHERE tipo = 'ADMT'
+                    AND :fecha_admt BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
+                    AND estado IN ('programado','activo')
+                )";
+            $params[':fecha_admt'] = $fecha;
+        }
 
         if ($numeroTurno == 3) {
             $sql .= "
@@ -602,7 +626,7 @@ class Trabajadores {
                 )
                 AND t.id NOT IN (
                     SELECT trabajador_id FROM dias_especiales
-                    WHERE tipo IN ('LC','L','L8','VAC','SUS','ADM','ADMM','ADMT')
+                    WHERE tipo IN ('LC','L','L8','VAC','SUS','ADM')
                     AND :fecha_lib BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                     AND estado IN ('programado','activo')
                 )";
@@ -612,6 +636,30 @@ class Trabajadores {
             ':fecha_inca'     => $fecha,
             ':fecha_lib'      => $fecha,
         ];
+
+        // ADMM (admin mañana): solo disponible para T1 → bloquear T2 y T3
+        if ($numeroTurno == 2 || $numeroTurno == 3) {
+            $sql .= "
+                AND t.id NOT IN (
+                    SELECT trabajador_id FROM dias_especiales
+                    WHERE tipo = 'ADMM'
+                    AND :fecha_admm BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
+                    AND estado IN ('programado','activo')
+                )";
+            $params[':fecha_admm'] = $fecha;
+        }
+
+        // ADMT (admin tarde): solo disponible para T2 → bloquear T1 y T3
+        if ($numeroTurno == 1 || $numeroTurno == 3) {
+            $sql .= "
+                AND t.id NOT IN (
+                    SELECT trabajador_id FROM dias_especiales
+                    WHERE tipo = 'ADMT'
+                    AND :fecha_admt BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
+                    AND estado IN ('programado','activo')
+                )";
+            $params[':fecha_admt'] = $fecha;
+        }
 
         // Restricción no_turno_noche: se mantiene excepto en modo 'minimo'
         if ($numeroTurno == 3 && $modo !== 'minimo') {
@@ -788,14 +836,20 @@ class Trabajadores {
                     )
                     AND t.id NOT IN (
                         SELECT trabajador_id FROM dias_especiales
-                        WHERE tipo IN ('LC','L','L8','VAC','SUS','ADM','ADMM','ADMT')
+                        WHERE tipo IN ('LC','L','L8','VAC','SUS','ADM')
                         AND :fecha3 BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
+                        AND estado IN ('programado','activo')
+                    )
+                    AND t.id NOT IN (
+                        SELECT trabajador_id FROM dias_especiales
+                        WHERE tipo IN ('ADMM','ADMT')
+                        AND :fecha4 BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                         AND estado IN ('programado','activo')
                     )
                     ORDER BY t.nombre";
 
             $stmt = $this->db->prepare($sql);
-            $stmt->execute([':fecha1' => $fecha, ':fecha2' => $fecha, ':fecha3' => $fecha]);
+            $stmt->execute([':fecha1' => $fecha, ':fecha2' => $fecha, ':fecha3' => $fecha, ':fecha4' => $fecha]);
             $this->disponiblesL4Cache[$cacheKey] = $stmt->fetchAll();
         }
 
