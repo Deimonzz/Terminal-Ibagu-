@@ -304,7 +304,7 @@ async function generarExcelIA(cfg) {
         // ── COBERTURA ─────────────────────────────────────────────────────────
         if (tipo === 'cobertura' || tipo === 'general') {
             const SOLO_NOCHE=new Set(['V1','V2','C','D3','F6','F11']);
-            const PUESTOS_ALL=['D1','D2','D3','D4','F4','F5','F6','F11','F14','F15','V1','V2','C','G'];
+            const PUESTOS_ALL=['D1','D2','D3','D4','F2','F5','F6','F11','F14','F15','V1','V2','C','G'];
             const totalDias=new Date(anio,mes,0).getDate();
             const rows=[[titulo+' — Cobertura diaria','','','',''],[periodo,'','','',''],['','','','',''],['Fecha','Día','Cubiertos','Faltantes','%']];
             const merges=[{s:{r:0,c:0},e:{r:0,c:4}},{s:{r:1,c:0},e:{r:1,c:4}}];
@@ -582,7 +582,7 @@ async function obtenerContextoSistema() {
         // Puestos cubiertos hoy (por turno)
         const PUESTOS_SISTEMA = {
             'DELTA':      ['D1','D2','D3','D4'],
-            'FOX':        ['F4','F5','F6','F11','F14','F15'],
+            'FOX':        ['F2','F5','F6','F11','F14','F15'],
             'VIGIA':      ['V1','V2'],
             'TASA DE USO':['C'],
             'EQUIPAJES':  ['G']
@@ -699,7 +699,7 @@ sinLibreSemana.map(t => `- ${t.nombre}`).join('\n')}
 
 --- RESTRICCIONES TURNO NOCTURNO ---
 Turno 3 (noche 22:00-06:00) SOLO opera en: V1, V2, C (Conduces), D3, F6, F11.
-Los demás puestos (D1, D2, D4, F4, F5, F14, F15, G) NO tienen Turno 3.
+Los demás puestos (D1, D2, D4, F2, F5, F14, F15, G) NO tienen Turno 3.
 L4 (4 horas): F5 (14-18h), F15 (14-18h), D2 (16-20h), D1 (16-20h), F11 (06-10h). Un L4 SUSTITUYE el turno normal de ese puesto ese día — el puesto sí está cubierto.
 TNR (Turno No Realizado): trabajador no se presentó a su turno. Se registra para reportes.
 
@@ -716,7 +716,7 @@ supervisores.map(s => `- ${s.nombre || s.trabajador || '?'}${s.puesto ? ' (' + s
 
 --- PUESTOS POR ÁREA ---
 DELTA: D1, D2, D3, D4
-FOX: F4, F5, F6, F11, F14, F15
+FOX: F2, F5, F6, F11, F14, F15
 VIGÍA: V1, V2
 TASA DE USO: C
 EQUIPAJES: G
@@ -764,7 +764,7 @@ ${(() => {
     const SOLO_NOCHE = new Set(['V1','V2','C','D3','F6','F11']);
     const puestosTodos = puestosLista.length > 0
         ? puestosLista.map(p => p.codigo)
-        : ['D1','D2','D3','D4','F4','F5','F6','F11','F14','F15','V1','V2','C','G'];
+        : ['D1','D2','D3','D4','F2','F5','F6','F11','F14','F15','V1','V2','C','G'];
 
     // Índice de turnos por fecha+puesto+turno
     const cubiertos = {};
@@ -957,7 +957,7 @@ REGLAS DE TURNOS:
 • Incapacidades = NO asignar
 • TNR = trabajador no se presentó
 
-AREAS: DELTA(D1-4), FOX(F4,5,6,11,14,15), VIGÍA(V1,2), TASA(C), EQUIPAJES(G)
+AREAS: DELTA(D1-4), FOX(F2,5,6,11,14,15), VIGÍA(V1,2), TASA(C), EQUIPAJES(G)
 
 RESPONDER CON:
 - **Resumen** del problema/estado

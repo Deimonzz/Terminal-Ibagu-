@@ -242,6 +242,24 @@ class DiasEspeciales {
         
         // Para tipos ADM, ADMM, ADMT: no permitir duplicados del mismo tipo en la misma fecha
         if (in_array($tipo, ['ADM', 'ADMM', 'ADMT'])) {
+            $sql_turnos = "SELECT COUNT(*) as count FROM turnos_asignados 
+                           WHERE trabajador_id = :trabajador_id 
+                           AND fecha BETWEEN :fecha_inicio AND :fecha_fin
+                           AND estado IN ('programado', 'activo')";
+            $stmt_turnos = $this->db->prepare($sql_turnos);
+            $stmt_turnos->execute([
+                ':trabajador_id' => $trabajador_id,
+                ':fecha_inicio' => $fecha_inicio,
+                ':fecha_fin' => $fecha_fin
+            ]);
+            $result_turnos = $stmt_turnos->fetch();
+            if ($result_turnos['count'] > 0) {
+                return [
+                    'valido' => false,
+                    'mensaje' => "No se puede registrar un día especial de tipo {$tipo} porque ya existe un turno asignado en ese rango de fechas."
+                ];
+            }
+
             $sql = "SELECT COUNT(*) as count FROM dias_especiales 
                     WHERE trabajador_id = :trabajador_id 
                     AND tipo = :tipo 

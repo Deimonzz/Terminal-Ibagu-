@@ -219,7 +219,7 @@ async function cargarPuestosTrabajo() {
             {id: 4, codigo: 'D4', nombre: 'Delta 4', area: 'DELTA'}
         ],
         'FOX': [
-            {id: 5, codigo: 'F4', nombre: 'Fox 4', area: 'FOX'},
+            {id: 5, codigo: 'F2', nombre: 'Fox 2', area: 'FOX'},
             {id: 6, codigo: 'F5', nombre: 'Fox 5', area: 'FOX'},
             {id: 7, codigo: 'F6', nombre: 'Fox 6', area: 'FOX'},
             {id: 8, codigo: 'F11', nombre: 'Fox 11', area: 'FOX'},
@@ -382,7 +382,7 @@ async function cargarEstadisticasDashboard() {
         // Turnos 1 y 2: todos los puestos
         const PUESTOS_SISTEMA = {
             'DELTA':       ['D1','D2','D3','D4'],
-            'FOX':         ['F4','F5','F6','F11','F14','F15'],
+            'FOX':         ['F2','F5','F6','F11','F14','F15'],
             'VIGÍA':       ['V1','V2'],
             'TASA DE USO': ['C'],
             'EQUIPAJES':   ['G']
@@ -1858,7 +1858,7 @@ function renderizarVistaDiaria(turnos, fecha, filtroTurno, admList = [], supervi
 
     const ESTRUCTURA = [
         { area: 'DELTA',       puestos: [{cod:'D1',id:1},{cod:'D2',id:2},{cod:'D3',id:3},{cod:'D4',id:4}] },
-        { area: 'FOX',         puestos: [{cod:'F4',id:5},{cod:'F5',id:6},{cod:'F6',id:7},{cod:'F11',id:8},{cod:'F14',id:9},{cod:'F15',id:10}] },
+        { area: 'FOX',         puestos: [{cod:'F2',id:5},{cod:'F5',id:6},{cod:'F6',id:7},{cod:'F11',id:8},{cod:'F14',id:9},{cod:'F15',id:10}] },
         { area: 'VIGIA',       puestos: [{cod:'V1',id:11},{cod:'V2',id:12}] },
         { area: 'TASA DE USO', puestos: [{cod:'C',id:14}] },
         { area: 'EQUIPAJES',   puestos: [{cod:'G',id:16}] }
@@ -1875,7 +1875,17 @@ function renderizarVistaDiaria(turnos, fecha, filtroTurno, admList = [], supervi
         idxTurnos[pid + '_' + n] = t;
     });
 
-    const especiales = turnosFiltrados.filter(t => t.tipo_especial);
+    const especialesDesdeTurnos = turnosFiltrados.filter(t => t.tipo_especial);
+    const especialesDesdeAdmList = (admList || []).map(e => ({
+        ...e,
+        tipo_especial: e.tipo,
+        trabajador: e.trabajador || e.trabajador_nombre || '',
+        fecha: e.fecha || fecha,
+        trabajador_id: e.trabajador_id,
+        id: e.id,
+        estado: e.estado
+    }));
+    const especiales = [...especialesDesdeTurnos, ...especialesDesdeAdmList];
 
     // Determinar qué turnos mostrar
     const numerosAMostrar = filtroTurno ? [Number(filtroTurno)] : [1, 2, 3];
@@ -1902,6 +1912,10 @@ function renderizarVistaDiaria(turnos, fecha, filtroTurno, admList = [], supervi
             if (t.tipo_especial === 'ADMT') return num === 2;
             return false;
         });
+        const especialPorTipo = {};
+        especialesEste.forEach(e => { especialPorTipo[e.tipo_especial] = e; });
+        const slotsEspeciales = num === 1 ? [{tipo:'ADMM', label:'ADMM'}, {tipo:'ADM', label:'ADM'}] : num === 2 ? [{tipo:'ADMT', label:'ADMT'}, {tipo:'ADM', label:'ADM'}] : [];
+        const mostrarColEspeciales = slotsEspeciales.length > 0;
 
         html += '<div style="margin:1.5rem 0;">';
 
@@ -1934,7 +1948,7 @@ function renderizarVistaDiaria(turnos, fecha, filtroTurno, admList = [], supervi
             html += '<i class="fas fa-map-marker-alt" style="margin-right:4px;color:' + borderColor + ';"></i>' + areaConf.area;
             html += '</th>';
         });
-        if (especialesEste.length > 0) {
+        if (mostrarColEspeciales) {
             html += '<th style="padding:8px 10px;text-align:left;color:#6c757d;font-size:0.78rem;font-weight:700;letter-spacing:0.5px;">';
             html += '<i class="fas fa-star" style="margin-right:4px;color:#fd7e14;"></i>ESPECIALES';
             html += '</th>';
@@ -1949,7 +1963,7 @@ function renderizarVistaDiaria(turnos, fecha, filtroTurno, admList = [], supervi
                     return true;
                 }).length
             ),
-            especialesEste.length,
+            slotsEspeciales.length,
             1
         );
 
@@ -2026,26 +2040,36 @@ function renderizarVistaDiaria(turnos, fecha, filtroTurno, admList = [], supervi
             });
 
             // Columna especiales
-            if (especialesEste.length > 0) {
-                const esp = especialesEste[fi];
+            if (mostrarColEspeciales) {
+                const slot = slotsEspeciales[fi];
                 html += '<td style="padding:7px 10px;vertical-align:middle;">';
-                if (esp) {
-                    const cfg = CONFIG_ESP[esp.tipo_especial] || { bg:'#e9ecef', color:'#495057', border:'#6c757d' };
-                    const f = (esp.fecha||fecha||'').replace(/'/g, "\\'");
-                    html += '<div style="display:flex;align-items:center;gap:6px;">';
-                    const esAutoLibre = esp.tipo_especial === 'L' && (esp.descripcion||'').startsWith('AUTO:');
-                    html += '<span style="background:' + cfg.bg + ';color:' + cfg.color + ';padding:2px 8px;border-radius:4px;font-weight:700;font-size:0.82rem;border:1px solid ' + cfg.border + ';white-space:nowrap;">' + esp.tipo_especial + '</span>';
-                    if (esAutoLibre) html += '<span style="background:#fd7e14;color:white;font-size:0.68rem;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:3px;">AUTO</span>';
-                    html += '<span style="color:#495057;font-size:0.85rem;flex:1;">' + (esp.trabajador||'') + '</span>';
-                    html += '<button style="padding:2px 6px;border:none;background:transparent;cursor:pointer;" title="Editar"';
-                    html += ' onclick="editarAsignacion(' + (esp.id||0) + ',null,' + "'" + f + "'" + ',null,' + (esp.trabajador_id||'null') + ",'')><i class=\"fas fa-edit\" style=\"font-size:0.8rem;color:#6c757d;\"></i></button>";
-                    html += '</div>';
-                    const esNPesp = esp.estado === 'no_presentado';
-                    html += '<div style="display:flex;gap:3px;margin-top:2px;">';
-                    html += '<button style="padding:2px 6px;border:none;background:transparent;cursor:pointer;" title="Eliminar" data-turno-id="' + (esp.id||0) + '" data-trabajador="' + (esp.trabajador||'') + '" data-fecha="' + f + '" onclick="eliminarTurnoBtn(this)"><i class="fas fa-trash-alt" style="font-size:0.8rem;color:#dc3545;"></i></button>';
-                    html += '<button style="padding:2px 8px;border:none;border-radius:4px;font-size:0.75rem;cursor:pointer;background:' + (esNPesp?'#dc3545':'#f8f9fa') + ';color:' + (esNPesp?'white':'#6c757d') + ';border:1px solid ' + (esNPesp?'#dc3545':'#dee2e6') + ';" data-turno-id="' + (esp.id||0) + '" data-trabajador="' + (esp.trabajador||'') + '" data-estado="' + (esp.estado||'programado') + '" onclick="toggleNoPresentado(this)">';
-                    html += esNPesp ? '<i class="fas fa-times-circle"></i> TNR' : '<i class="fas fa-user-times"></i> TNR';
-                    html += '</button></div>';
+                if (slot) {
+                    const esp = especialPorTipo[slot.tipo] || null;
+                    const cfg = CONFIG_ESP[slot.tipo] || { bg:'#e9ecef', color:'#495057', border:'#6c757d' };
+                    const f = (esp ? (esp.fecha||fecha||'') : fecha || '').replace(/'/g, "\\'");
+                    if (esp) {
+                        html += '<div style="display:flex;align-items:center;gap:6px;">';
+                        const esAutoLibre = esp.tipo_especial === 'L' && (esp.descripcion||'').startsWith('AUTO:');
+                        html += '<span style="background:' + cfg.bg + ';color:' + cfg.color + ';padding:2px 8px;border-radius:4px;font-weight:700;font-size:0.82rem;border:1px solid ' + cfg.border + ';white-space:nowrap;">' + esp.tipo_especial + '</span>';
+                        if (esAutoLibre) html += '<span style="background:#fd7e14;color:white;font-size:0.68rem;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:3px;">AUTO</span>';
+                        html += '<span style="color:#495057;font-size:0.85rem;flex:1;">' + (esp.trabajador||'') + '</span>';
+                        html += '<button style="padding:2px 6px;border:none;background:transparent;cursor:pointer;" title="Editar"';
+                        html += ' onclick="editarAsignacion(' + (esp.id||0) + ',null,\'' + f + '\',' + 'null,' + (esp.trabajador_id||'null') + ',\'\',false,null,\'' + slot.tipo + '\')"><i class="fas fa-edit" style="font-size:0.8rem;color:#6c757d;"></i></button>';
+                        html += '</div>';
+                        const esNPesp = esp.estado === 'no_presentado';
+                        html += '<div style="display:flex;gap:3px;margin-top:2px;">';
+                        html += '<button style="padding:2px 6px;border:none;background:transparent;cursor:pointer;" title="Eliminar" data-turno-id="' + (esp.id||0) + '" data-trabajador="' + (esp.trabajador||'') + '" data-fecha="' + f + '" data-tipo-especial="' + slot.tipo + '" onclick="eliminarTurnoBtn(this)"><i class="fas fa-trash-alt" style="font-size:0.8rem;color:#dc3545;"></i></button>';
+                        html += '<button style="padding:2px 8px;border:none;border-radius:4px;font-size:0.75rem;cursor:pointer;background:' + (esNPesp?'#dc3545':'#f8f9fa') + ';color:' + (esNPesp?'white':'#6c757d') + ';border:1px solid ' + (esNPesp?'#dc3545':'#dee2e6') + ';" data-turno-id="' + (esp.id||0) + '" data-trabajador="' + (esp.trabajador||'') + '" data-estado="' + (esp.estado||'programado') + '" onclick="toggleNoPresentado(this)">';
+                        html += esNPesp ? '<i class="fas fa-times-circle"></i> TNR' : '<i class="fas fa-user-times"></i> TNR';
+                        html += '</button></div>';
+                    } else {
+                        html += '<div style="display:flex;align-items:center;gap:6px;cursor:pointer;opacity:0.7;" ';
+                        html += 'onclick="editarAsignacion(0,null,\'' + fecha + '\',null,null,\'\',false,null,\'' + slot.tipo + '\')">';
+                        html += '<span style="background:' + cfg.bg + ';color:' + cfg.color + ';padding:2px 8px;border-radius:4px;font-weight:700;font-size:0.82rem;border:1px dashed ' + cfg.border + ';white-space:nowrap;">' + slot.tipo + '</span>';
+                        html += '<span style="font-size:0.82rem;color:#adb5bd;">Sin asignar</span>';
+                        html += '<span style="font-size:0.78rem;color:#0d6efd;margin-left:auto;">+ Asignar</span>';
+                        html += '</div>';
+                    }
                 }
                 html += '</td>';
             }
@@ -2521,7 +2545,7 @@ function cambiarMes(direccion) {
 // ─── ESTRUCTURA FIJA DE PUESTOS (compartida con render y exports) ─────────────
 const EXPORT_ESTRUCTURA = [
     { area: 'DELTA',       puestos: [{cod:'D1',id:1},{cod:'D2',id:2},{cod:'D3',id:3},{cod:'D4',id:4}] },
-    { area: 'FOX',         puestos: [{cod:'F4',id:5},{cod:'F5',id:6},{cod:'F6',id:7},{cod:'F11',id:8},{cod:'F14',id:9},{cod:'F15',id:10}] },
+    { area: 'FOX',         puestos: [{cod:'F2',id:5},{cod:'F5',id:6},{cod:'F6',id:7},{cod:'F11',id:8},{cod:'F14',id:9},{cod:'F15',id:10}] },
     { area: 'VIGIA',       puestos: [{cod:'V1',id:11},{cod:'V2',id:12}] },
     { area: 'TASA DE USO', puestos: [{cod:'C',id:14}] },
     { area: 'EQUIPAJES',   puestos: [{cod:'G',id:16}] }
@@ -3838,28 +3862,42 @@ function eliminarTurnoBtn(btn) {
     const id     = btn.getAttribute('data-turno-id');
     const nombre = btn.getAttribute('data-trabajador');
     const fecha  = btn.getAttribute('data-fecha');
-    eliminarTurno(id, nombre, fecha);
+    const tipoEspecial = btn.getAttribute('data-tipo-especial') || null;
+    eliminarTurno(id, nombre, fecha, { tipoEspecial });
 }
 
 // ─── ELIMINAR TURNO INDIVIDUAL ───────────────────────────────────────────────
-async function eliminarTurno(turnoId, nombreTrabajador, fecha) {
+async function eliminarTurno(turnoId, nombreTrabajador, fecha, opciones = {}) {
+    const { tipoEspecial = null } = opciones;
     const ok = await confirmarAccion({
-        titulo:  'Eliminar asignación',
-        mensaje: '¿Eliminar el turno de <strong>' + nombreTrabajador + '</strong> del <strong>' + fecha + '</strong>? Esta acción no se puede deshacer.',
-        textoBtn: 'Eliminar turno',
+        titulo:  tipoEspecial ? 'Eliminar disponibilidad' : 'Eliminar asignación',
+        mensaje: tipoEspecial
+            ? '¿Eliminar la disponibilidad <strong>' + tipoEspecial + '</strong> de <strong>' + nombreTrabajador + '</strong> del <strong>' + fecha + '</strong>?'
+            : '¿Eliminar el turno de <strong>' + nombreTrabajador + '</strong> del <strong>' + fecha + '</strong>? Esta acción no se puede deshacer.',
+        textoBtn: tipoEspecial ? 'Eliminar disponibilidad' : 'Eliminar turno',
         tipoBtn:  'danger',
         icono:    'fa-calendar-times'
     });
     if (!ok) return;
 
-    mostrarSpinner('Eliminando turno...');
+    mostrarSpinner(tipoEspecial ? 'Eliminando disponibilidad...' : 'Eliminando turno...');
     try {
-        const res = await fetch(API_BASE + 'turnos.php?id=' + turnoId, { method: 'DELETE' });
-        const data = await res.json();
+        let res, data;
+        if (tipoEspecial) {
+            res = await fetch(API_BASE + 'dias_especiales.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ action: 'eliminar', id: turnoId })
+            });
+            data = await res.json();
+        } else {
+            res = await fetch(API_BASE + 'turnos.php?id=' + turnoId, { method: 'DELETE' });
+            data = await res.json();
+        }
         ocultarSpinner();
         if (data.success) {
-            mostrarAlerta('Turno eliminado correctamente', 'success');
-            registrarCambio('Turno eliminado', nombreTrabajador + ' · ' + fecha);
+            mostrarAlerta(tipoEspecial ? 'Disponibilidad eliminada correctamente' : 'Turno eliminado correctamente', 'success');
+            registrarCambio(tipoEspecial ? 'Disponibilidad eliminada' : 'Turno eliminado', nombreTrabajador + ' · ' + fecha);
             cargarVistaDiaria();
             // Recargar grilla mensual si está visible
             if (document.getElementById('calendario-vista-mensual') &&
@@ -3867,11 +3905,11 @@ async function eliminarTurno(turnoId, nombreTrabajador, fecha) {
                 cargarGrillaMensual();
             }
         } else {
-            mostrarAlerta(data.message || 'No se pudo eliminar el turno', 'danger');
+            mostrarAlerta(data.message || (tipoEspecial ? 'No se pudo eliminar la disponibilidad' : 'No se pudo eliminar el turno'), 'danger');
         }
     } catch (e) {
         ocultarSpinner();
-        mostrarAlerta('Error al eliminar el turno', 'danger');
+        mostrarAlerta(tipoEspecial ? 'Error al eliminar la disponibilidad' : 'Error al eliminar el turno', 'danger');
     }
 }
 
@@ -5137,9 +5175,10 @@ function mostrarAlerta(mensaje, tipo = 'info') {
     }, 5000);
 }
 
-async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajadorActualId, puestoCodigo='', tieneL4=false, l4TurnoId=null) {
+async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajadorActualId, puestoCodigo='', tieneL4=false, l4TurnoId=null, tipoEspecial = null) {
   // turnoId=0 significa celda vacía — nueva asignación
   const esNuevo = !turnoId;
+  const esEspecial = !!tipoEspecial;
 
   // Mapa numero_turno → turno_id de configuracion_turnos
   const TURNO_ID_MAP = { 1: 1, 2: 2, 3: 3 };
@@ -5147,8 +5186,9 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
   const modalOverlay = document.getElementById('modal-overlay');
   const modalTitulo  = document.getElementById('modal-titulo');
   const modalBody    = document.getElementById('modal-body');
+  const turnoLabelNum = esEspecial ? (tipoEspecial === 'ADMT' ? 2 : 1) : (Number(numeroTurno) || 1);
 
-  modalTitulo.textContent = esNuevo ? 'Asignar turno' : 'Editar asignación';
+  modalTitulo.textContent = esEspecial ? (esNuevo ? 'Asignar ' + tipoEspecial : 'Editar ' + tipoEspecial) : (esNuevo ? 'Asignar turno' : 'Editar asignación');
   modalBody.innerHTML = '<p>Cargando trabajadores...</p>';
   modalOverlay.classList.add('active');
 
@@ -5286,6 +5326,13 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
         </select>
       </div>` : '';
 
+    const seccionEspecialInfo = esEspecial ? `
+      <div style="margin-bottom:12px;padding:10px 12px;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;font-size:0.84rem;color:#9a2c00;">
+        <i class="fas fa-user-clock" style="margin-right:6px;"></i>
+        Se asignará como <strong>${tipoEspecial}</strong> para el día seleccionado.
+      </div>
+    ` : '';
+
     modalBody.innerHTML = `
       <form id="form-editar-asignacion">
         <div class="form-grid">
@@ -5295,9 +5342,10 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
           </div>
           <div class="form-group">
             <label>Turno</label>
-            <input type="text" disabled value="T${numNormActual} — ${numNormActual===1?'Mañana':numNormActual===2?'Tarde':'Noche'}" style="background:#f8f9fa;">
+            <input type="text" disabled value="T${esEspecial ? turnoLabelNum : numNormActual} — ${esEspecial ? (turnoLabelNum===2?'Tarde':'Mañana') : (numNormActual===1?'Mañana':numNormActual===2?'Tarde':'Noche')}" style="background:#f8f9fa;">
           </div>
         </div>
+        ${esEspecial ? seccionEspecialInfo : ''}
         ${seccionMover}
         ${seccionL4}
         ${panelEstadisticas}
@@ -5382,7 +5430,26 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
         const puestoCambio   = String(puestoDestino) !== String(puestoId);
 
         let result;
-        if (esNuevo) {
+        if (esEspecial) {
+          if (!esNuevo) {
+            await fetch(`${API_BASE}dias_especiales.php`, {
+              method: 'POST', headers: {'Content-Type':'application/json'},
+              body: JSON.stringify({ action: 'eliminar', id: turnoId })
+            });
+          }
+          const res = await fetch(`${API_BASE}dias_especiales.php`, {
+            method: 'POST', headers: {'Content-Type':'application/json'},
+            body: JSON.stringify({
+              trabajador_id: nuevoId,
+              tipo: tipoEspecial,
+              fecha_inicio: fecha,
+              fecha_fin: fecha,
+              descripcion: tipoEspecial + ' asignado desde vista diaria',
+              estado: 'programado'
+            })
+          });
+          result = await res.json();
+        } else if (esNuevo) {
           // Nueva asignación directa
           const res = await fetch(`${API_BASE}turnos.php`, {
             method: 'POST', headers: {'Content-Type':'application/json'},

@@ -63,7 +63,7 @@ class Trabajadores {
                 )
                 AND t.id NOT IN (
                     SELECT trabajador_id FROM dias_especiales
-                    WHERE tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS', 'ADM')
+                    WHERE tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS', 'ADM', 'ADMM', 'ADMT')
                     AND :fecha_lib BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                     AND estado IN ('programado', 'activo')
                 )";
@@ -73,30 +73,6 @@ class Trabajadores {
             ':fecha_inca' => $fecha,
             ':fecha_lib' => $fecha
         ];
-
-        // ADMM (admin mañana): solo disponible para T1 → bloquear T2 y T3
-        if ($numeroTurno == 2 || $numeroTurno == 3) {
-            $sql .= "
-                AND t.id NOT IN (
-                    SELECT trabajador_id FROM dias_especiales
-                    WHERE tipo = 'ADMM'
-                    AND :fecha_admm BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
-                    AND estado IN ('programado','activo')
-                )";
-            $params[':fecha_admm'] = $fecha;
-        }
-
-        // ADMT (admin tarde): solo disponible para T2 → bloquear T1 y T3
-        if ($numeroTurno == 1 || $numeroTurno == 3) {
-            $sql .= "
-                AND t.id NOT IN (
-                    SELECT trabajador_id FROM dias_especiales
-                    WHERE tipo = 'ADMT'
-                    AND :fecha_admt BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
-                    AND estado IN ('programado','activo')
-                )";
-            $params[':fecha_admt'] = $fecha;
-        }
 
         if ($numeroTurno == 3) {
             $sql .= "
@@ -568,6 +544,20 @@ class Trabajadores {
         return $result['count'] == 0;
     }
     
+    /**
+     * Limpia el cache de disponibles para una fecha específica.
+     * Necesario cuando se insertan días especiales (ADMM/ADMT) en medio
+     * del proceso de asignación automática.
+     */
+    public function limpiarCacheFecha($fecha) {
+        foreach (array_keys($this->disponiblesTurnoCache) as $key) {
+            if (strpos($key, '|' . $fecha) !== false) {
+                unset($this->disponiblesTurnoCache[$key]);
+            }
+        }
+        unset($this->disponiblesL4Cache[$fecha]);
+    }
+
     public function obtenerDisponibles($puesto_id, $turno_id, $fecha) {
         $puesto = $this->getPuesto($puesto_id);
         $disponibles = $this->obtenerDisponiblesTurno($turno_id, $fecha);
@@ -626,7 +616,7 @@ class Trabajadores {
                 )
                 AND t.id NOT IN (
                     SELECT trabajador_id FROM dias_especiales
-                    WHERE tipo IN ('LC','L','L8','VAC','SUS','ADM')
+                    WHERE tipo IN ('LC','L','L8','VAC','SUS','ADM','ADMM','ADMT')
                     AND :fecha_lib BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                     AND estado IN ('programado','activo')
                 )";
@@ -744,7 +734,7 @@ class Trabajadores {
             if (!empty($bloqueados)) {
                 $bloqueados  = array_unique($bloqueados);
                 $disponibles = array_values(array_filter($disponibles,
-                    fn($t) => !in_array($t['id'], $bloqueados)));
+                    function($t) use ($bloqueados) { return !in_array($t['id'], $bloqueados); }));
             }
         }
 
@@ -825,9 +815,7 @@ class Trabajadores {
                     AND LOWER(COALESCE(t.cargo, '')) != 'supervisor'
                     AND t.id NOT IN (
                         SELECT ta.trabajador_id FROM turnos_asignados ta
-                        INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
                         WHERE ta.fecha = :fecha1
-                        AND ct.numero_turno IN (4, 5)
                         AND ta.estado IN ('programado', 'activo')
                     )
                     AND t.id NOT IN (
@@ -836,20 +824,14 @@ class Trabajadores {
                     )
                     AND t.id NOT IN (
                         SELECT trabajador_id FROM dias_especiales
-                        WHERE tipo IN ('LC','L','L8','VAC','SUS','ADM')
+                        WHERE tipo IN ('LC','L','L8','VAC','SUS','ADM','ADMM','ADMT')
                         AND :fecha3 BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
-                        AND estado IN ('programado','activo')
-                    )
-                    AND t.id NOT IN (
-                        SELECT trabajador_id FROM dias_especiales
-                        WHERE tipo IN ('ADMM','ADMT')
-                        AND :fecha4 BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                         AND estado IN ('programado','activo')
                     )
                     ORDER BY t.nombre";
 
             $stmt = $this->db->prepare($sql);
-            $stmt->execute([':fecha1' => $fecha, ':fecha2' => $fecha, ':fecha3' => $fecha, ':fecha4' => $fecha]);
+            $stmt->execute([':fecha1' => $fecha, ':fecha2' => $fecha, ':fecha3' => $fecha]);
             $this->disponiblesL4Cache[$cacheKey] = $stmt->fetchAll();
         }
 
