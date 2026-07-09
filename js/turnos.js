@@ -2319,6 +2319,10 @@ function normalizarTipoEspecial(tipo) {
     return t || null;
 }
 
+function esEstadoVisibleMensual(estado) {
+    return ['programado', 'activo', 'finalizado'].includes(String(estado || '').toLowerCase());
+}
+
 async function cargarGrillaMensual() {
     const grilla  = document.getElementById('grilla-mensual');
     const titulo  = document.getElementById('titulo-mes-grilla');
@@ -2382,7 +2386,7 @@ async function cargarGrillaMensual() {
         // Agregar días especiales (L, VAC, SUS, LC, L8) como entradas con tipo_especial
         if (dataDiasEsp.success && dataDiasEsp.data) {
             dataDiasEsp.data.forEach(de => {
-                if (!['programado','activo'].includes(de.estado)) return;
+                if (!esEstadoVisibleMensual(de.estado)) return;
                 // Expandir rango fecha_inicio → fecha_fin
                 const inicio = new Date(de.fecha_inicio + 'T00:00:00');
                 const fin    = de.fecha_fin ? new Date(de.fecha_fin + 'T00:00:00') : inicio;
@@ -4027,7 +4031,7 @@ async function obtenerAsignacionesMensualCelda(trabId, fecha) {
 
         if (rDE.success && Array.isArray(rDE.data)) {
             rDE.data
-                .filter(de => ['programado', 'activo'].includes(de.estado) && String(de.trabajador_id) === String(trabId))
+                .filter(de => esEstadoVisibleMensual(de.estado) && String(de.trabajador_id) === String(trabId))
                 .forEach(de => {
                     const tipoNorm = normalizarTipoEspecial(de.tipo);
                     out.push({
