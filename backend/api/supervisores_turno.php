@@ -125,7 +125,7 @@ try {
             // Verificar que no tenga un día especial que impida asignación
             $chkEspecial = $db->prepare(
                 "SELECT COUNT(*) as cnt FROM dias_especiales
-                 WHERE trabajador_id = :tid AND tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS', 'ADM', 'ADMM', 'ADMT')
+                 WHERE trabajador_id = :tid AND tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS', 'CAP', 'ADM', 'ADMM', 'ADMT')
                  AND :fecha BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                  AND estado IN ('programado', 'activo')"
             );

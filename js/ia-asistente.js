@@ -303,8 +303,8 @@ async function generarExcelIA(cfg) {
 
         // ── COBERTURA ─────────────────────────────────────────────────────────
         if (tipo === 'cobertura' || tipo === 'general') {
-            const SOLO_NOCHE=new Set(['V1','V2','C','D3','F6','F11']);
-            const PUESTOS_ALL=['D1','D2','D3','D4','F2','F5','F6','F11','F14','F15','V1','V2','C','G'];
+            const SOLO_NOCHE=new Set(['V1','V2','C','C2','D3','F6','F11']);
+            const PUESTOS_ALL=['D1','D2','D3','D4','F2','F5','F6','F11','F14','F15','V1','V2','C','C2','G'];
             const totalDias=new Date(anio,mes,0).getDate();
             const rows=[[titulo+' — Cobertura diaria','','','',''],[periodo,'','','',''],['','','','',''],['Fecha','Día','Cubiertos','Faltantes','%']];
             const merges=[{s:{r:0,c:0},e:{r:0,c:4}},{s:{r:1,c:0},e:{r:1,c:4}}];
@@ -584,7 +584,7 @@ async function obtenerContextoSistema() {
             'DELTA':      ['D1','D2','D3','D4'],
             'FOX':        ['F2','F5','F6','F11','F14','F15'],
             'VIGIA':      ['V1','V2'],
-            'TASA DE USO':['C'],
+            'TASA DE USO':['C','C2'],
             'EQUIPAJES':  ['G']
         };
         const TURNOS_SISTEMA = [1, 2, 3];
@@ -599,7 +599,7 @@ async function obtenerContextoSistema() {
         );
 
         // Solo estos puestos operan en Turno 3 nocturno
-        const SOLO_NOCHE_IA = new Set(['V1','V2','C','D3','F6','F11']);
+        const SOLO_NOCHE_IA = new Set(['V1','V2','C','C2','D3','F6','F11']);
 
         const puestosSinCubrir = [];
         Object.entries(PUESTOS_SISTEMA).forEach(([area, puestos]) => {
@@ -761,7 +761,7 @@ ${(() => {
 
 Puestos sin cubrir por día (primeros 10 días con problemas):
 ${(() => {
-    const SOLO_NOCHE = new Set(['V1','V2','C','D3','F6','F11']);
+    const SOLO_NOCHE = new Set(['V1','V2','C','C2','D3','F6','F11']);
     const puestosTodos = puestosLista.length > 0
         ? puestosLista.map(p => p.codigo)
         : ['D1','D2','D3','D4','F2','F5','F6','F11','F14','F15','V1','V2','C','G'];
@@ -957,7 +957,7 @@ REGLAS DE TURNOS:
 • Incapacidades = NO asignar
 • TNR = trabajador no se presentó
 
-AREAS: DELTA(D1-4), FOX(F2,5,6,11,14,15), VIGÍA(V1,2), TASA(C), EQUIPAJES(G)
+AREAS: DELTA(D1-4), FOX(F2,5,6,11,14,15), VIGÍA(V1,2), TASA(C,C2), EQUIPAJES(G)
 
 RESPONDER CON:
 - **Resumen** del problema/estado

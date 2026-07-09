@@ -15,9 +15,11 @@ class DiasEspeciales {
     //Obtener días especiales
     
     public function obtener($filtros = []) {
-        $sql = "SELECT de.*, t.nombre as trabajador, t.cedula
+        $sql = "SELECT de.*, t.nombre as trabajador, t.cedula,
+                pt.id AS puesto_trabajo_id, pt.codigo AS puesto_codigo, pt.nombre AS puesto_nombre
                 FROM dias_especiales de
                 INNER JOIN trabajadores t ON de.trabajador_id = t.id
+                LEFT JOIN puestos_trabajo pt ON de.puesto_trabajo_id = pt.id
                 WHERE 1=1";
         
         $params = [];
@@ -70,7 +72,7 @@ class DiasEspeciales {
     
     public function crear($datos) {
         // Validar solapamiento según el tipo
-        if (in_array($datos['tipo'], ['LC', 'L', 'L8', 'VAC', 'SUS', 'ADM', 'ADMM', 'ADMT'])) {
+        if (in_array($datos['tipo'], ['LC', 'L', 'L8', 'VAC', 'SUS', 'CAP', 'ADM', 'ADMM', 'ADMT'])) {
             $validacion = $this->validarSolapamiento($datos['trabajador_id'], $datos['fecha_inicio'], 
                                                      $datos['fecha_fin'] ?? $datos['fecha_inicio'], $datos['tipo']);
             if (!$validacion['valido']) {
@@ -99,13 +101,14 @@ class DiasEspeciales {
             }
             
             $sql = "INSERT INTO dias_especiales 
-                    (trabajador_id, tipo, fecha_inicio, fecha_fin, horas_inicio, horas_fin, descripcion, estado) 
-                    VALUES (:trabajador_id, :tipo, :fecha_inicio, :fecha_fin, :horas_inicio, :horas_fin, 
+                    (trabajador_id, puesto_trabajo_id, tipo, fecha_inicio, fecha_fin, horas_inicio, horas_fin, descripcion, estado) 
+                    VALUES (:trabajador_id, :puesto_trabajo_id, :tipo, :fecha_inicio, :fecha_fin, :horas_inicio, :horas_fin, 
                             :descripcion, :estado)";
             
             $stmt = $this->db->prepare($sql);
             $stmt->execute([
                 ':trabajador_id' => $datos['trabajador_id'],
+                ':puesto_trabajo_id' => $datos['puesto_trabajo_id'] ?? null,
                 ':tipo' => $datos['tipo'],
                 ':fecha_inicio' => $datos['fecha_inicio'],
                 ':fecha_fin' => $datos['fecha_fin'] ?? null,
@@ -117,8 +120,8 @@ class DiasEspeciales {
             
             $id = $this->db->lastInsertId();
             
-            // Si es un día de descanso completo, cancelar turnos
-            if (in_array($datos['tipo'], ['LC', 'L', 'L8', 'VAC', 'SUS'])) {
+            // Si es un día de descanso completo o capacitación, cancelar turnos
+            if (in_array($datos['tipo'], ['LC', 'L', 'L8', 'VAC', 'SUS', 'CAP'])) {
                 $this->cancelarTurnos($datos['trabajador_id'], $datos['fecha_inicio'], 
                                      $datos['fecha_fin'] ?? $datos['fecha_inicio']);
             }
@@ -145,6 +148,7 @@ class DiasEspeciales {
     public function actualizar($id, $datos) {
         try {
             $sql = "UPDATE dias_especiales SET 
+                    puesto_trabajo_id = :puesto_trabajo_id,
                     tipo = :tipo,
                     fecha_inicio = :fecha_inicio,
                     fecha_fin = :fecha_fin,
@@ -157,6 +161,7 @@ class DiasEspeciales {
             $stmt = $this->db->prepare($sql);
             $stmt->execute([
                 ':id' => $id,
+                ':puesto_trabajo_id' => $datos['puesto_trabajo_id'] ?? null,
                 ':tipo' => $datos['tipo'],
                 ':fecha_inicio' => $datos['fecha_inicio'],
                 ':fecha_fin' => $datos['fecha_fin'] ?? null,
@@ -182,14 +187,28 @@ class DiasEspeciales {
     //Eliminar día especial
     
     public function eliminar($id) {
-        $sql = "DELETE FROM dias_especiales WHERE id = :id";
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([':id' => $id]);
-        
-        return [
-            'success' => true,
-            'message' => 'Día especial eliminado'
-        ];
+        try {
+            $sql = "DELETE FROM dias_especiales WHERE id = :id";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([':id' => $id]);
+
+            if ($stmt->rowCount() === 0) {
+                return [
+                    'success' => false,
+                    'message' => 'No se encontró el día especial para eliminar'
+                ];
+            }
+
+            return [
+                'success' => true,
+                'message' => 'Día especial eliminado'
+            ];
+        } catch (PDOException $e) {
+            return [
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ];
+        }
     }
     
     
@@ -213,6 +232,13 @@ class DiasEspeciales {
             
             $stmt = $this->db->prepare($sql);
             $stmt->execute($params);
+
+            if ($stmt->rowCount() === 0) {
+                return [
+                    'success' => false,
+                    'message' => 'No se encontró el día especial para eliminar'
+                ];
+            }
             
             return [
                 'success' => true,
@@ -240,8 +266,9 @@ class DiasEspeciales {
             $fecha_fin = $temp;
         }
         
-        // Para tipos ADM, ADMM, ADMT: no permitir duplicados del mismo tipo en la misma fecha
-        if (in_array($tipo, ['ADM', 'ADMM', 'ADMT'])) {
+        // Para tipos CAP, ADM, ADMM, ADMT: no permitir duplicados del mismo tipo en la misma fecha
+        // y evitar registrar capacitación o administración cuando ya existe un turno normal.
+        if (in_array($tipo, ['CAP', 'ADM', 'ADMM', 'ADMT'])) {
             $sql_turnos = "SELECT COUNT(*) as count FROM turnos_asignados 
                            WHERE trabajador_id = :trabajador_id 
                            AND fecha BETWEEN :fecha_inicio AND :fecha_fin
@@ -396,7 +423,7 @@ class DiasEspeciales {
         $sqlEspeciales = "SELECT COUNT(*) as count, " . Database::groupConcat('tipo', ', ') . " as tipos
                 FROM dias_especiales 
                 WHERE trabajador_id = :trabajador_id
-                AND tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS', 'ADM', 'ADMM', 'ADMT')
+                AND tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS', 'CAP', 'ADM', 'ADMM', 'ADMT')
                 AND :fecha BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                 AND estado IN ('programado', 'activo')";
         

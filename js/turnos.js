@@ -232,6 +232,7 @@ async function cargarPuestosTrabajo() {
         ],
         'TASA DE USO': [
             {id: 14, codigo: 'C', nombre: 'Tasa de Uso', area: 'TASA DE USO'},
+            {id: 16, codigo: 'C2', nombre: 'Tasa de Uso C2', area: 'TASA DE USO'},
         ],
         'EQUIPAJES': [
             {id: 15, codigo: 'G', nombre: 'Equipajes', area: 'EQUIPAJES'},
@@ -240,7 +241,7 @@ async function cargarPuestosTrabajo() {
 }
 
 // Códigos de puestos activos en turno nocturno (Turno 3)
-const CODIGOS_NOCTURNOS = new Set(['V1','V2','C','D3','F6','F11']); // Vigía 1, Vigía 2, Conduces, Delta 3, Fox 6, Fox 11
+const CODIGOS_NOCTURNOS = new Set(['V1','V2','C','C2','D3','F6','F11']); // Vigía 1, Vigía 2, Conduces, Tasa de Uso C2, Delta 3, Fox 6, Fox 11
 
 function esTurnoNoche() {
     const turnoSelect = document.getElementById('turno-select');
@@ -384,10 +385,10 @@ async function cargarEstadisticasDashboard() {
             'DELTA':       ['D1','D2','D3','D4'],
             'FOX':         ['F2','F5','F6','F11','F14','F15'],
             'VIGÍA':       ['V1','V2'],
-            'TASA DE USO': ['C'],
+            'TASA DE USO': ['C','C2'],
             'EQUIPAJES':   ['G']
         };
-        const SOLO_NOCHE = new Set(['V1','V2','C','D3','F6','F11']); // solo estos hacen T3
+        const SOLO_NOCHE = new Set(['V1','V2','C','C2','D3','F6','F11']); // solo estos hacen T3
         const TURNOS = [1, 2, 3];
 
         const cubiertosHoy = new Set();
@@ -1336,7 +1337,7 @@ async function onCambioTipoEspecial() {
     aviso.style.display = 'none';
 
     // Mostrar/ocultar panel de horas según tipo
-    if (panelHoras) panelHoras.style.display = tipo === 'SUP' ? '' : 'none';
+    if (panelHoras) panelHoras.style.display = (tipo === 'SUP' || tipo === 'CAP') ? '' : 'none';
 
     // Limpiar horas al cambiar tipo
     const hi = document.getElementById('sup-hora-inicio');
@@ -1346,7 +1347,7 @@ async function onCambioTipoEspecial() {
     if (hf) hf.value = '';
     if (res) res.style.display = 'none';
 
-    if (!tipo || (!fecha && tipo !== 'SUP')) {
+    if (!tipo || !fecha) {
         sel.innerHTML = '<option value="">Seleccione fecha y tipo primero...</option>';
         return;
     }
@@ -1620,6 +1621,53 @@ async function guardarTurnoEspecial(e) {
         return;
     }
 
+    if (tipo === 'CAP') {
+        const horaInicio = document.getElementById('sup-hora-inicio')?.value;
+        const horaFin    = document.getElementById('sup-hora-fin')?.value;
+        if (!horaInicio || !horaFin) {
+            const aviso = document.getElementById('validacion-especial');
+            aviso.className = 'alert alert-warning';
+            aviso.textContent = 'Ingresa la hora de entrada y salida de la capacitación.';
+            aviso.style.display = 'block';
+            ocultarSpinner();
+            return;
+        }
+        const datos = {
+            trabajador_id: trabId,
+            tipo: 'CAP',
+            fecha_inicio: fecha,
+            fecha_fin: null,
+            horas_inicio: horaInicio,
+            horas_fin: horaFin,
+            descripcion: 'Capacitación',
+            estado: 'programado'
+        };
+        try {
+            const res = await fetch(API_BASE + 'dias_especiales.php', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(datos)
+            });
+            const r = await res.json();
+            ocultarSpinner();
+            if (r.success) {
+                mostrarAlerta('✅ Capacitación guardada', 'success');
+                limpiarFormularioEspecial();
+                cargarEstadisticasDashboard();
+                cargarVistaDiaria();
+            } else {
+                const aviso = document.getElementById('validacion-especial');
+                aviso.className = 'alert alert-danger';
+                aviso.textContent = r.message || 'Error al guardar';
+                aviso.style.display = 'block';
+            }
+        } catch(err) {
+            ocultarSpinner();
+            mostrarAlerta('Error de conexión: ' + err.message, 'danger');
+        }
+        return;
+    }
+
     // L, L8, LC, VAC, SUS, ADM, ADMM, ADMT → dias_especiales.php
     const tiposDiasEspeciales = ['L','L8','LC','VAC','SUS','ADM','ADMM','ADMT'];
     const esDiaEspecial = tiposDiasEspeciales.includes(tipo);
@@ -1757,7 +1805,7 @@ async function cargarVistaDiaria() {
 
         if (data.success) {
             const especiales = (dataEsp.success ? dataEsp.data : [])
-                .filter(e => ['ADM','ADMM','ADMT'].includes(e.tipo));
+                .filter(e => ['ADM','ADMM','ADMT','CAP'].includes(e.tipo));
             const supervisores = dataSup.success ? dataSup.data : [];
             renderizarVistaDiaria(data.data || [], fecha, turno, especiales, supervisores);
         } else {
@@ -1814,8 +1862,16 @@ function renderizarVistaDiaria(turnos, fecha, filtroTurno, admList = [], supervi
         });
     });
 
+    const ESTRUCTURA = [
+        { area: 'DELTA',       puestos: [{cod:'D1',id:1},{cod:'D2',id:2},{cod:'D3',id:3},{cod:'D4',id:4}] },
+        { area: 'FOX',         puestos: [{cod:'F2',id:5},{cod:'F5',id:6},{cod:'F6',id:7},{cod:'F11',id:8},{cod:'F14',id:9},{cod:'F15',id:10}] },
+        { area: 'VIGIA',       puestos: [{cod:'V1',id:11},{cod:'V2',id:12}] },
+        { area: 'TASA DE USO', puestos: [{cod:'C',id:14},{cod:'C2',id:16}] },
+        { area: 'EQUIPAJES',   puestos: [{cod:'G',id:15}] }
+    ];
+
     const totalAsignados = turnos.length;
-    const puestosDefinidos = 17;
+    const puestosDefinidos = ESTRUCTURA.reduce((sum, area) => sum + area.puestos.length, 0);
     const turnosEsperados  = puestosDefinidos * 3;
 
     const fechaObj = new Date(fecha + 'T00:00:00');
@@ -1854,15 +1910,7 @@ function renderizarVistaDiaria(turnos, fecha, filtroTurno, admList = [], supervi
     // nocturno:true = también aparece en T3
     // soloNocturno NO existe — todos los puestos trabajan T1, T2 y T3 (terminal 24/7)
     // El T3 solo tiene un subconjunto de puestos activos
-    const PUESTOS_T3 = new Set(['V1','V2','C','D3','F6','F11']);
-
-    const ESTRUCTURA = [
-        { area: 'DELTA',       puestos: [{cod:'D1',id:1},{cod:'D2',id:2},{cod:'D3',id:3},{cod:'D4',id:4}] },
-        { area: 'FOX',         puestos: [{cod:'F2',id:5},{cod:'F5',id:6},{cod:'F6',id:7},{cod:'F11',id:8},{cod:'F14',id:9},{cod:'F15',id:10}] },
-        { area: 'VIGIA',       puestos: [{cod:'V1',id:11},{cod:'V2',id:12}] },
-        { area: 'TASA DE USO', puestos: [{cod:'C',id:14}] },
-        { area: 'EQUIPAJES',   puestos: [{cod:'G',id:16}] }
-    ];
+    const PUESTOS_T3 = new Set(['V1','V2','C','C2','D3','F6','F11']);
 
     // Indexar turnos asignados por puesto_id + numero_turno_normalizado
     const idxTurnos = {}; // "puestoId_numNorm" → turno
@@ -1886,6 +1934,17 @@ function renderizarVistaDiaria(turnos, fecha, filtroTurno, admList = [], supervi
         estado: e.estado
     }));
     const especiales = [...especialesDesdeTurnos, ...especialesDesdeAdmList];
+
+    const capacitaciones = especiales.filter(t => t.tipo_especial === 'CAP');
+    if (capacitaciones.length > 0) {
+        html += '<div style="margin:0 0 1rem;padding:0.9rem 1rem;border-radius:10px;background:#e2e3ff;color:#3730a3;">';
+        html += '<strong>Capacitaciones:</strong> ' + capacitaciones.map(e => {
+            const inicio = e.horas_inicio || e.hora_inicio || '??:??';
+            const fin = e.horas_fin || e.hora_fin || '??:??';
+            return (e.trabajador || 'Trabajador') + ' (' + inicio + '–' + fin + ')';
+        }).join(' · ');
+        html += '</div>';
+    }
 
     // Determinar qué turnos mostrar
     const numerosAMostrar = filtroTurno ? [Number(filtroTurno)] : [1, 2, 3];
@@ -2255,6 +2314,11 @@ function cambiarMesGrilla(dir) {
     cargarGrillaMensual();
 }
 
+function normalizarTipoEspecial(tipo) {
+    const t = String(tipo || '').trim().toUpperCase();
+    return t || null;
+}
+
 async function cargarGrillaMensual() {
     const grilla  = document.getElementById('grilla-mensual');
     const titulo  = document.getElementById('titulo-mes-grilla');
@@ -2328,14 +2392,21 @@ async function cargarGrillaMensual() {
                     if (!idx[tid]) idx[tid] = {};
                     if (!idx[tid][f]) idx[tid][f] = [];
                     // Solo agregar si no hay ya un día especial del mismo tipo ese día
-                    const yaExiste = idx[tid][f].some(x => x.tipo_especial === de.tipo);
+                    const tipoNorm = normalizarTipoEspecial(de.tipo);
+                    const yaExiste = idx[tid][f].some(x => normalizarTipoEspecial(x.tipo_especial || x.tipo) === tipoNorm);
                     if (!yaExiste) {
                         idx[tid][f].push({
                             id:            de.id || null,
-                            tipo_especial: de.tipo,
+                            tipo_especial: tipoNorm,
+                            tipo:          tipoNorm,
                             descripcion:   de.descripcion || '',
                             estado:        de.estado,
-                            trabajador_id: de.trabajador_id
+                            trabajador_id: de.trabajador_id,
+                            puesto_trabajo_id: de.puesto_trabajo_id || null,
+                            puesto_codigo: de.puesto_codigo || null,
+                            puesto_nombre: de.puesto_nombre || null,
+                            horas_inicio: de.horas_inicio || null,
+                            horas_fin: de.horas_fin || null
                         });
                     }
                 }
@@ -2434,9 +2505,12 @@ async function cargarGrillaMensual() {
                 // Serializar asigs para el onclick (solo campos necesarios)
                 const asigsSafe = JSON.stringify(asigs.map(a => ({
                     id: a.id||null, tipo_especial: a.tipo_especial||null,
+                    tipo: a.tipo||null,
                     descripcion: a.descripcion||'', estado: a.estado||'',
                     numero_turno: a.numero_turno||null, puesto_codigo: a.puesto_codigo||null,
-                    hora_inicio: a.hora_inicio||null, hora_fin: a.hora_fin||null
+                    puesto_trabajo_id: a.puesto_trabajo_id||null, puesto_nombre: a.puesto_nombre||null,
+                    hora_inicio: a.hora_inicio||null, hora_fin: a.hora_fin||null,
+                    horas_inicio: a.horas_inicio||null, horas_fin: a.horas_fin||null
                 }))).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
                 const nombreSafe = trab.nombre.replace(/'/g, '&#39;');
                 const cargoSafeAttr = (trab.cargo || '').replace(/'/g, '&#39;');
@@ -2454,8 +2528,9 @@ async function cargarGrillaMensual() {
                 } else {
                     asigs.forEach(a => {
                         let etiqueta, bg, color;
+                        const tipoEspecial = a.tipo_especial || a.tipo || null;
 
-                        if (a.tipo_especial) {
+                        if (tipoEspecial) {
                             const cfgEsp = {
                                 'L':    { bg: '#cce5ff',  color: '#004085' },
                                 'L8':   { bg: '#cce5ff',  color: '#004085' },
@@ -2466,32 +2541,48 @@ async function cargarGrillaMensual() {
                                 'ADMM': { bg: '#fde8d8',  color: '#7d3800' },
                                 'ADMT': { bg: '#fde8d8',  color: '#7d3800' },
                                 'ADM':  { bg: '#fde8d8',  color: '#7d3800' },
+                                'CAP':  { bg: '#e2e3ff',  color: '#3730a3' },
                                 'SUP':  { bg: '#f3e8ff',  color: '#6b21a8' }
-                            }[a.tipo_especial] || { bg: '#e9ecef', color: '#495057' };
-                            const esAutoL = a.tipo_especial === 'L' && (a.descripcion||'').startsWith('AUTO:');
-                            const esSup   = a.tipo_especial === 'SUP';
+                            }[tipoEspecial] || { bg: '#e9ecef', color: '#495057' };
+                            const esAutoL = tipoEspecial === 'L' && (a.descripcion||'').startsWith('AUTO:');
+                            const esSup   = tipoEspecial === 'SUP';
+                            const esCap   = tipoEspecial === 'CAP';
+                            const inicio = (a.horas_inicio || a.hora_inicio || '').substring(0,5);
+                            const fin    = (a.horas_fin   || a.hora_fin   || '').substring(0,5);
+                            const capPuesto = (a.puesto_codigo || '').trim();
+                            const capBase = `CAP${capPuesto}`;
+                            const capLabel = esCap && inicio && fin ? `${capBase} ${inicio.replace(/:00$/, '')}-${fin.replace(/:00$/, '')}` : capBase;
                             const tooltip_extra = a.descripcion ? ' — ' + a.descripcion : '';
-                            // Para SUP mostrar las horas en lugar del código
-                            etiqueta = esSup ? (a.descripcion || 'SUP') : esAutoL ? 'L⚡' : a.tipo_especial;
+                            etiqueta = esSup ? (a.descripcion || 'SUP') : esAutoL ? 'L⚡' : esCap ? capLabel : tipoEspecial;
                             bg    = esAutoL ? '#fd7e14' : cfgEsp.bg;
                             color = esAutoL ? 'white'   : cfgEsp.color;
                         } else {
-                            const origNum = Number(a.numero_turno) || 0;
-                            let num = origNum;
-                            if (origNum === 4) num = 1;
-                            else if (origNum === 5) num = 2;
-
-                            if (origNum >= 4) {
-                                etiqueta = String(num) + (a.puesto_codigo || '') + 'L4';
+                            const origNum = Number(a.numero_turno);
+                            if (!origNum || Number.isNaN(origNum)) {
+                                const inicio = (a.horas_inicio || a.hora_inicio || '').substring(0,5);
+                                const fin    = (a.horas_fin   || a.hora_fin   || '').substring(0,5);
+                                const capPuesto = (a.puesto_codigo || '').trim();
+                                const capBase = `CAP${capPuesto}`;
+                                etiqueta = (inicio && fin) ? `${capBase} ${inicio.replace(/:00$/, '')}-${fin.replace(/:00$/, '')}` : capBase;
+                                bg = '#e9ecef';
+                                color = '#495057';
                             } else {
-                                etiqueta = String(num) + (a.puesto_codigo || '');
-                            }
+                                let num = origNum;
+                                if (origNum === 4) num = 1;
+                                else if (origNum === 5) num = 2;
 
-                            bg    = num === 1 ? '#d1ecf1' : num === 2 ? '#fff3cd' : '#1a1a2e';
-                            color = num === 1 ? '#0c5460' : num === 2 ? '#856404' : '#e0e0e0';
+                                if (origNum >= 4) {
+                                    etiqueta = String(num) + (a.puesto_codigo || '') + 'L4';
+                                } else {
+                                    etiqueta = String(num) + (a.puesto_codigo || '');
+                                }
+
+                                bg    = num === 1 ? '#d1ecf1' : num === 2 ? '#fff3cd' : '#1a1a2e';
+                                color = num === 1 ? '#0c5460' : num === 2 ? '#856404' : '#e0e0e0';
+                            }
                         }
 
-                        const tooltip = (a.trabajador || '') + ' · ' + (a.puesto_nombre || a.tipo_especial || '') + ' · ' + (a.turno_nombre || a.tipo_especial || '') + (typeof tooltip_extra !== 'undefined' ? tooltip_extra : '');
+                        const tooltip = (a.trabajador || '') + ' · ' + (a.puesto_nombre || tipoEspecial || '') + ' · ' + (a.turno_nombre || tipoEspecial || '') + (typeof tooltip_extra !== 'undefined' ? tooltip_extra : '');
                         tooltip_extra = undefined; // reset
                         const esAusente = a.estado === 'no_presentado';
                         if (esAusente) { bg = '#dc3545'; color = 'white'; }
@@ -2516,6 +2607,7 @@ async function cargarGrillaMensual() {
             {label:'T3 - Noche',  bg:'#1a1a2e', color:'#e0e0e0'},
             {label:'L4',          bg:'#e2d9f3', color:'#6f42c1'},
             {label:'L - Libre',   bg:'#cce5ff', color:'#004085'},
+            {label:'CAP',         bg:'#e2e3ff', color:'#3730a3'},
             {label:'ADM',         bg:'#fde8d8', color:'#7d3800'},
             {label:'SUP - Supervisor', bg:'#f3e8ff', color:'#6b21a8'},
         ];
@@ -2547,10 +2639,10 @@ const EXPORT_ESTRUCTURA = [
     { area: 'DELTA',       puestos: [{cod:'D1',id:1},{cod:'D2',id:2},{cod:'D3',id:3},{cod:'D4',id:4}] },
     { area: 'FOX',         puestos: [{cod:'F2',id:5},{cod:'F5',id:6},{cod:'F6',id:7},{cod:'F11',id:8},{cod:'F14',id:9},{cod:'F15',id:10}] },
     { area: 'VIGIA',       puestos: [{cod:'V1',id:11},{cod:'V2',id:12}] },
-    { area: 'TASA DE USO', puestos: [{cod:'C',id:14}] },
-    { area: 'EQUIPAJES',   puestos: [{cod:'G',id:16}] }
+    { area: 'TASA DE USO', puestos: [{cod:'C',id:14},{cod:'C2',id:16}] },
+    { area: 'EQUIPAJES',   puestos: [{cod:'G',id:15}] }
 ];
-const EXPORT_PUESTOS_T3  = new Set(['V1','V2','C','D3','F6','F11']);
+const EXPORT_PUESTOS_T3  = new Set(['V1','V2','C','C2','D3','F6','F11']);
 const EXPORT_PUESTOS_L4  = { 'F5':{turno:1}, 'F15':{turno:1}, 'D2':{turno:2}, 'D1':{turno:2}, 'F11':{turno:1} };
 
 function exportBuildIdx(turnos) {
@@ -3916,13 +4008,115 @@ async function eliminarTurno(turnoId, nombreTrabajador, fecha, opciones = {}) {
 // ─── SPINNER GLOBAL ──────────────────────────────────────────────────────────
 // ─── POPOVER EDICIÓN VISTA MENSUAL ───────────────────────────────────────────
 
+async function obtenerAsignacionesMensualCelda(trabId, fecha) {
+    try {
+        const [rT, rDE, rI, rS] = await Promise.all([
+            fetch(`${API_BASE}turnos.php?fecha=${fecha}&trabajador_id=${trabId}`).then(r => r.json()),
+            fetch(`${API_BASE}dias_especiales.php?fecha_inicio=${fecha}&fecha_fin=${fecha}&trabajador_id=${trabId}`).then(r => r.json()),
+            fetch(`${API_BASE}incapacidades.php?fecha_inicio=${fecha}&fecha_fin=${fecha}&trabajador_id=${trabId}`).then(r => r.json()),
+            fetch(`${API_BASE}supervisores_turno.php?fecha=${fecha}&trabajador_id=${trabId}`).then(r => r.json())
+        ]);
+
+        const out = [];
+
+        if (rT.success && Array.isArray(rT.data)) {
+            rT.data
+                .filter(t => t.estado !== 'cancelado' && String(t.trabajador_id) === String(trabId))
+                .forEach(t => out.push(t));
+        }
+
+        if (rDE.success && Array.isArray(rDE.data)) {
+            rDE.data
+                .filter(de => ['programado', 'activo'].includes(de.estado) && String(de.trabajador_id) === String(trabId))
+                .forEach(de => {
+                    const tipoNorm = normalizarTipoEspecial(de.tipo);
+                    out.push({
+                        id: de.id || null,
+                        tipo_especial: tipoNorm,
+                        tipo: tipoNorm,
+                        descripcion: de.descripcion || '',
+                        estado: de.estado || 'programado',
+                        trabajador_id: de.trabajador_id,
+                        puesto_trabajo_id: de.puesto_trabajo_id || null,
+                        puesto_codigo: de.puesto_codigo || null,
+                        puesto_nombre: de.puesto_nombre || null,
+                        hora_inicio: de.horas_inicio || null,
+                        hora_fin: de.horas_fin || null,
+                        horas_inicio: de.horas_inicio || null,
+                        horas_fin: de.horas_fin || null
+                    });
+                });
+        }
+
+        if (rI.success && Array.isArray(rI.data)) {
+            rI.data
+                .filter(inc => inc.estado === 'activa')
+                .forEach(inc => {
+                    out.push({
+                        tipo_especial: 'INC',
+                        tipo: 'INC',
+                        descripcion: inc.tipo_incapacidad || inc.tipo || 'Incapacidad',
+                        estado: 'activa',
+                        trabajador_id: trabId
+                    });
+                });
+        }
+
+        if (rS.success && Array.isArray(rS.data)) {
+            rS.data
+                .filter(s => String(s.trabajador_id) === String(trabId))
+                .forEach(s => {
+                    out.push({
+                        id: s.id || null,
+                        tipo_especial: 'SUP',
+                        tipo: 'SUP',
+                        descripcion: s.descripcion || '',
+                        estado: s.estado || 'programado',
+                        trabajador_id: s.trabajador_id,
+                        hora_inicio: s.hora_inicio || null,
+                        hora_fin: s.hora_fin || null
+                    });
+                });
+        }
+
+        return out;
+    } catch (e) {
+        console.error('Error recuperando asignaciones de celda mensual:', e);
+        return [];
+    }
+}
+
 // Wrapper que lee datos frescos del atributo data-asigs en tiempo real
-function abrirPopoverMensualDesdecelda(celda) {
+async function abrirPopoverMensualDesdecelda(celda) {
     const trabId = Number(celda.getAttribute('data-trab-id-cel'));
     const fecha  = celda.getAttribute('data-fecha');
     const nombre = celda.getAttribute('data-nombre').replace(/&#39;/g, "'");
     const cargo  = celda.getAttribute('data-cargo') || '';
-    const raw    = celda.getAttribute('data-asigs') || '[]';
+    let raw      = celda.getAttribute('data-asigs') || '[]';
+
+    let asigs = [];
+    try {
+        const decoded = raw
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .replace(/&amp;/g, '&');
+        asigs = JSON.parse(decoded);
+    } catch (e) {
+        asigs = [];
+    }
+
+    const textoCelda = (celda.textContent || '').trim();
+    const pareceConContenido = textoCelda && textoCelda !== '—' && textoCelda !== '-';
+
+    if (asigs.length === 0 && pareceConContenido) {
+        asigs = await obtenerAsignacionesMensualCelda(trabId, fecha);
+        if (asigs.length > 0) {
+            raw = JSON.stringify(asigs).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+            celda.setAttribute('data-asigs', raw);
+            celda.innerHTML = renderCeldaMensual(asigs, trabId, fecha, nombre);
+        }
+    }
+
     abrirPopoverMensual(celda, trabId, fecha, nombre, raw, cargo);
 }
 
@@ -3941,7 +4135,19 @@ function abrirPopoverMensual(celda, trabId, fecha, nombre, asigsSafeStr, cargo =
         asigs = JSON.parse(decoded);
     } catch(e) { asigs = []; }
 
+    // Normalizar campos para CAP y otros datos especiales
+    asigs = asigs.map(a => ({
+        ...a,
+        tipo_especial: normalizarTipoEspecial(a.tipo_especial || a.tipo),
+        tipo: normalizarTipoEspecial(a.tipo || a.tipo_especial),
+        horas_inicio: a.horas_inicio || a.hora_inicio || null,
+        horas_fin: a.horas_fin || a.hora_fin || null,
+        hora_inicio: a.hora_inicio || a.horas_inicio || null,
+        hora_fin: a.hora_fin || a.horas_fin || null
+    }));
+
     const fechaFmt = new Date(fecha + 'T00:00:00').toLocaleDateString('es-CO', {weekday:'short', day:'numeric', month:'short'});
+    const nombreEsc = String(nombre || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
     // Construir contenido según lo que haya ese día
     let itemsHtml = '';
@@ -3958,22 +4164,65 @@ function abrirPopoverMensual(celda, trabId, fecha, nombre, asigsSafeStr, cargo =
                         <span style="font-size:0.8rem;color:#6c757d;">${esAuto ? 'Generado automáticamente' : 'Día libre'}</span>
                     </div>
                     <div style="display:flex;gap:4px;">
-                        <button onclick="cambiarDiaLibreMensual(${trabId},'${fecha}','${nombre}')" 
+                        <button onclick="cambiarDiaLibreMensual(${trabId},'${fecha}','${nombreEsc}')" 
                             style="background:#0d6efd;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;">
                             ✏️ Cambiar fecha
                         </button>
-                        <button onclick="eliminarDiaLibreMensual(${trabId},'${fecha}','${nombre}')"
+                        <button onclick="eliminarDiaLibreMensual(${trabId},'${fecha}','${nombreEsc}')"
                             style="background:#dc3545;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;">
                             🗑️
                         </button>
                     </div>
                 </div>`;
-        } else if (a.tipo_especial === 'VAC') {
-            itemsHtml += `<div style="padding:6px 0;border-bottom:1px solid #f0f0f0;">
-                <span style="background:#d4edda;color:#155724;padding:1px 7px;border-radius:10px;font-size:0.75rem;font-weight:700;">VAC</span>
-                <span style="font-size:0.8rem;color:#6c757d;margin-left:6px;">Vacaciones</span>
+        } else if (a.tipo_especial === 'CAP') {
+            const inicio = (a.horas_inicio || a.hora_inicio || '').substring(0,5);
+            const fin    = (a.horas_fin   || a.hora_fin   || '').substring(0,5);
+            const horario = inicio && fin ? `${inicio.replace(/:00$/,'')}-${fin.replace(/:00$/,'')}` : 'Horario no definido';
+            const badgeCap = `CAP${(a.puesto_codigo || '').trim()}`;
+            itemsHtml += `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;">
+                <div style="display:flex;align-items:center;flex-direction:column;align-items:flex-start;gap:6px;">
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="background:#e2e3ff;color:#3730a3;padding:1px 7px;border-radius:10px;font-size:0.75rem;font-weight:700;">${badgeCap}</span>
+                        <span style="font-size:0.8rem;color:#6c757d;">${horario}</span>
+                    </div>
+                </div>
+                <div style="display:flex;gap:4px;">
+                    <button onclick="cambiarTurnoMensual(${trabId},'${fecha}','${nombreEsc}',null,'',null,'especial','CAP',${a.id || 'null'})"
+                        style="background:#6c757d;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;">
+                        ✏️ Cambiar
+                    </button>
+                    <button onclick="eliminarDiaEspecialMensual(${trabId},'${fecha}','CAP','${nombreEsc}',${a.id || 'null'})"
+                        style="background:#dc3545;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;">
+                        🗑️ Eliminar
+                    </button>
+                </div>
             </div>`;
-        } else if (a.tipo_especial === 'INC') {
+        } else if (
+            a.tipo_especial === 'ESP' ||
+            (!a.tipo_especial && !a.numero_turno && (a.horas_inicio || a.hora_inicio || a.horas_fin || a.hora_fin))
+        ) {
+            const inicio = (a.horas_inicio || a.hora_inicio || '').substring(0,5);
+            const fin    = (a.horas_fin   || a.hora_fin   || '').substring(0,5);
+            const horario = inicio && fin ? `${inicio.replace(/:00$/,'')}-${fin.replace(/:00$/,'')}` : 'Horario no definido';
+            const tipoEsp = normalizarTipoEspecial(a.tipo_especial || a.tipo || 'CAP');
+            const badgeCap = `CAP${(a.puesto_codigo || '').trim()}`;
+            itemsHtml += `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid #f0f0f0;">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <span style="background:#e9ecef;color:#495057;padding:1px 7px;border-radius:10px;font-size:0.75rem;font-weight:700;">${badgeCap}</span>
+                    <span style="font-size:0.8rem;color:#6c757d;">${horario}</span>
+                </div>
+                <div style="display:flex;gap:4px;">
+                    <button onclick="cambiarTurnoMensual(${trabId},'${fecha}','${nombreEsc}',${a.id || 'null'},'${a.puesto_codigo||''}',null,'ambigua','${tipoEsp}',${a.id || 'null'})"
+                        style="background:#6c757d;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;">
+                        ✏️ Cambiar
+                    </button>
+                    <button onclick="eliminarAsignacionMensualAmbigua(${trabId},'${fecha}','${tipoEsp}','${nombreEsc}',${a.id || 'null'})"
+                        style="background:#dc3545;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;">
+                        🗑️ Eliminar
+                    </button>
+                </div>
+            </div>`;
+        } else if (a.tipo_especial === 'VAC') {
             itemsHtml += `<div style="padding:6px 0;border-bottom:1px solid #f0f0f0;">
                 <span style="background:#f8d7da;color:#721c24;padding:1px 7px;border-radius:10px;font-size:0.75rem;font-weight:700;">INC</span>
                 <span style="font-size:0.8rem;color:#6c757d;margin-left:6px;">${a.descripcion || 'Incapacidad'}</span>
@@ -3990,7 +4239,7 @@ function abrirPopoverMensual(celda, trabId, fecha, nombre, asigsSafeStr, cargo =
                         style="background:#9c27b0;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;">
                         ✏️ Editar
                     </button>
-                    <button onclick="eliminarSupervisorTurno(${a.id},'${nombre.replace(/'/g, "\\'")}','${fecha}')"
+                    <button onclick="eliminarSupervisorTurno(${a.id},'${nombreEsc}','${fecha}')"
                         style="background:#dc3545;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;">
                         🗑️
                     </button>
@@ -4004,11 +4253,11 @@ function abrirPopoverMensual(celda, trabId, fecha, nombre, asigsSafeStr, cargo =
                     <span style="font-size:0.8rem;color:#6c757d;">${tipoLabel}</span>
                 </div>
                 <div style="display:flex;gap:4px;">
-                    <button onclick="cambiarDisponibilidadMensual(${trabId},'${fecha}','${nombre}','${a.tipo_especial}')"
+                    <button onclick="cambiarDisponibilidadMensual(${trabId},'${fecha}','${nombreEsc}','${a.tipo_especial}')"
                         style="background:#6c757d;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;">
                         ✏️ Cambiar
                     </button>
-                    <button onclick="eliminarDiaEspecialMensual(${trabId},'${fecha}','${a.tipo_especial}','${nombre}')"
+                    <button onclick="eliminarDiaEspecialMensual(${trabId},'${fecha}','${a.tipo_especial}','${nombreEsc}')"
                         style="background:#dc3545;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;">
                         🗑️
                     </button>
@@ -4028,11 +4277,11 @@ function abrirPopoverMensual(celda, trabId, fecha, nombre, asigsSafeStr, cargo =
                     <span style="font-size:0.8rem;color:#6c757d;">${nombreT}</span>
                 </div>
                 <div style="display:flex;gap:4px;">
-                    <button onclick="cambiarTurnoMensual(${trabId},'${fecha}','${nombre}',${a.id},'${a.puesto_codigo||''}',${origNum},'normal',null,null)"
+                    <button onclick="cambiarTurnoMensual(${trabId},'${fecha}','${nombreEsc}',${a.id},'${a.puesto_codigo||''}',${origNum},'normal',null,null)"
                         style="background:#6c757d;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;">
                         ✏️ Cambiar
                     </button>
-                    <button onclick="eliminarTurnoMensual(${trabId},'${fecha}','${nombre}',${a.id})"
+                    <button onclick="eliminarTurnoMensual(${trabId},'${fecha}','${nombreEsc}',${a.id})"
                         style="background:#dc3545;color:white;border:none;border-radius:6px;padding:3px 8px;font-size:0.75rem;cursor:pointer;">
                         🗑️
                     </button>
@@ -4053,21 +4302,28 @@ function abrirPopoverMensual(celda, trabId, fecha, nombre, asigsSafeStr, cargo =
     const cargoSafe = (cargo || '').replace(/'/g, "\\'");
 
     let botonesAccion = '';
-    if (!tieneLibre && !tieneImpedimento) {
+    const tieneEspecial = asigs.some(a => a.tipo_especial || (!a.numero_turno && (a.horas_inicio || a.hora_inicio || a.horas_fin || a.hora_fin)));
+    if (!tieneLibre && !tieneImpedimento && !tieneEspecial) {
         botonesAccion += `
-        <button onclick="agregarDiaLibreMensual(${trabId},'${fecha}','${nombre}')"
+        <button onclick="agregarDiaLibreMensual(${trabId},'${fecha}','${nombreEsc}')"
             style="width:100%;margin-top:8px;background:#025B2D;color:white;border:none;border-radius:8px;
                    padding:7px;font-size:0.82rem;font-weight:600;cursor:pointer;">
             📅 Asignar día libre aquí
         </button>`;
     }
-    if (!tieneTurno && !tieneLibre && !tieneImpedimento) {
+    if (!tieneTurno && !tieneLibre && !tieneImpedimento && !tieneEspecial) {
         const label = esSupervisor ? '➕ Asignar turno supervisor aquí' : '➕ Asignar turno aquí';
         botonesAccion += `
-        <button onclick="asignarTurnoRapidoMensual(${trabId},'${fecha}','${nombre}','${cargoSafe}')"
+        <button onclick="asignarTurnoRapidoMensual(${trabId},'${fecha}','${nombreEsc}','${cargoSafe}')"
             style="width:100%;margin-top:6px;background:#0d6efd;color:white;border:none;border-radius:8px;
                    padding:7px;font-size:0.82rem;font-weight:600;cursor:pointer;">
             ${label}
+        </button>`;
+        botonesAccion += `
+        <button onclick="asignarCapacitacionMensual(${trabId},'${fecha}','${nombreEsc}')"
+            style="width:100%;margin-top:6px;background:#6f42c1;color:white;border:none;border-radius:8px;
+                   padding:7px;font-size:0.82rem;font-weight:600;cursor:pointer;">
+            📘 Asignar capacitación (CAP)
         </button>`;
     }
     const btnAgregar = botonesAccion;
@@ -4115,23 +4371,134 @@ function abrirPopoverMensual(celda, trabId, fecha, nombre, asigsSafeStr, cargo =
     }, 100);
 }
 
-async function eliminarDiaEspecialMensual(trabId, fecha, tipo, nombre) {
+async function eliminarDiaEspecialMensual(trabId, fecha, tipo, nombre, id = null) {
     const conf = await confirmarAccion({ titulo: 'Eliminar día especial', mensaje: `¿Eliminar <strong>${tipo}</strong> del ${fecha} de <strong>${nombre}</strong>?`, textoBtn: 'Eliminar', tipoBtn: 'danger', icono: 'fa-trash' });
     if (!conf) return;
     mostrarSpinner('Eliminando...');
     try {
+        const body = { action: 'eliminar' };
+        if (id) {
+            body.id = id;
+        } else {
+            body.trabajador_id = trabId;
+            body.fecha = fecha;
+            body.tipo = tipo;
+        }
         const res = await fetch(API_BASE + 'dias_especiales.php', {
             method: 'POST',
             headers: {'Content-Type':'application/json'},
-            body: JSON.stringify({ action: 'eliminar', trabajador_id: trabId, fecha: fecha, tipo: tipo })
+            body: JSON.stringify(body)
         });
         const r = await res.json();
+
+        if (!r.success) {
+            if (String(tipo || '').toUpperCase() === 'CAP' && id) {
+                try {
+                    const rt = await fetch(API_BASE + `turnos.php?fecha=${fecha}&trabajador_id=${trabId}`).then(x => x.json());
+                    const turnosDia = rt.success && Array.isArray(rt.data) ? rt.data : [];
+                    const turnoCoincide = turnosDia.find(t => String(t.id) === String(id) && String(t.trabajador_id) === String(trabId) && String(t.fecha) === String(fecha));
+                    if (turnoCoincide) {
+                        const rc = await fetch(API_BASE + 'turnos.php', {
+                            method: 'POST',
+                            headers: {'Content-Type':'application/json'},
+                            body: JSON.stringify({ action: 'cancelar', id: turnoCoincide.id })
+                        }).then(x => x.json());
+                        if (rc && rc.success) {
+                            ocultarSpinner();
+                            mostrarAlerta('✅ ' + tipo + ' eliminado', 'success');
+                            recargarFilaMensual(trabId);
+                            return;
+                        }
+                    }
+                } catch (_) {}
+            }
+
+            ocultarSpinner();
+            mostrarAlerta('❌ Error: ' + (r.message || 'No se pudo eliminar'), 'danger');
+            return;
+        }
+
+        // Verificar si realmente desapareció de dias_especiales
+        let sigueEnEspeciales = false;
+        try {
+            const rv = await fetch(API_BASE + `dias_especiales.php?fecha_inicio=${fecha}&fecha_fin=${fecha}&trabajador_id=${trabId}`).then(x => x.json());
+            const lista = rv.success && Array.isArray(rv.data) ? rv.data : [];
+            const tipoNorm = normalizarTipoEspecial(tipo);
+            sigueEnEspeciales = lista.some(de => normalizarTipoEspecial(de.tipo) === tipoNorm);
+        } catch (_) {}
+
+        // Fallback seguro: si no se borró en especiales y tenemos id, intentar cancelar turno
+        if (sigueEnEspeciales && id) {
+            try {
+                const rt = await fetch(API_BASE + `turnos.php?fecha=${fecha}&trabajador_id=${trabId}`).then(x => x.json());
+                const turnosDia = rt.success && Array.isArray(rt.data) ? rt.data : [];
+                const turnoCoincide = turnosDia.find(t => String(t.id) === String(id) && String(t.trabajador_id) === String(trabId) && String(t.fecha) === String(fecha));
+                if (turnoCoincide) {
+                    await fetch(API_BASE + 'turnos.php', {
+                        method: 'POST',
+                        headers: {'Content-Type':'application/json'},
+                        body: JSON.stringify({ action: 'cancelar', id: turnoCoincide.id })
+                    });
+                }
+            } catch (_) {}
+        }
+
         ocultarSpinner();
-        if (r.success) {
-            mostrarAlerta('✅ ' + tipo + ' eliminado', 'success');
+        mostrarAlerta('✅ ' + tipo + ' eliminado', 'success');
+        recargarFilaMensual(trabId);
+    } catch(e) { ocultarSpinner(); mostrarAlerta('Error de conexión', 'danger'); }
+}
+
+async function eliminarAsignacionMensualAmbigua(trabId, fecha, tipo, nombre, id = null) {
+    const conf = await confirmarAccion({ titulo: 'Eliminar asignación', mensaje: `¿Eliminar <strong>${tipo}</strong> del ${fecha} de <strong>${nombre}</strong>?`, textoBtn: 'Eliminar', tipoBtn: 'danger', icono: 'fa-trash' });
+    if (!conf) return;
+    mostrarSpinner('Eliminando...');
+    try {
+        let ok = false;
+        let msg = '';
+
+        if (id) {
+            try {
+                const rTurno = await fetch(API_BASE + 'turnos.php', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ action: 'cancelar', id })
+                }).then(x => x.json());
+                if (rTurno && rTurno.success) ok = true;
+                else if (rTurno && rTurno.message) msg = rTurno.message;
+            } catch (_) {}
+        }
+
+        if (!ok && id) {
+            try {
+                const rEsp = await fetch(API_BASE + 'dias_especiales.php', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ action: 'eliminar', id })
+                }).then(x => x.json());
+                if (rEsp && rEsp.success) ok = true;
+                else if (rEsp && rEsp.message) msg = rEsp.message;
+            } catch (_) {}
+        }
+
+        if (!ok) {
+            try {
+                const rEspF = await fetch(API_BASE + 'dias_especiales.php', {
+                    method: 'POST',
+                    headers: {'Content-Type':'application/json'},
+                    body: JSON.stringify({ action: 'eliminar', trabajador_id: trabId, fecha, tipo })
+                }).then(x => x.json());
+                if (rEspF && rEspF.success) ok = true;
+                else if (rEspF && rEspF.message) msg = rEspF.message;
+            } catch (_) {}
+        }
+
+        ocultarSpinner();
+        if (ok) {
+            mostrarAlerta('✅ Asignación eliminada', 'success');
             recargarFilaMensual(trabId);
         } else {
-            mostrarAlerta('❌ Error: ' + (r.message || 'No se pudo eliminar'), 'danger');
+            mostrarAlerta('❌ Error: ' + (msg || 'No se pudo eliminar'), 'danger');
         }
     } catch(e) { ocultarSpinner(); mostrarAlerta('Error de conexión', 'danger'); }
 }
@@ -4368,7 +4735,38 @@ async function cambiarTurnoMensual(trabId, fecha, nombre, turnoAsigId, puestoCod
         mostrarSpinner('Guardando cambio...');
         try {
             // PASO 1: Eliminar/cancelar el turno/especial actual
-            if (tipoOrigen === 'especial' && diaEspecialId) {
+            if (tipoOrigen === 'ambigua') {
+                let eliminado = false;
+                if (turnoAsigId) {
+                    try {
+                        const rDelTurno = await fetch(API_BASE + 'turnos.php', {
+                            method: 'POST',
+                            headers: {'Content-Type':'application/json'},
+                            body: JSON.stringify({ action: 'cancelar', id: turnoAsigId })
+                        }).then(x => x.json());
+                        eliminado = !!(rDelTurno && rDelTurno.success);
+                    } catch (_) {}
+                }
+                if (!eliminado && diaEspecialId) {
+                    try {
+                        const rDelEsp = await fetch(API_BASE + 'dias_especiales.php', {
+                            method: 'POST',
+                            headers: {'Content-Type':'application/json'},
+                            body: JSON.stringify({ action: 'eliminar', id: diaEspecialId })
+                        }).then(x => x.json());
+                        eliminado = !!(rDelEsp && rDelEsp.success);
+                    } catch (_) {}
+                }
+                if (!eliminado && tipoEspecialActual) {
+                    try {
+                        await fetch(API_BASE + 'dias_especiales.php', {
+                            method: 'POST',
+                            headers: {'Content-Type':'application/json'},
+                            body: JSON.stringify({ action: 'eliminar', trabajador_id: trabId, fecha: fecha, tipo: tipoEspecialActual })
+                        });
+                    } catch (_) {}
+                }
+            } else if (tipoOrigen === 'especial' && diaEspecialId) {
                 // Origen es dias_especiales — eliminar por id
                 await fetch(API_BASE + 'dias_especiales.php', {
                     method: 'POST',
@@ -4740,6 +5138,136 @@ async function agregarDiaLibreMensual(trabId, fecha, nombre) {
     } catch(e) { ocultarSpinner(); mostrarAlerta('Error de conexión', 'danger'); }
 }
 
+async function asignarCapacitacionMensual(trabId, fecha, nombre) {
+    document.getElementById('popover-mensual')?.remove();
+    document.getElementById('overlay-rapido')?.remove();
+    document.getElementById('popover-rapido')?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);z-index:9999;';
+    const pop = document.createElement('div');
+    pop.style.cssText = `position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+        z-index:10000;background:white;border-radius:14px;padding:24px 28px;
+        box-shadow:0 12px 40px rgba(0,0,0,0.25);min-width:360px;`;
+    pop.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div>
+                <div style="font-weight:700;font-size:1rem;color:#1a1a2e;">Asignar capacitación (CAP)</div>
+                <div style="font-size:0.82rem;color:#6c757d;">${nombre} — ${fecha}</div>
+            </div>
+            <button id="btn-cerrar-cap-mensual" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:#6c757d;line-height:1;">×</button>
+        </div>
+        <div style="display:grid;gap:12px;">
+            <div>
+                <label style="display:block;font-size:0.82rem;font-weight:600;color:#495057;margin-bottom:4px;">Puesto</label>
+                <select id="cap-puesto-mensual" style="width:100%;padding:10px 12px;border:1px solid #dee2e6;border-radius:10px;font-size:0.95rem;">
+                    <option value="">Seleccione un puesto</option>
+                </select>
+            </div>
+            <div>
+                <label style="display:block;font-size:0.82rem;font-weight:600;color:#495057;margin-bottom:4px;">Hora inicio</label>
+                <input type="time" id="cap-hora-inicio-mensual" style="width:100%;padding:10px 12px;border:1px solid #dee2e6;border-radius:10px;font-size:0.95rem;">
+            </div>
+            <div>
+                <label style="display:block;font-size:0.82rem;font-weight:600;color:#495057;margin-bottom:4px;">Hora fin</label>
+                <input type="time" id="cap-hora-fin-mensual" style="width:100%;padding:10px 12px;border:1px solid #dee2e6;border-radius:10px;font-size:0.95rem;">
+            </div>
+            <div id="cap-validacion-mensual" style="display:none;padding:10px 12px;border-radius:10px;font-size:0.88rem;"></div>
+        </div>
+        <div style="display:flex;gap:10px;margin-top:18px;">
+            <button id="btn-guardar-cap-mensual" style="flex:1;background:#6f42c1;color:white;border:none;border-radius:10px;padding:10px 0;font-weight:700;cursor:pointer;">Guardar capacitación</button>
+            <button id="btn-cancelar-cap-mensual" style="flex:1;background:#6c757d;color:white;border:none;border-radius:10px;padding:10px 0;font-weight:700;cursor:pointer;">Cancelar</button>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+    document.body.appendChild(pop);
+
+    const cerrar = () => { pop.remove(); overlay.remove(); };
+    overlay.addEventListener('click', e => { if (e.target === overlay) cerrar(); });
+    pop.querySelector('#btn-cancelar-cap-mensual')?.addEventListener('click', cerrar);
+    pop.querySelector('#btn-cerrar-cap-mensual')?.addEventListener('click', cerrar);
+
+    const cargarPuestosCap = async () => {
+        const select = pop.querySelector('#cap-puesto-mensual');
+        try {
+            const res = await fetch(API_BASE + 'turnos.php?action=puestos');
+            const data = await res.json();
+            if (data.success && Array.isArray(data.data)) {
+                select.innerHTML = '<option value="">Seleccione un puesto</option>' + data.data.map(p => `
+                    <option value="${p.id}" data-codigo="${p.codigo}">${p.codigo} — ${p.nombre}</option>`
+                ).join('');
+            }
+        } catch (e) {
+            console.error('Error cargando puestos CAP', e);
+        }
+    };
+    cargarPuestosCap();
+
+    pop.querySelector('#btn-guardar-cap-mensual').addEventListener('click', async () => {
+        const horaInicio = pop.querySelector('#cap-hora-inicio-mensual').value;
+        const horaFin = pop.querySelector('#cap-hora-fin-mensual').value;
+        const validacion = pop.querySelector('#cap-validacion-mensual');
+        const puestoId = pop.querySelector('#cap-puesto-mensual').value;
+        if (!puestoId) {
+            validacion.style.display = '';
+            validacion.style.background = '#fff3cd';
+            validacion.style.color = '#856404';
+            validacion.textContent = 'Selecciona el puesto para la capacitación.';
+            return;
+        }
+        if (!horaInicio || !horaFin) {
+            validacion.style.display = '';
+            validacion.style.background = '#fff3cd';
+            validacion.style.color = '#856404';
+            validacion.textContent = 'Ingresa hora de inicio y fin de la capacitación.';
+            return;
+        }
+        validacion.style.display = 'none';
+        pop.querySelector('#btn-guardar-cap-mensual').disabled = true;
+        pop.querySelector('#btn-guardar-cap-mensual').textContent = 'Guardando...';
+
+        mostrarSpinner('Asignando capacitación...');
+        try {
+            const res = await fetch(API_BASE + 'dias_especiales.php', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    trabajador_id: trabId,
+                    puesto_trabajo_id: puestoId,
+                    tipo: 'CAP',
+                    fecha_inicio: fecha,
+                    fecha_fin: null,
+                    horas_inicio: horaInicio,
+                    horas_fin: horaFin,
+                    descripcion: 'Capacitación asignada desde vista mensual',
+                    estado: 'programado'
+                })
+            });
+            const r = await res.json();
+            ocultarSpinner();
+            if (r.success) {
+                mostrarAlerta('✅ Capacitación asignada', 'success');
+                cerrar();
+                recargarFilaMensual(trabId);
+            } else {
+                validacion.style.display = '';
+                validacion.style.background = '#f8d7da';
+                validacion.style.color = '#721c24';
+                validacion.textContent = r.message || 'No se pudo guardar capacitación.';
+            }
+        } catch (e) {
+            ocultarSpinner();
+            validacion.style.display = '';
+            validacion.style.background = '#f8d7da';
+            validacion.style.color = '#721c24';
+            validacion.textContent = 'Error de conexión.';
+        } finally {
+            pop.querySelector('#btn-guardar-cap-mensual').disabled = false;
+            pop.querySelector('#btn-guardar-cap-mensual').textContent = 'Guardar capacitación';
+        }
+    });
+}
+
 async function cambiarDiaLibreMensual(trabId, fechaActual, nombre) {
     document.getElementById('popover-mensual')?.remove();
 
@@ -4882,8 +5410,23 @@ async function recargarFilaMensual(trabId) {
             for (let d = new Date(ini); d <= fin; d.setDate(d.getDate()+1)) {
                 const f = d.toISOString().split('T')[0];
                 if (!idx[f]) idx[f] = [];
-                if (!idx[f].some(x => x.tipo_especial === de.tipo))
-                    idx[f].push({ id: de.id||null, tipo_especial: de.tipo, descripcion: de.descripcion||'', estado: de.estado, trabajador_id: trabId });
+                const tipoNorm = normalizarTipoEspecial(de.tipo);
+                if (!idx[f].some(x => normalizarTipoEspecial(x.tipo_especial || x.tipo) === tipoNorm))
+                    idx[f].push({
+                        id: de.id||null,
+                        tipo_especial: tipoNorm,
+                        tipo: tipoNorm,
+                        descripcion: de.descripcion||'',
+                        estado: de.estado,
+                        trabajador_id: trabId,
+                        puesto_trabajo_id: de.puesto_trabajo_id || null,
+                        puesto_codigo: de.puesto_codigo || null,
+                        puesto_nombre: de.puesto_nombre || null,
+                        horas_inicio: de.horas_inicio || null,
+                        horas_fin: de.horas_fin || null,
+                        hora_inicio: de.horas_inicio || null,
+                        hora_fin: de.horas_fin || null
+                    });
             }
         });
         if (rI.success && rI.data) rI.data.forEach(inc => {
@@ -4928,8 +5471,12 @@ async function recargarFilaMensual(trabId) {
             // Actualizar data-asigs para que el próximo clic tenga datos frescos
             const asigsSafe = JSON.stringify(asigs.map(a => ({
                 id: a.id||null, tipo_especial: a.tipo_especial||null,
+                tipo: a.tipo || null,
                 descripcion: a.descripcion||'', estado: a.estado||'',
-                numero_turno: a.numero_turno||null, puesto_codigo: a.puesto_codigo||null
+                numero_turno: a.numero_turno||null, puesto_codigo: a.puesto_codigo||null,
+                puesto_trabajo_id: a.puesto_trabajo_id||null, puesto_nombre: a.puesto_nombre||null,
+                hora_inicio: a.hora_inicio||null, hora_fin: a.hora_fin||null,
+                horas_inicio: a.horas_inicio||null, horas_fin: a.horas_fin||null
             }))).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
             td.setAttribute('data-asigs', asigsSafe);
             td.innerHTML = renderCeldaMensual(asigs, trabId, f, td.getAttribute('data-nombre'));
@@ -4943,6 +5490,16 @@ async function recargarFilaMensual(trabId) {
 function renderCeldaMensual(asigs, trabId, fecha, nombre) {
     if (asigs.length === 0) return '<span style="color:#ced4da;font-size:0.7rem;">—</span>';
 
+    asigs = asigs.map(a => ({
+        ...a,
+        tipo_especial: normalizarTipoEspecial(a.tipo_especial || a.tipo),
+        tipo: normalizarTipoEspecial(a.tipo || a.tipo_especial),
+        horas_inicio: a.horas_inicio || a.hora_inicio || null,
+        horas_fin: a.horas_fin || a.hora_fin || null,
+        hora_inicio: a.hora_inicio || a.horas_inicio || null,
+        hora_fin: a.hora_fin || a.horas_fin || null
+    }));
+
     const COLORES = {
         'L':    { bg:'#cce5ff',  color:'#004085' },
         'L8':   { bg:'#cce5ff',  color:'#004085' },
@@ -4953,6 +5510,7 @@ function renderCeldaMensual(asigs, trabId, fecha, nombre) {
         'ADMM': { bg:'#fde8d8',  color:'#7d3800' },
         'ADMT': { bg:'#fde8d8',  color:'#7d3800' },
         'ADM':  { bg:'#fde8d8',  color:'#7d3800' },
+        'CAP':  { bg:'#e2e3ff',  color:'#3730a3' },
         'SUP':  { bg:'#f3e8ff',  color:'#6b21a8' }
     };
 
@@ -4965,19 +5523,35 @@ function renderCeldaMensual(asigs, trabId, fecha, nombre) {
                 etiqueta = (a.hora_inicio && a.hora_fin)
                     ? `${(a.hora_inicio||'').substring(0,5)}-${(a.hora_fin||'').substring(0,5)}`
                     : 'SUP';
+            } else if (a.tipo_especial === 'CAP') {
+                const inicio = (a.horas_inicio || a.hora_inicio || '').substring(0,5);
+                const fin    = (a.horas_fin   || a.hora_fin   || '').substring(0,5);
+                const capPuesto = (a.puesto_codigo || '').trim();
+                const capBase = `CAP${capPuesto}`;
+                etiqueta = inicio && fin ? `${capBase} ${inicio.replace(/:00$/,'')}-${fin.replace(/:00$/,'')}` : capBase;
             } else {
                 etiqueta = esAuto ? 'L⚡' : a.tipo_especial;
             }
             bg    = esAuto ? '#fd7e14' : cfg.bg;
             color = esAuto ? 'white'   : cfg.color;
         } else {
-            const origNum = Number(a.numero_turno) || 0;
-            let num = origNum;
-            if (origNum === 4 || origNum === 9)  num = 1;
-            if (origNum === 5 || origNum === 10) num = 2;
-            etiqueta = origNum >= 4 ? `${num}${a.puesto_codigo||''}L4` : `${num}${a.puesto_codigo||''}`;
-            bg    = num===1?'#d1ecf1':num===2?'#fff3cd':'#1a1a2e';
-            color = num===1?'#0c5460':num===2?'#856404':'#e0e0e0';
+            const origNum = Number(a.numero_turno);
+            if (!origNum || Number.isNaN(origNum)) {
+                const inicio = (a.horas_inicio || a.hora_inicio || '').substring(0,5);
+                const fin    = (a.horas_fin   || a.hora_fin   || '').substring(0,5);
+                const capPuesto = (a.puesto_codigo || '').trim();
+                const capBase = `CAP${capPuesto}`;
+                etiqueta = inicio && fin ? `${capBase} ${inicio.replace(/:00$/,'')}-${fin.replace(/:00$/,'')}` : capBase;
+                bg = '#e9ecef';
+                color = '#495057';
+            } else {
+                let num = origNum;
+                if (origNum === 4 || origNum === 9)  num = 1;
+                if (origNum === 5 || origNum === 10) num = 2;
+                etiqueta = origNum >= 4 ? `${num}${a.puesto_codigo||''}L4` : `${num}${a.puesto_codigo||''}`;
+                bg    = num===1?'#d1ecf1':num===2?'#fff3cd':'#1a1a2e';
+                color = num===1?'#0c5460':num===2?'#856404':'#e0e0e0';
+            }
         }
         const esAusente = a.estado === 'no_presentado';
         if (esAusente) { bg = '#dc3545'; color = 'white'; }
@@ -5306,10 +5880,10 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
 
     // Construir opciones de puestos compatibles con este turno para el selector de mover
     const puestosDisp = (dataPuestos.success ? dataPuestos.data : []);
-    const NOCTURNOS_COD = new Set(['V1','V2','C','D3','F6','F11']);
+    const NOCTURNOS_COD = new Set(['V1','V2','C','C2','D3','F6','F11']);
     const puestosFiltrados = puestosDisp.filter(p => {
         if (numNormActual === 3) return NOCTURNOS_COD.has(p.codigo);
-        return !new Set(['V1','V2','C']).has(p.codigo); // en T1/T2 no mostrar exclusivos nocturnos
+        return !new Set(['V1','V2','C','C2']).has(p.codigo); // en T1/T2 no mostrar exclusivos nocturnos
     });
     const optsPuestoDestino = puestosFiltrados.map(p =>
         `<option value="${p.id}" ${p.id == puestoId ? 'selected' : ''}>${p.codigo} — ${p.nombre}</option>`
@@ -6970,10 +7544,14 @@ async function cargarTablaDiasEspeciales() {
     const tabla = document.getElementById('tabla-dias-especiales');
     if (!tabla) return;
     try {
-        const res  = await fetch(API_BASE + 'dias_especiales.php?excluir_tipos=L,L8,LC,ADM,ADMM,ADMT');
+        const res  = await fetch(API_BASE + 'dias_especiales.php?excluir_tipos=L,L8,ADM,ADMM,ADMT,CAP');
         const data = await res.json();
+        const TIPOS_PERMITIDOS_TABLA = new Set(['LC','VAC','SUS']);
         const registros = (data.success && Array.isArray(data.data))
-            ? data.data.filter(d => !['ADM','ADMM','ADMT','L','L8','LC'].includes(String(d.tipo || '').toUpperCase()))
+            ? data.data.filter(d => {
+                const tipo = normalizarTipoEspecial(d.tipo);
+                return !!tipo && TIPOS_PERMITIDOS_TABLA.has(tipo);
+            })
             : [];
         if (registros.length === 0) {
             tabla.innerHTML = '<p class="info-box">No hay días especiales registrados.</p>';
@@ -6984,16 +7562,17 @@ async function cargarTablaDiasEspeciales() {
         let html = '<table><thead><tr style="background:linear-gradient(135deg,var(--terminal) 0%,#027433 100%);color:white;">';
         html += '<th>Trabajador</th><th>Tipo</th><th>Fecha inicio</th><th>Fecha fin</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>';
         registros.forEach(d => {
-            const bg  = colores[d.tipo] || '#e9ecef';
-            const col = textos[d.tipo]  || '#495057';
+            const tipoNorm = normalizarTipoEspecial(d.tipo);
+            const bg  = colores[tipoNorm] || '#e9ecef';
+            const col = textos[tipoNorm]  || '#495057';
             html += '<tr>';
             html += '<td>' + (d.trabajador || '-') + '</td>';
-            html += '<td><span style="background:' + bg + ';color:' + col + ';padding:2px 8px;border-radius:4px;font-size:0.82rem;font-weight:700;">' + (d.tipo||'-') + '</span></td>';
+            html += '<td><span style="background:' + bg + ';color:' + col + ';padding:2px 8px;border-radius:4px;font-size:0.82rem;font-weight:700;">' + (tipoNorm || '-') + '</span></td>';
             html += '<td>' + (d.fecha_inicio||'-') + '</td>';
             html += '<td>' + (d.fecha_fin||'—') + '</td>';
             html += '<td>' + (d.estado||'-') + '</td>';
             html += '<td>';
-            html += '<button class="btn btn-sm btn-danger" onclick="eliminarDiaEspecial(' + d.id + ',\'' + (d.tipo||'') + '\')"><i class="fas fa-trash"></i></button>';
+            html += '<button class="btn btn-sm btn-danger" onclick="eliminarDiaEspecial(' + d.id + ',\'' + (tipoNorm||'') + '\')"><i class="fas fa-trash"></i></button>';
             html += '</td></tr>';
         });
         html += '</tbody></table>';

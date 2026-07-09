@@ -249,6 +249,7 @@
                                     <option value="ADMM">🟠 ADMM — Administrativo Mañana (desde 8:00 am)</option>
                                     <option value="ADMT">🟠 ADMT — Administrativo Tarde (desde 2:00 pm)</option>
                                     <option value="ADM">🟠 ADM — Administrativo Día Completo (8am-12pm / 2pm-6pm)</option>
+                                    <option value="CAP">🟣 CAP — Capacitación (hora libre)</option>
                                     <option value="SUP">🟣 SUP — Turno Supervisor (hora libre)</option>
                                 </select>
                             </div>
@@ -609,7 +610,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-    <script src="js/turnos.js"></script>
-    <script src="js/ia-asistente.js"></script>
+    <script src="js/turnos.js?v=<?php echo @filemtime(__DIR__ . '/js/turnos.js'); ?>"></script>
+    <script src="js/ia-asistente.js?v=<?php echo @filemtime(__DIR__ . '/js/ia-asistente.js'); ?>"></script>
 </body>
 </html>

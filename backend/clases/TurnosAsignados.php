@@ -149,7 +149,7 @@ class TurnosAsignados {
         $sql = "SELECT COUNT(*) as count, " . Database::groupConcat('tipo', ', ') . " as tipos
                 FROM dias_especiales 
                 WHERE trabajador_id = :trabajador_id
-                AND tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS', 'ADM', 'ADMM', 'ADMT')
+                AND tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS', 'CAP', 'ADM', 'ADMM', 'ADMT')
                 AND :fecha BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                 AND estado IN ('programado', 'activo')";
         $stmt = $this->db->prepare($sql);

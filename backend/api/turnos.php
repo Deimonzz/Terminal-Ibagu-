@@ -58,6 +58,13 @@ try {
 
             } elseif ($action === 'puestos') {
                 $db = Database::getInstance()->getConnection();
+
+                $existeC2 = $db->prepare("SELECT id FROM puestos_trabajo WHERE codigo = :codigo LIMIT 1");
+                $existeC2->execute([':codigo' => 'C2']);
+                if (!$existeC2->fetch()) {
+                    $db->prepare("INSERT INTO puestos_trabajo (id, codigo, nombre, area, activo) VALUES (16, 'C2', 'Tasa de Uso C2', 'TASA DE USO', 1) ON DUPLICATE KEY UPDATE codigo = VALUES(codigo)")->execute();
+                }
+
                 $resultado = $db->query("SELECT id, codigo, nombre, area FROM puestos_trabajo WHERE activo = TRUE ORDER BY area, codigo")->fetchAll();
                 echo json_encode(['success' => true, 'data' => $resultado]);
                 break;
@@ -94,8 +101,11 @@ try {
             if (json_last_error() !== JSON_ERROR_NONE) {
                 throw new Exception('JSON inválido: ' . json_last_error_msg());
             }
+
+            // Permitir action tanto por querystring como por body JSON
+            $action_post = $action ?: ($datos['action'] ?? '');
             
-            if ($action === 'validar') {
+            if ($action_post === 'validar') {
                 $resultado = $turnos->validarAsignacion(
                     $datos['trabajador_id'],
                     $datos['puesto_trabajo_id'],
@@ -106,10 +116,10 @@ try {
                     'success' => true,
                     'data' => $resultado
                 ]);
-            } elseif ($action === 'masivo') {
+            } elseif ($action_post === 'masivo') {
                 $resultado = $turnos->asignarMasivo($datos['asignaciones']);
                 echo json_encode($resultado);
-            } elseif ($action === 'actualizar') {
+            } elseif ($action_post === 'actualizar') {
                 // Actualizar turno existente (PUT alternativo para Apache)
                 $id = $datos['id'] ?? null;
                 if (!$id) {
@@ -118,7 +128,7 @@ try {
                 }
                 $resultado = $turnos->actualizar($id, $datos);
                 echo json_encode($resultado);
-            } elseif ($action === 'cancelar') {
+            } elseif ($action_post === 'cancelar') {
                 $id = $datos['id'] ?? null;
                 if (!$id) {
                     echo json_encode(['success' => false, 'message' => 'ID requerido']);
@@ -127,7 +137,7 @@ try {
                 $resultado = $turnos->cancelar($id, $datos['motivo'] ?? null, $datos['usuario_id'] ?? null);
                 echo json_encode($resultado);
             }
-            elseif ($action === 'eliminar') {
+            elseif ($action_post === 'eliminar') {
                 $id = $datos['id'] ?? null;
                 if (!$id) {
                     echo json_encode(['success' => false, 'message' => 'ID requerido']);

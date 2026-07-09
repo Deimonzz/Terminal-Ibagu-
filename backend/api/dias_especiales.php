@@ -29,6 +29,22 @@ try {
                     'excluir_tipos'  => $_GET['excluir_tipos']  ?? null
                     ];
                     $resultado = $dias->obtener($filtros);
+
+                    // Filtro defensivo: normaliza tipo y excluye variantes CAP* cuando se solicita excluir CAP.
+                    if (!empty($filtros['excluir_tipos']) && is_array($resultado)) {
+                        $excluir = array_map(
+                            static fn($t) => strtoupper(trim((string)$t)),
+                            explode(',', (string)$filtros['excluir_tipos'])
+                        );
+                        $resultado = array_values(array_filter($resultado, static function ($row) use ($excluir) {
+                            $tipo = strtoupper(trim((string)($row['tipo'] ?? '')));
+                            if ($tipo === '') return true;
+                            if (in_array('CAP', $excluir, true) && strpos($tipo, 'CAP') === 0) {
+                                return false;
+                            }
+                            return !in_array($tipo, $excluir, true);
+                        }));
+                    }
             }
             echo json_encode(['success' => true, 'data' => $resultado]);
             break;

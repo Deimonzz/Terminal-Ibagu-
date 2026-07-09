@@ -59,7 +59,7 @@ class AsignacionAutomatica {
             "SELECT trabajador_id, tipo, fecha_inicio,
                     COALESCE(fecha_fin, fecha_inicio) as fecha_fin
              FROM dias_especiales
-             WHERE tipo IN ('LC','L','L8','VAC','SUS','ADM','ADMM','ADMT')
+             WHERE tipo IN ('LC','L','L8','VAC','SUS','CAP','ADM','ADMM','ADMT')
              AND estado IN ('programado','activo')
              AND fecha_inicio <= ? AND COALESCE(fecha_fin, fecha_inicio) >= ?"
         );
@@ -258,6 +258,10 @@ class AsignacionAutomatica {
         $patronLibres = $this->obtenerPatronLibresMesAnterior($mesAnterior, $anioAnterior, $ctx['todosActivos']);
 
         $puestos = $this->obtenerPuestos();
+        // No asignar automáticamente el puesto C2; se asigna manualmente.
+        $puestos = array_values(array_filter($puestos, function($p) {
+            return strtoupper($p['codigo'] ?? '') !== 'C2';
+        }));
 
         $turnosConfig = $this->db->query(
             "SELECT id, numero_turno FROM configuracion_turnos ORDER BY numero_turno"
@@ -718,7 +722,7 @@ class AsignacionAutomatica {
 
         $stmt = $this->db->prepare(
             "SELECT trabajador_id, fecha_inicio FROM dias_especiales
-             WHERE tipo IN ('L','L8','LC','VAC','SUS','ADM','ADMM','ADMT')
+             WHERE tipo IN ('L','L8','LC','VAC','SUS','CAP','ADM','ADMM','ADMT')
              AND fecha_inicio BETWEEN ? AND ?
              AND estado IN ('programado','activo')"
         );

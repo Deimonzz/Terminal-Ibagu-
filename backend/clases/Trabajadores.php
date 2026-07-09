@@ -63,7 +63,7 @@ class Trabajadores {
                 )
                 AND t.id NOT IN (
                     SELECT trabajador_id FROM dias_especiales
-                    WHERE tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS', 'ADM', 'ADMM', 'ADMT')
+                    WHERE tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS', 'CAP', 'ADM', 'ADMM', 'ADMT')
                     AND :fecha_lib BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                     AND estado IN ('programado', 'activo')
                 )";
@@ -276,27 +276,57 @@ class Trabajadores {
         }
     }
 
+    private function anonimizarYDesactivar($id) {
+        $token = 'DEL-' . $id . '-' . date('YmdHis');
+        $sql = "UPDATE trabajadores SET
+                nombre = :nombre,
+                cedula = :cedula,
+                cargo = NULL,
+                area = NULL,
+                telefono = NULL,
+                email = NULL,
+                activo = false
+                WHERE id = :id";
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([
+            ':id' => $id,
+            ':nombre' => 'TRABAJADOR ELIMINADO #' . $id,
+            ':cedula' => $token
+        ]);
+    }
+
     public function eliminar($id) {
+        // Si tiene historial, preservar referencias y anonimizar en vez de borrar físicamente.
         $sql = "SELECT COUNT(*) as count FROM turnos_asignados WHERE trabajador_id = :id";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':id' => $id]);
         $result = $stmt->fetch();
-        
-        if ($result['count'] > 0) {
+
+        if ((int)($result['count'] ?? 0) > 0) {
+            $this->anonimizarYDesactivar($id);
             return [
-                'success' => false,
-                'message' => 'No se puede eliminar. El trabajador tiene turnos asignados. Use "Desactivar" en su lugar.'
+                'success' => true,
+                'message' => 'Trabajador eliminado de operación. Se conservaron los turnos históricos.'
             ];
         }
-        
-        $sql = "DELETE FROM trabajadores WHERE id = :id";
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([':id' => $id]);
-        
-        return [
-            'success' => true,
-            'message' => 'Trabajador eliminado exitosamente'
-        ];
+
+        try {
+            $sql = "DELETE FROM trabajadores WHERE id = :id";
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute([':id' => $id]);
+
+            return [
+                'success' => true,
+                'message' => 'Trabajador eliminado exitosamente'
+            ];
+        } catch (PDOException $e) {
+            // Si hay otras referencias (incapacidades, especiales, etc), conservar historial y retirar de operación.
+            $this->anonimizarYDesactivar($id);
+            return [
+                'success' => true,
+                'message' => 'Trabajador eliminado de operación. Se conservaron datos históricos relacionados.'
+            ];
+        }
     }
 
     public function activar($id) {
@@ -616,7 +646,7 @@ class Trabajadores {
                 )
                 AND t.id NOT IN (
                     SELECT trabajador_id FROM dias_especiales
-                    WHERE tipo IN ('LC','L','L8','VAC','SUS','ADM','ADMM','ADMT')
+                    WHERE tipo IN ('LC','L','L8','VAC','SUS','CAP','ADM','ADMM','ADMT')
                     AND :fecha_lib BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                     AND estado IN ('programado','activo')
                 )";
@@ -824,7 +854,7 @@ class Trabajadores {
                     )
                     AND t.id NOT IN (
                         SELECT trabajador_id FROM dias_especiales
-                        WHERE tipo IN ('LC','L','L8','VAC','SUS','ADM','ADMM','ADMT')
+                        WHERE tipo IN ('LC','L','L8','VAC','SUS','CAP','ADM','ADMM','ADMT')
                         AND :fecha3 BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                         AND estado IN ('programado','activo')
                     )

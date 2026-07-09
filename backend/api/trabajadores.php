@@ -65,9 +65,19 @@ try {
         
         case 'DELETE':
             if (!empty($_GET['action']) && $_GET['action'] === 'restriccion'){
+                if (empty($_GET['id'])) {
+                    http_response_code(400);
+                    echo json_encode(['success' => false, 'message' => 'ID requerido']);
+                    break;
+                }
                 $resultado = $trabajadores->eliminarRestriccion($_GET['id']);
             } else {
-                $resultado = $trabajadores->desactivar($_GET['id']);
+                if (empty($_GET['id'])) {
+                    http_response_code(400);
+                    echo json_encode(['success' => false, 'message' => 'ID requerido']);
+                    break;
+                }
+                $resultado = $trabajadores->eliminar($_GET['id']);
             }
 
             echo json_encode($resultado);
