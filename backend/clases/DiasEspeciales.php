@@ -7,19 +7,28 @@ require_once __DIR__ . '/../../config/database.php';
 
 class DiasEspeciales {
     private $db;
+    private $puestoColumn;
     
     public function __construct() {
         $this->db = Database::getInstance()->getConnection();
+        $this->puestoColumn = Database::getColumnName('dias_especiales', 'puesto_trabajo_id', 'puesto_id');
     }
     
     //Obtener días especiales
     
     public function obtener($filtros = []) {
+        $selectPuesto = 'NULL AS puesto_trabajo_id, NULL AS puesto_codigo, NULL AS puesto_nombre';
+        $joinPuesto = '';
+        if ($this->puestoColumn) {
+            $selectPuesto = 'pt.id AS puesto_trabajo_id, pt.codigo AS puesto_codigo, pt.nombre AS puesto_nombre';
+            $joinPuesto = 'LEFT JOIN puestos_trabajo pt ON de.' . $this->puestoColumn . ' = pt.id';
+        }
+
         $sql = "SELECT de.*, t.nombre as trabajador, t.cedula,
-                pt.id AS puesto_trabajo_id, pt.codigo AS puesto_codigo, pt.nombre AS puesto_nombre
+                " . $selectPuesto . "
                 FROM dias_especiales de
                 INNER JOIN trabajadores t ON de.trabajador_id = t.id
-                LEFT JOIN puestos_trabajo pt ON de.puesto_trabajo_id = pt.id
+                " . $joinPuesto . "
                 WHERE 1=1";
         
         $params = [];
@@ -100,15 +109,17 @@ class DiasEspeciales {
                 ]);
             }
             
-            $sql = "INSERT INTO dias_especiales 
-                    (trabajador_id, puesto_trabajo_id, tipo, fecha_inicio, fecha_fin, horas_inicio, horas_fin, descripcion, estado) 
-                    VALUES (:trabajador_id, :puesto_trabajo_id, :tipo, :fecha_inicio, :fecha_fin, :horas_inicio, :horas_fin, 
-                            :descripcion, :estado)";
-            
-            $stmt = $this->db->prepare($sql);
-            $stmt->execute([
+            $fields = 'trabajador_id, tipo, fecha_inicio, fecha_fin, horas_inicio, horas_fin, descripcion, estado';
+            $values = ':trabajador_id, :tipo, :fecha_inicio, :fecha_fin, :horas_inicio, :horas_fin, :descripcion, :estado';
+            if ($this->puestoColumn) {
+                $fields = 'trabajador_id, ' . $this->puestoColumn . ', tipo, fecha_inicio, fecha_fin, horas_inicio, horas_fin, descripcion, estado';
+                $values = ':trabajador_id, :puesto_trabajo_id, :tipo, :fecha_inicio, :fecha_fin, :horas_inicio, :horas_fin, :descripcion, :estado';
+            }
+
+            $sql = "INSERT INTO dias_especiales (" . $fields . ") VALUES (" . $values . ")";
+
+            $params = [
                 ':trabajador_id' => $datos['trabajador_id'],
-                ':puesto_trabajo_id' => $datos['puesto_trabajo_id'] ?? null,
                 ':tipo' => $datos['tipo'],
                 ':fecha_inicio' => $datos['fecha_inicio'],
                 ':fecha_fin' => $datos['fecha_fin'] ?? null,
@@ -116,7 +127,13 @@ class DiasEspeciales {
                 ':horas_fin' => $datos['horas_fin'] ?? null,
                 ':descripcion' => $datos['descripcion'] ?? null,
                 ':estado' => 'programado'
-            ]);
+            ];
+            if ($this->puestoColumn) {
+                $params[':puesto_trabajo_id'] = $datos['puesto_trabajo_id'] ?? null;
+            }
+
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
             
             $id = $this->db->lastInsertId();
             
@@ -147,8 +164,13 @@ class DiasEspeciales {
     
     public function actualizar($id, $datos) {
         try {
+            $setPuesto = '';
+            if ($this->puestoColumn) {
+                $setPuesto = $this->puestoColumn . " = :puesto_trabajo_id,";
+            }
+
             $sql = "UPDATE dias_especiales SET 
-                    puesto_trabajo_id = :puesto_trabajo_id,
+                    " . $setPuesto . "
                     tipo = :tipo,
                     fecha_inicio = :fecha_inicio,
                     fecha_fin = :fecha_fin,
@@ -158,10 +180,8 @@ class DiasEspeciales {
                     estado = :estado
                     WHERE id = :id";
             
-            $stmt = $this->db->prepare($sql);
-            $stmt->execute([
+            $params = [
                 ':id' => $id,
-                ':puesto_trabajo_id' => $datos['puesto_trabajo_id'] ?? null,
                 ':tipo' => $datos['tipo'],
                 ':fecha_inicio' => $datos['fecha_inicio'],
                 ':fecha_fin' => $datos['fecha_fin'] ?? null,
@@ -169,7 +189,13 @@ class DiasEspeciales {
                 ':horas_fin' => $datos['horas_fin'] ?? null,
                 ':descripcion' => $datos['descripcion'] ?? null,
                 ':estado' => $datos['estado'] ?? 'programado'
-            ]);
+            ];
+            if ($this->puestoColumn) {
+                $params[':puesto_trabajo_id'] = $datos['puesto_trabajo_id'] ?? null;
+            }
+
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
             
             return [
                 'success' => true,
