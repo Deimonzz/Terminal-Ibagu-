@@ -2549,6 +2549,7 @@ async function cargarGrillaMensual() {
                     tipo: a.tipo||null,
                     descripcion: a.descripcion||'', estado: a.estado||'',
                     numero_turno: a.numero_turno||null, puesto_codigo: a.puesto_codigo||null,
+                    horas_laborales: a.horas_laborales||null,
                     puesto_trabajo_id: a.puesto_trabajo_id||null, puesto_nombre: a.puesto_nombre||null,
                     hora_inicio: a.hora_inicio||null, hora_fin: a.hora_fin||null,
                     horas_inicio: a.horas_inicio||null, horas_fin: a.horas_fin||null
@@ -2611,11 +2612,12 @@ async function cargarGrillaMensual() {
                                 let num = origNum;
                                 if (origNum === 4) num = 1;
                                 else if (origNum === 5) num = 2;
+                                const es6h = Number(a.horas_laborales) === 6;
 
                                 if (origNum >= 4) {
                                     etiqueta = String(num) + (a.puesto_codigo || '') + 'L4';
                                 } else {
-                                    etiqueta = String(num) + (a.puesto_codigo || '');
+                                    etiqueta = String(num) + (a.puesto_codigo || '') + (es6h ? ' 6H' : '');
                                 }
 
                                 bg    = num === 1 ? '#d1ecf1' : num === 2 ? '#fff3cd' : '#1a1a2e';
@@ -2710,6 +2712,57 @@ function calcularDuracionHoras(horaInicio, horaFin) {
     return horas + 'h' + (mins > 0 ? ' ' + mins + 'm' : '');
 }
 
+function calcularHorasDecimal(horaInicio, horaFin) {
+    if (!horaInicio || !horaFin) return null;
+    const [h1, m1] = String(horaInicio).substring(0, 5).split(':').map(Number);
+    const [h2, m2] = String(horaFin).substring(0, 5).split(':').map(Number);
+    if ([h1, m1, h2, m2].some(v => Number.isNaN(v))) return null;
+    let minutos = (h2 * 60 + m2) - (h1 * 60 + m1);
+    if (minutos < 0) minutos += 1440;
+    return minutos / 60;
+}
+
+function obtenerHorasTurnoExport(t) {
+    const h = Number(t?.horas_laborales);
+    if (Number.isFinite(h) && h > 0) return h;
+
+    const orig = Number(t?.numero_turno) || 0;
+    if ([4, 5, 9, 10].includes(orig)) return 4;
+
+    const hCalc = calcularHorasDecimal(t?.hora_inicio, t?.hora_fin);
+    if (Number.isFinite(hCalc) && hCalc > 0) return hCalc;
+
+    if ([1, 2, 3].includes(orig)) return 8;
+    return null;
+}
+
+function construirCodigoTurnoExport(t, puestoCodigo = '', opciones = {}) {
+    const cfg = {
+        prefijoT: false,
+        ...opciones
+    };
+
+    if (!t) return '';
+    if (t.tipo_especial) return t.tipo_especial;
+
+    const orig = Number(t.numero_turno) || 0;
+    const base = [4, 9].includes(orig) ? 1 : [5, 10].includes(orig) ? 2 : orig;
+    const codigo = (t.puesto_codigo || puestoCodigo || '');
+    const horas = obtenerHorasTurnoExport(t);
+    const horasTag = Number.isFinite(horas) ? ` ${Math.round(horas)}H` : '';
+    const esL4 = [4, 5, 9, 10].includes(orig) || (Number.isFinite(horas) && horas <= 4.5 && [1, 2].includes(base));
+
+    if (esL4) {
+        return cfg.prefijoT
+            ? `T${base}${codigo ? ' ' + codigo : ''} L4 4H`
+            : `${base}${codigo}L4 4H`;
+    }
+
+    return cfg.prefijoT
+        ? `T${base}${codigo ? ' ' + codigo : ''}${horasTag || ' 8H'}`
+        : `${base}${codigo}${horasTag || ' 8H'}`;
+}
+
 async function exportarDiaExcel() {
     const fecha = fechaCalendarioActual.toISOString().split('T')[0];
     try {
@@ -2771,8 +2824,9 @@ async function exportarDiaExcel() {
                 areaConf.puestos.forEach(p => {
                     if (cfg.num === 3 && !EXPORT_PUESTOS_T3.has(p.cod)) return;
                     const t   = idx[p.id + '_' + cfg.num];
-                    const esL4 = t && [4,5,9,10].includes(Number(t.numero_turno));
-                    const cod  = esL4 ? String(cfg.num) + p.cod + 'L4' : String(cfg.num) + p.cod;
+                    const cod  = t
+                        ? construirCodigoTurnoExport(t, p.cod)
+                        : String(cfg.num) + p.cod;
                     ws_data.push([
                         cod,
                         areaConf.area,
@@ -2881,8 +2935,9 @@ async function exportarDiaPDF() {
                     if (cfg.num === 3 && !EXPORT_PUESTOS_T3.has(p.cod)) return;
                     const t    = idx[p.id + '_' + cfg.num];
                     const esNP = t?.estado === 'no_presentado';
-                    const esL4 = t && [4,5,9,10].includes(Number(t.numero_turno));
-                    const cod  = esL4 ? String(cfg.num)+p.cod+'L4' : String(cfg.num)+p.cod;
+                    const cod  = t
+                        ? construirCodigoTurnoExport(t, p.cod)
+                        : String(cfg.num) + p.cod;
                     filas.push({ cod, area: areaConf.area, trabajador: t ? (t.trabajador||'') : '', esNP, esVacante:!t, esEspecial:false });
                 });
             });
@@ -3201,7 +3256,7 @@ async function exportarMesExcel() {
       if (t.tipo_especial) {
         codigo = t.tipo_especial;
       } else {
-        codigo = orig >= 4 ? String(base) + (t.puesto_codigo||'') + 'L4' : String(base) + (t.puesto_codigo||'');
+                codigo = construirCodigoTurnoExport(t, t.puesto_codigo || '');
       }
 
       ws1_data.push([
@@ -3398,8 +3453,8 @@ async function exportarMesExcel() {
       const orig = Number(a.numero_turno) || 0;
       const base = orig === 4 ? 1 : orig === 5 ? 2 : orig;
       const etiqueta = orig >= 4
-        ? String(base) + (a.puesto_codigo||'') + 'L4'
-        : String(base) + (a.puesto_codigo||'');
+                ? construirCodigoTurnoExport(a, a.puesto_codigo || '')
+                : construirCodigoTurnoExport(a, a.puesto_codigo || '');
       const pal = orig >= 4 ? PAL.L4
                 : base === 1 ? PAL.T1
                 : base === 2 ? PAL.T2
@@ -3521,10 +3576,9 @@ async function exportarMesExcel() {
     // ── Fila de leyenda debajo de la tabla ───────────────────────────────
     const leyendaRow = ws2_data.length; // siguiente fila libre (0-indexed)
     const leyendaItems = [
-      { label: 'T1 - Mañana',  pal: PAL.T1  },
-      { label: 'T2 - Tarde',   pal: PAL.T2  },
-      { label: 'T3 - Noche',   pal: PAL.T3  },
-      { label: 'L4',           pal: PAL.L4  },
+            { label: 'T1/T2/T3 (8H)',pal: PAL.T1  },
+            { label: 'Turno 6H',      pal: PAL.T2  },
+            { label: 'L4 (4H)',       pal: PAL.L4  },
       { label: 'L - Libre',    pal: PAL.L   },
       { label: 'VAC',          pal: PAL.VAC },
       { label: 'INC',          pal: PAL.INC },
@@ -3654,11 +3708,7 @@ async function exportarMesPDF() {
             const tid = t.trabajador_id;
             const dia = parseInt(t.fecha.split('-')[2]);
             if (!mapa[tid]) mapa[tid] = {};
-            let n = Number(t.numero_turno);
-            if ([4,9].includes(n)) n = 1;
-            if ([5,10].includes(n)) n = 2;
-            const esL4 = [4,5,9,10].includes(Number(t.numero_turno));
-            const cod  = t.tipo_especial ? t.tipo_especial : (esL4 ? 'T'+n+(t.puesto_codigo||'')+'L4' : 'T'+n+(t.puesto_codigo||''));
+            const cod = construirCodigoTurnoExport(t, t.puesto_codigo || '', { prefijoT: true });
             mapa[tid][dia] = { cod, estado: t.estado };
             trabIds.add(tid);
         });
@@ -3908,15 +3958,18 @@ async function exportarCalendarioExcel() {
 
       const turnos = data.data;
 
-      let csv = '\uFEFF'; // BOM para Excel UTF-8
-      csv += 'Fecha,Trabajador,Puesto,Área,Turno,Horario,Estado\n';
+    let csv = '\uFEFF'; // BOM para Excel UTF-8
+    csv += 'Fecha,Trabajador,Puesto,Área,Turno,Jornada,Horario,Estado\n';
         
         turnos.forEach(turno => {
+        const etiquetaTurno = construirCodigoTurnoExport(turno, turno.puesto_codigo || '', { prefijoT: true });
+        const horasTurno = obtenerHorasTurnoExport(turno);
             csv += `${turno.fecha},`;
             csv += `"${turno.trabajador}",`;
             csv += `"${turno.puesto_codigo} - ${turno.puesto_nombre}",`;
             csv += `"${turno.area}",`;
-            csv += `"${turno.turno_nombre}",`;
+        csv += `"${etiquetaTurno || turno.turno_nombre}",`;
+        csv += `"${Number.isFinite(horasTurno) ? Math.round(horasTurno) + 'H' : ''}",`;
             csv += `"${turno.hora_inicio} - ${turno.hora_fin}",`;
             csv += `${turno.estado}\n`;
         });
@@ -4308,7 +4361,8 @@ function abrirPopoverMensual(celda, trabId, fecha, nombre, asigsSafeStr, cargo =
             const origNum = Number(a.numero_turno);
             const esL4 = [4,5,9,10].includes(origNum);
             const num = [4,9].includes(origNum) ? 1 : [5,10].includes(origNum) ? 2 : origNum;
-            const etiqueta = esL4 ? `${num}${a.puesto_codigo||''}L4` : `T${num} ${a.puesto_codigo||''}`;
+            const es6h = Number(a.horas_laborales) === 6;
+            const etiqueta = esL4 ? `${num}${a.puesto_codigo||''}L4` : `T${num} ${a.puesto_codigo||''}${es6h ? ' 6H' : ''}`;
             const nombreT = esL4 ? `L4 ${num===1?'Mañana':'Tarde'}` : num===1?'Mañana':num===2?'Tarde':num===3?'Noche':'Especial';
             const bgT = num===1?'#d1ecf1':num===2?'#fff3cd':'#1a1a2e';
             const colT = num===1?'#0c5460':num===2?'#856404':'#e0e0e0';
@@ -5515,6 +5569,7 @@ async function recargarFilaMensual(trabId) {
                 tipo: a.tipo || null,
                 descripcion: a.descripcion||'', estado: a.estado||'',
                 numero_turno: a.numero_turno||null, puesto_codigo: a.puesto_codigo||null,
+                horas_laborales: a.horas_laborales||null,
                 puesto_trabajo_id: a.puesto_trabajo_id||null, puesto_nombre: a.puesto_nombre||null,
                 hora_inicio: a.hora_inicio||null, hora_fin: a.hora_fin||null,
                 horas_inicio: a.horas_inicio||null, horas_fin: a.horas_fin||null
@@ -5589,7 +5644,8 @@ function renderCeldaMensual(asigs, trabId, fecha, nombre) {
                 let num = origNum;
                 if (origNum === 4 || origNum === 9)  num = 1;
                 if (origNum === 5 || origNum === 10) num = 2;
-                etiqueta = origNum >= 4 ? `${num}${a.puesto_codigo||''}L4` : `${num}${a.puesto_codigo||''}`;
+                const es6h = Number(a.horas_laborales) === 6;
+                etiqueta = origNum >= 4 ? `${num}${a.puesto_codigo||''}L4` : `${num}${a.puesto_codigo||''}${es6h ? ' 6H' : ''}`;
                 bg    = num===1?'#d1ecf1':num===2?'#fff3cd':'#1a1a2e';
                 color = num===1?'#0c5460':num===2?'#856404':'#e0e0e0';
             }

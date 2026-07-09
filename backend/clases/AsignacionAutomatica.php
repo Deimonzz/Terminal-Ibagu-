@@ -232,6 +232,7 @@ class AsignacionAutomatica {
         $diasMes         = (int)date('t', mktime(0, 0, 0, $mes, 1, $anio));
         $asignaciones    = [];
         $errores         = [];
+        $warnings        = [];
         $libresAsignados = [];
         $libresErrores   = [];
         // Registro de cuántas veces se usó cada nivel de fallback
@@ -264,39 +265,110 @@ class AsignacionAutomatica {
         }));
 
         $turnosConfig = $this->db->query(
-            "SELECT id, numero_turno FROM configuracion_turnos ORDER BY numero_turno"
+            "SELECT id, numero_turno, nombre, horas_laborales
+             FROM configuracion_turnos
+             WHERE activo = TRUE
+             ORDER BY numero_turno, id"
         )->fetchAll();
         $turnoIdPorNumero = [];
+        $turnoOpcionesPorNumero = [1 => [], 2 => [], 3 => []];
         $numeroPorTurnoId = [];
+        $turnoMetaPorId   = [];
+        $turnoIdL4Manana  = null;
+        $turnoIdL4Tarde   = null;
+        $hayTurno6h       = false;
+
         foreach ($turnosConfig as $tc) {
-            $numeroPorTurnoId[$tc['id']] = $tc['numero_turno'];
-            if (in_array($tc['numero_turno'], [1,2,3])) {
-                $turnoIdPorNumero[$tc['numero_turno']] = $tc['id'];
+            $id     = (int)$tc['id'];
+            $num    = (int)$tc['numero_turno'];
+            $horas  = (float)$tc['horas_laborales'];
+            $nombre = strtolower((string)($tc['nombre'] ?? ''));
+
+            $numeroPorTurnoId[$id] = $num;
+            $turnoMetaPorId[$id] = [
+                'numero_turno'    => $num,
+                'horas_laborales' => $horas,
+            ];
+
+            if (in_array($num, [1,2,3])) {
+                $turnoOpcionesPorNumero[$num][] = [
+                    'id'    => $id,
+                    'horas' => $horas,
+                    'nombre'=> (string)($tc['nombre'] ?? ''),
+                ];
+            }
+
+            if ($num === 4 && $horas >= 3.5 && $horas <= 4.5) {
+                if ($turnoIdL4Manana === null || strpos($nombre, 'l4') !== false) {
+                    $turnoIdL4Manana = $id;
+                }
+            }
+
+            if ($num === 5 && $horas >= 3.5 && $horas <= 4.5) {
+                if ($turnoIdL4Tarde === null || strpos($nombre, 'l4') !== false) {
+                    $turnoIdL4Tarde = $id;
+                }
+            }
+
+            if (in_array($num, [1,2,3]) && $horas >= 5.5 && $horas <= 6.5) {
+                $hayTurno6h = true;
             }
         }
+
+        foreach ([1,2,3] as $numBase) {
+            if (empty($turnoOpcionesPorNumero[$numBase])) continue;
+            usort($turnoOpcionesPorNumero[$numBase], function($a, $b) {
+                if ($a['horas'] == $b['horas']) return $a['id'] <=> $b['id'];
+                return $b['horas'] <=> $a['horas'];
+            });
+
+            // ID base para filtros de disponibilidad: preferir 8h, luego el primero disponible.
+            $turnoIdPorNumero[$numBase] = $turnoOpcionesPorNumero[$numBase][0]['id'];
+            foreach ($turnoOpcionesPorNumero[$numBase] as $op) {
+                if ($op['horas'] >= 7.5) {
+                    $turnoIdPorNumero[$numBase] = $op['id'];
+                    break;
+                }
+            }
+        }
+
         $turnos = array_keys($turnoIdPorNumero) ?: [1,2,3];
 
         $ctx['turnoIdANumero'] = $numeroPorTurnoId;
 
-        // L4 solo en TARDE — se eliminan F5, F15, F11 (turno 1 mañana)
-        $puestosL4Map   = ['D2'=>10,'D1'=>10];
-        $puestosL4Turno = ['D2'=>2,'D1'=>2];
+        $perfilObjetivo = [
+            'max_horas' => 42.0,
+            'max_8h'    => 4,
+            'max_6h'    => 1,
+            'max_4h'    => 1,
+        ];
+        $maxHorasSemanalOperativo = $hayTurno6h ? 42.0 : 44.0;
+        if (!$hayTurno6h) {
+            $warnings[] = 'No hay turno activo de 6 horas en configuracion_turnos; se aplica perfil operativo de hasta 44h semanales (5x8 + 1x4) mientras se configura el turno de 6h.';
+        }
+
+        $turnoIdL4Manana = $turnoIdL4Manana ?? 9;
+        $turnoIdL4Tarde  = $turnoIdL4Tarde ?? 10;
+
+        // L4 en puestos definidos por negocio, incluyendo F11 en mañana.
+        $puestosL4Map   = ['D2'=>$turnoIdL4Tarde,'D1'=>$turnoIdL4Tarde,'F11'=>$turnoIdL4Manana];
+        $puestosL4Turno = ['D2'=>2,'D1'=>2,'F11'=>1];
 
         $stmtPuestosL4 = $this->db->prepare(
             "SELECT id, codigo FROM puestos_trabajo
-             WHERE codigo IN ('D2','D1') AND activo = TRUE"
+             WHERE codigo IN ('D2','D1','F11') AND activo = TRUE"
         );
         $stmtPuestosL4->execute();
         $puestosL4Info = $stmtPuestosL4->fetchAll();
 
         $ctx['puestosL4TurnoId'] = [];
         foreach ($puestosL4Info as $pl4) {
-            $ctx['puestosL4TurnoId'][$pl4['id']] = $puestosL4Map[$pl4['codigo']] ?? 10;
+            $ctx['puestosL4TurnoId'][$pl4['id']] = $puestosL4Map[$pl4['codigo']] ?? $turnoIdL4Tarde;
         }
 
         // Puestos prioritarios por turno — se procesan ANTES del shuffle
         $puestosPrioridadT1 = ['F6','D3','C','G','V1','V2','F14','F15','D1','D4','F2'];
-        $puestosPrioridadT2 = ['F6','D3','C','G','V1','V2','F14','F15','F11','D1','D2','D4','F2'];
+        $puestosPrioridadT2 = ['F6','D3','C','G','V1','V2','F14','F15','F11','D1','D4','F2'];
 
         $puestosNocturnos = ['V1','V2','C','D3','F6','F11'];
         $MAX_LIBRES_DIA   = 3;
@@ -379,8 +451,9 @@ class AsignacionAutomatica {
             $turnosAsignadosPrefetch   = $this->prefetchTurnosAsignados($mes, $anio);
             $turnosPorTrabajadorSemana = $turnosAsignadosPrefetch['turnosPorTrabajadorSemana'];
             $turnosPorPuestoFecha      = $turnosAsignadosPrefetch['turnosPorPuestoFecha'];
+            $perfilSemanal             = $turnosAsignadosPrefetch['perfilSemanal'];
 
-            // Prefetch de ADMM/ADMT ya asignados en el mes (para detectar duplicados en memoria)
+            // Prefetch de ADMM/ADMT ya existentes en el mes (compatibilidad histórica)
             $stmtAdm = $this->db->prepare(
                 "SELECT trabajador_id, tipo, fecha_inicio FROM dias_especiales
                  WHERE tipo IN ('ADMM','ADMT')
@@ -392,16 +465,10 @@ class AsignacionAutomatica {
             foreach ($stmtAdm->fetchAll(PDO::FETCH_ASSOC) as $row) {
                 $semKey = $this->getSemanaKey($row['fecha_inicio']);
                 $admPorTrabajadorSemana[$row['trabajador_id']][$semKey] = $row['tipo'];
+                $this->actualizarPerfilSemanal($perfilSemanal, $row['trabajador_id'], $semKey, 4.0);
                 // También registrar en asignadosPorDia para que Paso 3 los vea como ocupados
                 $ctx['asignadosPorDia'][$row['fecha_inicio']][$row['trabajador_id']][] = $row['tipo'];
             }
-
-            // Prepared statement para insertar ADMM/ADMT en dias_especiales
-            $stmtInsAdm = $this->db->prepare(
-                "INSERT INTO dias_especiales
-                 (trabajador_id, tipo, fecha_inicio, fecha_fin, descripcion, estado)
-                 VALUES (?, ?, ?, NULL, 'AUTO: generado automáticamente', 'programado')"
-            );
 
             foreach ($semanasShuffled as $semana) {
                 foreach ($trabajadoresShuffled as $trab) {
@@ -421,114 +488,60 @@ class AsignacionAutomatica {
                     }
                     shuffle($diasSemana);
 
-                    // Decidir tipo: 70% L4, 15% ADMM, 15% ADMT
-                    $rand = rand(1, 100);
-                    $tipoElegido = $rand <= 70 ? 'L4' : ($rand <= 85 ? 'ADMM' : 'ADMT');
-
                     $asignado = false;
 
-                    // ── Intentar asignar ADMM ────────────────────────────
-                    if ($tipoElegido === 'ADMM') {
-                        foreach ($diasSemana as $fechaAdm) {
-                            // Verificar que no tenga ya un turno normal ese día
-                            if (!empty($ctx['asignadosPorDia'][$fechaAdm][$trab['id']])) continue;
-
-                            $disponiblesL4 = $this->getDisponiblesL4(null, null, $fechaAdm, $ctx);
-                            $disponible = array_filter($disponiblesL4, function($t) use ($trab) { return $t['id'] == $trab['id']; });
-                            if (empty($disponible)) continue;
-
-                            try {
-                                $stmtInsAdm->execute([$trab['id'], 'ADMM', $fechaAdm]);
-                                $asignaciones[] = ['fecha'=>$fechaAdm,'puesto'=>'ADM','turno'=>'ADMM','trabajador'=>$trab['nombre']];
-                                $admPorTrabajadorSemana[$trab['id']][$semana['lunes']] = 'ADMM';
-                                $ctx['diasEspeciales'][] = ['trabajador_id'=>$trab['id'],'fecha_inicio'=>$fechaAdm,'fecha_fin'=>$fechaAdm,'tipo'=>'ADMM'];
-                                // Registrar en asignadosPorDia para bloquear Paso 3
-                                $ctx['asignadosPorDia'][$fechaAdm][$trab['id']][] = 'ADMM';
-                                $this->trabajadores->limpiarCacheFecha($fechaAdm);
-                                $asignado = true;
-                                break;
-                            } catch (Exception $e) {
-                                // Duplicado u otro error, intentar siguiente día
-                            }
-                        }
-                        // Si no pudo ADMM, caer a L4
-                        if (!$asignado) $tipoElegido = 'L4';
-                    }
-
-                    // ── Intentar asignar ADMT ────────────────────────────
-                    if ($tipoElegido === 'ADMT') {
-                        foreach ($diasSemana as $fechaAdm) {
-                            // Verificar que no tenga ya un turno normal ese día
-                            if (!empty($ctx['asignadosPorDia'][$fechaAdm][$trab['id']])) continue;
-
-                            $disponiblesL4 = $this->getDisponiblesL4(null, null, $fechaAdm, $ctx);
-                            $disponible = array_filter($disponiblesL4, function($t) use ($trab) { return $t['id'] == $trab['id']; });
-                            if (empty($disponible)) continue;
-
-                            try {
-                                $stmtInsAdm->execute([$trab['id'], 'ADMT', $fechaAdm]);
-                                $asignaciones[] = ['fecha'=>$fechaAdm,'puesto'=>'ADM','turno'=>'ADMT','trabajador'=>$trab['nombre']];
-                                $admPorTrabajadorSemana[$trab['id']][$semana['lunes']] = 'ADMT';
-                                $ctx['diasEspeciales'][] = ['trabajador_id'=>$trab['id'],'fecha_inicio'=>$fechaAdm,'fecha_fin'=>$fechaAdm,'tipo'=>'ADMT'];
-                                // Registrar en asignadosPorDia para bloquear Paso 3
-                                $ctx['asignadosPorDia'][$fechaAdm][$trab['id']][] = 'ADMT';
-                                $this->trabajadores->limpiarCacheFecha($fechaAdm);
-                                $asignado = true;
-                                break;
-                            } catch (Exception $e) {
-                                // Duplicado u otro error, intentar siguiente día
-                            }
-                        }
-                        // Si no pudo ADMT, caer a L4
-                        if (!$asignado) $tipoElegido = 'L4';
-                    }
-
                     // ── Intentar asignar L4 ──────────────────────────────
-                    if ($tipoElegido === 'L4') {
-                        $puestosL4Mezclados = $puestosL4Info;
-                        shuffle($puestosL4Mezclados);
+                    $puestosL4Mezclados = $puestosL4Info;
+                    shuffle($puestosL4Mezclados);
+                    // D2 es de menor prioridad relativa: intentar antes otros puestos L4.
+                    usort($puestosL4Mezclados, function($a, $b) {
+                        $aEsD2 = strtoupper($a['codigo'] ?? '') === 'D2';
+                        $bEsD2 = strtoupper($b['codigo'] ?? '') === 'D2';
+                        if ($aEsD2 === $bEsD2) return 0;
+                        return $aEsD2 ? 1 : -1;
+                    });
 
-                        foreach ($diasSemana as $fechaL4) {
-                            if ($asignado) break;
-                            foreach ($puestosL4Mezclados as $puesto) {
-                                $turnoIdL4     = $puestosL4Map[$puesto['codigo']] ?? 9;
-                                $numeroTurnoL4 = $numeroPorTurnoId[$turnoIdL4] ?? 4;
+                    foreach ($diasSemana as $fechaL4) {
+                        if ($asignado) break;
+                        foreach ($puestosL4Mezclados as $puesto) {
+                            $turnoIdL4     = $puestosL4Map[$puesto['codigo']] ?? 9;
+                            $numeroTurnoL4 = $numeroPorTurnoId[$turnoIdL4] ?? 4;
 
-                                if ($this->estaPuestoOcupado($puesto['id'], $numeroTurnoL4, $fechaL4, $turnosPorPuestoFecha)) {
-                                    continue;
+                            if ($this->estaPuestoOcupado($puesto['id'], $numeroTurnoL4, $fechaL4, $turnosPorPuestoFecha)) {
+                                continue;
+                            }
+
+                            $disponiblesL4 = $this->getDisponiblesL4($puesto['id'], $fechaL4, $ctx);
+                            $disponible    = array_filter($disponiblesL4, function($t) use ($trab) { return $t['id'] == $trab['id']; });
+                            if (empty($disponible)) continue;
+
+                            $resultado = $this->turnosAsignados->asignarDirecto([
+                                'trabajador_id'     => $trab['id'],
+                                'puesto_trabajo_id' => $puesto['id'],
+                                'turno_id'          => $turnoIdL4,
+                                'fecha'             => $fechaL4,
+                                'observaciones'     => 'Asignacion automatica L4'
+                            ]);
+
+                            if ($resultado['success']) {
+                                $asignaciones[] = ['fecha'=>$fechaL4,'puesto'=>$puesto['codigo'],'turno'=>'L4','trabajador'=>$trab['nombre']];
+                                $turnosPorPuestoFecha[$puesto['id'].'|'.$numeroTurnoL4.'|'.$fechaL4] = true;
+
+                                if (!isset($turnosPorTrabajadorSemana[$trab['id']][$semana['lunes']])) {
+                                    $turnosPorTrabajadorSemana[$trab['id']][$semana['lunes']] = [];
                                 }
-
-                                $disponiblesL4 = $this->getDisponiblesL4($puesto['id'], $fechaL4, $ctx);
-                                $disponible    = array_filter($disponiblesL4, function($t) use ($trab) { return $t['id'] == $trab['id']; });
-                                if (empty($disponible)) continue;
-
-                                $resultado = $this->turnosAsignados->asignarDirecto([
-                                    'trabajador_id'     => $trab['id'],
-                                    'puesto_trabajo_id' => $puesto['id'],
-                                    'turno_id'          => $turnoIdL4,
-                                    'fecha'             => $fechaL4,
-                                    'observaciones'     => 'Asignacion automatica L4'
-                                ]);
-
-                                if ($resultado['success']) {
-                                    $asignaciones[] = ['fecha'=>$fechaL4,'puesto'=>$puesto['codigo'],'turno'=>'L4','trabajador'=>$trab['nombre']];
-                                    $turnosPorPuestoFecha[$puesto['id'].'|'.$numeroTurnoL4.'|'.$fechaL4] = true;
-
-                                    if (!isset($turnosPorTrabajadorSemana[$trab['id']][$semana['lunes']])) {
-                                        $turnosPorTrabajadorSemana[$trab['id']][$semana['lunes']] = [];
-                                    }
-                                    $turnosPorTrabajadorSemana[$trab['id']][$semana['lunes']][] = $numeroTurnoL4;
-                                    $ctx['asignadosPorDia'][$fechaL4][$trab['id']][] = $numeroTurnoL4;
-                                    $conteoTurnos[$trab['id']] = ($conteoTurnos[$trab['id']] ?? 0) + 1;
-                                    $asignado = true;
-                                    break;
-                                }
+                                $turnosPorTrabajadorSemana[$trab['id']][$semana['lunes']][] = $numeroTurnoL4;
+                                $ctx['asignadosPorDia'][$fechaL4][$trab['id']][] = $numeroTurnoL4;
+                                $this->actualizarPerfilSemanal($perfilSemanal, $trab['id'], $semana['lunes'], 4.0);
+                                $conteoTurnos[$trab['id']] = ($conteoTurnos[$trab['id']] ?? 0) + 1;
+                                $asignado = true;
+                                break;
                             }
                         }
                     }
 
                     if (!$asignado) {
-                        $errores[] = ['fecha'=>$semana['lunes'].' al '.$semana['domingo'],'puesto'=>'L4','turno'=>'L4/ADMM/ADMT','error'=>'Sin turno L4/ADMM/ADMT disponible para '.$trab['nombre']];
+                        $errores[] = ['fecha'=>$semana['lunes'].' al '.$semana['domingo'],'puesto'=>'L4','turno'=>'L4','error'=>'Sin turno L4 disponible para '.$trab['nombre']];
                     }
                 }
             }
@@ -554,6 +567,13 @@ class AsignacionAutomatica {
 
                 // Orden final: prioritarios T1, prioritarios T2 (que no están en T1), resto
                 $puestosOrdenados = array_merge($puestosPrioT1, $puestosPrioT2, $puestosResto);
+                // D2 se procesa al final para priorizar cobertura de otros puestos.
+                usort($puestosOrdenados, function($a, $b) {
+                    $aEsD2 = strtoupper($a['codigo'] ?? '') === 'D2';
+                    $bEsD2 = strtoupper($b['codigo'] ?? '') === 'D2';
+                    if ($aEsD2 === $bEsD2) return 0;
+                    return $aEsD2 ? 1 : -1;
+                });
 
                 foreach ($puestosOrdenados as $puesto) {
                     // T1 y T2 procesan sus turnos en orden fijo (no aleatorio) para respetar prioridad
@@ -567,10 +587,23 @@ class AsignacionAutomatica {
 
                     foreach ($turnosOrdenados as $turno) {
                         $codigoPuesto = strtoupper($puesto['codigo']);
+                        // Regla de negocio: D2 en mañana no se asigna automáticamente.
+                        if ($codigoPuesto === 'D2' && (int)$turno === 1) continue;
+                        $turnoIdBase = $turnoIdPorNumero[$turno] ?? null;
+                        if ($turnoIdBase === null) continue;
 
                         if ($turno == 3 && !in_array($codigoPuesto, $puestosNocturnos)) continue;
 
-                        $turnoIdReal = $turnoIdPorNumero[$turno] ?? $turno;
+                        $forzar8h = in_array($codigoPuesto, ['D3','V1','V2','C','F6','F11']) && in_array((int)$turno, [2,3]);
+                        if ($forzar8h && !$this->tieneOpcionTurnoMinHoras($turnoOpcionesPorNumero[$turno] ?? [], 7.5)) {
+                            $errores[] = [
+                                'fecha'  => $fecha,
+                                'puesto' => $puesto['codigo'],
+                                'turno'  => $turno,
+                                'error'  => 'Configuracion invalida: este puesto en tarde/noche requiere turno >= 8h'
+                            ];
+                            continue;
+                        }
 
                         if (isset($puestosL4Turno[$codigoPuesto]) && $puestosL4Turno[$codigoPuesto] == $turno) {
                             if ($this->tieneTurnoL4EnFecha($puesto['id'], $fecha, $turnosPorPuestoFecha)) {
@@ -584,7 +617,7 @@ class AsignacionAutomatica {
 
                         // ── FALLBACK POR NIVELES ──────────────────────────
                         $resultado_busqueda = $this->getDisponiblesConFallback(
-                            $puesto['id'], $turnoIdReal, $turno, $fecha, $ctx, $conteoTurnos
+                            $puesto['id'], $turnoIdBase, $turno, $fecha, $ctx, $conteoTurnos
                         );
                         $disponibles = $resultado_busqueda['lista'];
                         $nivelUsado  = $resultado_busqueda['nivel'];
@@ -602,7 +635,31 @@ class AsignacionAutomatica {
 
                         $fallbackStats[$nivelUsado] = ($fallbackStats[$nivelUsado] ?? 0) + 1;
 
-                        $sel = $disponibles[0];
+                        $planAsignacion = $this->seleccionarMejorCandidatoSemanal(
+                            $disponibles,
+                            $fecha,
+                            $turno,
+                            $codigoPuesto,
+                            $forzar8h,
+                            $turnoOpcionesPorNumero,
+                            $perfilSemanal,
+                            $perfilObjetivo,
+                            $maxHorasSemanalOperativo,
+                            $conteoTurnos
+                        );
+                        if (!$planAsignacion) {
+                            $errores[] = [
+                                'fecha'  => $fecha,
+                                'puesto' => $puesto['codigo'],
+                                'turno'  => $turno,
+                                'error'  => 'Sin trabajador elegible por limite de horas semanales'
+                            ];
+                            continue;
+                        }
+
+                        $sel        = $planAsignacion['trabajador'];
+                        $turnoIdReal= (int)$planAsignacion['turno_id'];
+                        $turnoHoras = (float)$planAsignacion['turno_horas'];
 
                         // Observación indica si se usó fallback
                         $obs = 'Asignacion automatica';
@@ -623,6 +680,8 @@ class AsignacionAutomatica {
                             if ($turno == 3) {
                                 $ctx['nochesPorTrabajador'][$sel['id']] = ($ctx['nochesPorTrabajador'][$sel['id']] ?? 0) + 1;
                             }
+                            $semKeySel = $this->getSemanaKey($fecha);
+                            $this->actualizarPerfilSemanal($perfilSemanal, $sel['id'], $semKeySel, $turnoHoras);
                             $conteoTurnos[$sel['id']] = ($conteoTurnos[$sel['id']] ?? 0) + 1;
                             $turnosPorPuestoFecha[$puesto['id'].'|'.$turno.'|'.$fecha] = true;
 
@@ -648,6 +707,7 @@ class AsignacionAutomatica {
                 'libres_errores'   => count($libresErrores),
                 'detalle_errores'  => $errores,
                 'detalle_libres'   => $libresAsignados,
+                'warnings'         => $warnings,
                 // Estadísticas de fallback para diagnóstico
                 'fallback_stats'   => [
                     'nivel_1_normal'              => $fallbackStats[1] ?? 0,
@@ -777,7 +837,7 @@ class AsignacionAutomatica {
         $selectPuesto = $puestoCol ? "ta.$puestoCol as puesto_trabajo_id" : "NULL as puesto_trabajo_id";
 
         $stmt = $this->db->prepare(
-            "SELECT ta.trabajador_id, " . $selectPuesto . ", ta.fecha, ct.numero_turno
+            "SELECT ta.trabajador_id, " . $selectPuesto . ", ta.fecha, ct.numero_turno, ct.horas_laborales
              FROM turnos_asignados ta
              INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
              WHERE ta.fecha BETWEEN ? AND ?
@@ -788,16 +848,172 @@ class AsignacionAutomatica {
 
         $turnosPorTrabajadorSemana = [];
         $turnosPorPuestoFecha      = [];
+        $perfilSemanal             = [];
 
         foreach ($result as $row) {
             $semanaKey = $this->getSemanaKey($row['fecha']);
             $turnosPorTrabajadorSemana[$row['trabajador_id']][$semanaKey][] = $row['numero_turno'];
+            $this->actualizarPerfilSemanal($perfilSemanal, $row['trabajador_id'], $semanaKey, (float)$row['horas_laborales']);
             if ($row['puesto_trabajo_id'] !== null) {
                 $turnosPorPuestoFecha[$row['puesto_trabajo_id'].'|'.$row['numero_turno'].'|'.$row['fecha']] = true;
             }
         }
 
-        return ['turnosPorTrabajadorSemana' => $turnosPorTrabajadorSemana, 'turnosPorPuestoFecha' => $turnosPorPuestoFecha];
+        return [
+            'turnosPorTrabajadorSemana' => $turnosPorTrabajadorSemana,
+            'turnosPorPuestoFecha'      => $turnosPorPuestoFecha,
+            'perfilSemanal'             => $perfilSemanal,
+        ];
+    }
+
+    private function clasificarBloqueHoras($horas) {
+        if ($horas >= 7.5) return 'h8';
+        if ($horas >= 5.5) return 'h6';
+        if ($horas >= 3.5) return 'h4';
+        return 'otro';
+    }
+
+    private function actualizarPerfilSemanal(&$perfilSemanal, $trabajadorId, $semanaKey, $horas) {
+        if (!isset($perfilSemanal[$trabajadorId][$semanaKey])) {
+            $perfilSemanal[$trabajadorId][$semanaKey] = [
+                'total_horas' => 0.0,
+                'h8' => 0,
+                'h6' => 0,
+                'h4' => 0,
+                'otro' => 0,
+            ];
+        }
+
+        $perfilSemanal[$trabajadorId][$semanaKey]['total_horas'] += (float)$horas;
+        $bloque = $this->clasificarBloqueHoras((float)$horas);
+        $perfilSemanal[$trabajadorId][$semanaKey][$bloque]++;
+    }
+
+    private function tieneOpcionTurnoMinHoras($opcionesTurno, $minHoras) {
+        foreach ($opcionesTurno as $op) {
+            if ((float)($op['horas'] ?? 0) >= (float)$minHoras) return true;
+        }
+        return false;
+    }
+
+    private function elegirOpcionTurnoParaPerfil($opcionesTurno, $perfil, $perfilObjetivo, $forzar8h) {
+        if (empty($opcionesTurno)) return null;
+
+        $filtradas = array_values(array_filter($opcionesTurno, function($op) use ($forzar8h) {
+            if (!$forzar8h) return true;
+            return (float)($op['horas'] ?? 0) >= 7.5;
+        }));
+        if (empty($filtradas)) return null;
+
+        $ops8 = array_values(array_filter($filtradas, function($op) { return (float)($op['horas'] ?? 0) >= 7.5; }));
+        $ops6 = array_values(array_filter($filtradas, function($op) { $h = (float)($op['horas'] ?? 0); return $h >= 5.5 && $h <= 6.5; }));
+
+        // Buscar 6h después de completar 4 turnos de 8h semanales.
+        if (!$forzar8h && (int)($perfil['h8'] ?? 0) >= (int)$perfilObjetivo['max_8h'] && (int)($perfil['h6'] ?? 0) < (int)$perfilObjetivo['max_6h'] && !empty($ops6)) {
+            usort($ops6, function($a, $b) { return $a['id'] <=> $b['id']; });
+            return $ops6[0];
+        }
+
+        // Mientras no complete los 4 turnos de 8h, priorizar 8h.
+        if ((int)($perfil['h8'] ?? 0) < (int)$perfilObjetivo['max_8h'] && !empty($ops8)) {
+            usort($ops8, function($a, $b) { return $a['id'] <=> $b['id']; });
+            return $ops8[0];
+        }
+
+        // Si ya completó 8h y aún le falta 6h, priorizar 6h.
+        if (!$forzar8h && (int)($perfil['h6'] ?? 0) < (int)$perfilObjetivo['max_6h'] && !empty($ops6)) {
+            usort($ops6, function($a, $b) { return $a['id'] <=> $b['id']; });
+            return $ops6[0];
+        }
+
+        // Fallback estable: más horas primero para sostener cobertura.
+        usort($filtradas, function($a, $b) {
+            if ($a['horas'] == $b['horas']) return $a['id'] <=> $b['id'];
+            return $b['horas'] <=> $a['horas'];
+        });
+        return $filtradas[0];
+    }
+
+    private function seleccionarMejorCandidatoSemanal($disponibles, $fecha, $turnoNumero, $codigoPuesto, $forzar8h, $turnoOpcionesPorNumero, $perfilSemanal, $perfilObjetivo, $maxHorasSemanalOperativo, $conteoTurnos) {
+        if (empty($disponibles)) return null;
+
+        $semanaKey = $this->getSemanaKey($fecha);
+        $elegibles = [];
+        $respaldo  = [];
+
+        foreach ($disponibles as $trab) {
+            $id = $trab['id'];
+            $perfil = $perfilSemanal[$id][$semanaKey] ?? ['total_horas' => 0.0, 'h8' => 0, 'h6' => 0, 'h4' => 0, 'otro' => 0];
+
+            $opcionTurno = $this->elegirOpcionTurnoParaPerfil(
+                $turnoOpcionesPorNumero[$turnoNumero] ?? [],
+                $perfil,
+                $perfilObjetivo,
+                $forzar8h
+            );
+            if (!$opcionTurno) continue;
+
+            $turnoHoras = (float)($opcionTurno['horas'] ?? 0);
+            $bloque = $this->clasificarBloqueHoras($turnoHoras);
+
+            $totalActual = (float)$perfil['total_horas'];
+            $totalProy   = $totalActual + (float)$turnoHoras;
+            $conteoBase  = (int)($conteoTurnos[$id] ?? 0);
+
+            $penalidad = 0;
+            if ($bloque === 'h8') {
+                if ((int)$perfil['h8'] >= (int)$perfilObjetivo['max_8h']) $penalidad += 20;
+                else $penalidad -= 2;
+            } elseif ($bloque === 'h6') {
+                if ((int)$perfil['h6'] >= (int)$perfilObjetivo['max_6h']) $penalidad += 15;
+                else $penalidad -= 2;
+            } elseif ($bloque === 'h4') {
+                if ((int)$perfil['h4'] >= (int)$perfilObjetivo['max_4h']) $penalidad += 10;
+                else $penalidad -= 2;
+            }
+
+            $item = [
+                'trabajador' => $trab,
+                'turno_id'   => (int)$opcionTurno['id'],
+                'turno_horas'=> $turnoHoras,
+                'penalidad'  => $penalidad,
+                'total'      => $totalActual,
+                'proyectado' => $totalProy,
+                'conteo'     => $conteoBase,
+            ];
+
+            if ($totalProy <= $maxHorasSemanalOperativo + 0.001) $elegibles[] = $item;
+            else $respaldo[] = $item;
+        }
+
+        $ordenar = function(&$lista) {
+            usort($lista, function($a, $b) {
+                if ($a['penalidad'] !== $b['penalidad']) return $a['penalidad'] <=> $b['penalidad'];
+                if ($a['total'] !== $b['total']) return $a['total'] <=> $b['total'];
+                if ($a['conteo'] !== $b['conteo']) return $a['conteo'] <=> $b['conteo'];
+                return $a['proyectado'] <=> $b['proyectado'];
+            });
+        };
+
+        if (!empty($elegibles)) {
+            $ordenar($elegibles);
+            return [
+                'trabajador' => $elegibles[0]['trabajador'],
+                'turno_id'   => $elegibles[0]['turno_id'],
+                'turno_horas'=> $elegibles[0]['turno_horas'],
+            ];
+        }
+
+        if (!empty($respaldo)) {
+            $ordenar($respaldo);
+            return [
+                'trabajador' => $respaldo[0]['trabajador'],
+                'turno_id'   => $respaldo[0]['turno_id'],
+                'turno_horas'=> $respaldo[0]['turno_horas'],
+            ];
+        }
+
+        return null;
     }
 
     private function getSemanaKey($fecha) {

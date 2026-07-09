@@ -236,6 +236,18 @@ async function generarExcelIA(cfg) {
         const DIAS_SEMANA = ['Dom','Lun','Mar','Mié','Jue','Vie','Sáb'];
         const periodo = `Período: ${primerDia} al ${ultimoDia}`;
 
+        const etiquetaTurnoIA = (t, prefijoT = true) => {
+            const orig = Number(t?.numero_turno) || 0;
+            const base = [4,9].includes(orig) ? 1 : [5,10].includes(orig) ? 2 : orig;
+            const esL4 = [4,5,9,10].includes(orig);
+            const horas = Number(t?.horas_laborales);
+            const horasTag = Number.isFinite(horas) ? ` ${Math.round(horas)}H` : (esL4 ? ' 4H' : '');
+            const puesto = t?.puesto_codigo || '';
+
+            if (esL4) return prefijoT ? `T${base} ${puesto} L4 4H`.trim() : `${base}${puesto}L4 4H`;
+            return prefijoT ? `T${base} ${puesto}${horasTag || ' 8H'}`.trim() : `${base}${puesto}${horasTag || ' 8H'}`;
+        };
+
         // ── EQUIDAD ──────────────────────────────────────────────────────────
         if (tipo === 'equidad' || tipo === 'general') {
             const cT={},cN={},cL={};
@@ -359,7 +371,7 @@ async function generarExcelIA(cfg) {
             if(tnrTurnos.length===0)rows.push(['Sin turnos no realizados en el período','','','','','']);
             else{
                 tnrTurnos.sort((a,b)=>(a.trabajador||'').localeCompare(b.trabajador||'')||a.fecha.localeCompare(b.fecha));
-                tnrTurnos.forEach(t=>{const origN=Number(t.numero_turno);const numN=[4,9].includes(origN)?1:[5,10].includes(origN)?2:origN;const esL4=[4,5,9,10].includes(origN);const dt=new Date(t.fecha+'T00:00:00');rows.push([t.trabajador||'?',t.fecha,DIAS_SEMANA[dt.getDay()],t.puesto_codigo||'?','T'+numN+(esL4?' L4':''),t.area||'?']);});
+                tnrTurnos.forEach(t=>{const dt=new Date(t.fecha+'T00:00:00');rows.push([t.trabajador||'?',t.fecha,DIAS_SEMANA[dt.getDay()],t.puesto_codigo||'?',etiquetaTurnoIA(t,true),t.area||'?']);});
                 rows.push(['','','','','','']);rows.push(['── RESUMEN ──','','','','','']);rows.push(['Trabajador','Total TNR','','','','']);
                 const porTrab={};tnrTurnos.forEach(t=>{porTrab[t.trabajador||'?']=(porTrab[t.trabajador||'?']||0)+1;});
                 Object.entries(porTrab).sort((a,b)=>b[1]-a[1]).forEach(([n,c])=>rows.push([n,c,'','','','']));
@@ -380,7 +392,7 @@ async function generarExcelIA(cfg) {
             const nombre=trab?trab.nombre:'Trabajador #'+tid;
             const rows=[[`${nombre} — ${mesNom} ${anio}`,'','','',''],[periodo,'','','',''],['','','','',''],['Fecha','Tipo','Puesto','Turno','Estado']];
             const merges=[{s:{r:0,c:0},e:{r:0,c:4}},{s:{r:1,c:0},e:{r:1,c:4}}];
-            misTurnos.sort((a,b)=>a.fecha.localeCompare(b.fecha)).forEach(t=>{const n=Number(t.numero_turno);const b2=[4,9].includes(n)?1:[5,10].includes(n)?2:n;rows.push([t.fecha,'Turno T'+b2+([4,5,9,10].includes(n)?' L4':''),t.puesto_codigo||'?',t.turno_nombre||'?',t.estado]);});
+            misTurnos.sort((a,b)=>a.fecha.localeCompare(b.fecha)).forEach(t=>{rows.push([t.fecha,'Turno ' + etiquetaTurnoIA(t,true),t.puesto_codigo||'?',t.turno_nombre||'?',t.estado]);});
             misLibres.forEach(d=>rows.push([d.fecha_inicio,d.tipo,'—','—',d.estado]));
             misInc.forEach(i=>rows.push([i.fecha_inicio+'→'+i.fecha_fin,'INCAPACIDAD','—','—',i.estado]));
             if(rows.length===4)rows.push(['Sin registros en este período','','','','']);
