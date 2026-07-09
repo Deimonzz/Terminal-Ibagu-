@@ -4,14 +4,20 @@
 //LC, L, L4, L8, SUS, VAC, ADMM, ADMT, ADM
 
 require_once __DIR__ . '/../../config/database.php';
+require_once __DIR__ . '/TurnosAsignados.php';
+require_once __DIR__ . '/Trabajadores.php';
 
 class DiasEspeciales {
     private $db;
     private $puestoColumn;
+    private $turnosAsignados;
+    private $trabajadores;
     
     public function __construct() {
         $this->db = Database::getInstance()->getConnection();
         $this->puestoColumn = Database::getColumnName('dias_especiales', 'puesto_trabajo_id', 'puesto_id');
+        $this->turnosAsignados = new TurnosAsignados();
+        $this->trabajadores = new Trabajadores();
     }
     
     //Obtener días especiales
@@ -94,6 +100,15 @@ class DiasEspeciales {
         
         try {
             $this->db->beginTransaction();
+
+            $turnosAfectados = [];
+            if (in_array($datos['tipo'], ['VAC', 'SUS'])) {
+                $turnosAfectados = $this->obtenerTurnosAfectados(
+                    $datos['trabajador_id'],
+                    $datos['fecha_inicio'],
+                    $datos['fecha_fin'] ?? $datos['fecha_inicio']
+                );
+            }
             
             // Si es un tipo de disponibilidad (ADM/ADMM/ADMT), eliminar cualquier otro de estos tipos ese día
             if (in_array($datos['tipo'], ['ADM', 'ADMM', 'ADMT'])) {
@@ -144,11 +159,26 @@ class DiasEspeciales {
             }
             
             $this->db->commit();
+
+            $cobertura = ['total' => 0, 'cubiertos' => 0, 'sin_cobertura' => 0, 'detalle' => []];
+            if (in_array($datos['tipo'], ['VAC', 'SUS'])) {
+                $cobertura = $this->cubrirTurnosAfectados(
+                    $datos['trabajador_id'],
+                    $turnosAfectados,
+                    'dia_especial_' . strtolower($datos['tipo'])
+                );
+            }
+
+            $msgCobertura = '';
+            if ($cobertura['total'] > 0) {
+                $msgCobertura = ' | Cobertura automática: ' . $cobertura['cubiertos'] . '/' . $cobertura['total'];
+            }
             
             return [
                 'success' => true,
                 'id' => $id,
-                'message' => 'Día especial registrado'
+                'message' => 'Día especial registrado' . $msgCobertura,
+                'cobertura_automatica' => $cobertura
             ];
             
         } catch (PDOException $e) {
@@ -358,6 +388,138 @@ class DiasEspeciales {
             ':fecha_inicio' => $fecha_inicio,
             ':fecha_fin' => $fecha_fin
         ]);
+    }
+
+    private function obtenerTurnosAfectados($trabajador_id, $fecha_inicio, $fecha_fin) {
+        $puestoCol = Database::getColumnName('turnos_asignados', 'puesto_trabajo_id', 'puesto_id');
+        $selectPuesto = $puestoCol ? ("ta." . $puestoCol . " as puesto_trabajo_id") : "NULL as puesto_trabajo_id";
+
+        $sql = "SELECT ta.id, ta.trabajador_id, ta.turno_id, ta.fecha, " . $selectPuesto . "
+                FROM turnos_asignados ta
+                WHERE ta.trabajador_id = :trabajador_id
+                AND ta.fecha BETWEEN :fecha_inicio AND :fecha_fin
+                AND ta.estado IN ('programado', 'activo')
+                ORDER BY ta.fecha ASC, ta.id ASC";
+
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute([
+            ':trabajador_id' => $trabajador_id,
+            ':fecha_inicio' => $fecha_inicio,
+            ':fecha_fin' => $fecha_fin
+        ]);
+
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    private function cubrirTurnosAfectados($trabajador_id_original, $turnosAfectados, $motivo = 'dia_especial') {
+        $resultado = [
+            'total' => count($turnosAfectados),
+            'cubiertos' => 0,
+            'sin_cobertura' => 0,
+            'detalle' => []
+        ];
+
+        if (empty($turnosAfectados)) {
+            return $resultado;
+        }
+
+        $stmtTrab = $this->db->prepare("SELECT nombre FROM trabajadores WHERE id = :id");
+        $stmtTrab->execute([':id' => $trabajador_id_original]);
+        $nombreOriginal = ($stmtTrab->fetch(PDO::FETCH_ASSOC)['nombre'] ?? ('Trabajador #' . $trabajador_id_original));
+
+        foreach ($turnosAfectados as $turno) {
+            $puestoId = $turno['puesto_trabajo_id'] ?? null;
+            if (!$puestoId) {
+                $resultado['sin_cobertura']++;
+                $resultado['detalle'][] = [
+                    'turno_id' => $turno['id'],
+                    'fecha' => $turno['fecha'],
+                    'status' => 'sin_cobertura',
+                    'motivo' => 'Turno sin puesto asociado'
+                ];
+                continue;
+            }
+
+            $disponibles = $this->trabajadores->obtenerDisponibles($puestoId, $turno['turno_id'], $turno['fecha']);
+            $cubierto = false;
+
+            foreach ($disponibles as $cand) {
+                $valid = $this->turnosAsignados->validarAsignacion(
+                    $cand['id'],
+                    $puestoId,
+                    $turno['turno_id'],
+                    $turno['fecha']
+                );
+
+                if (!$valid['valido']) {
+                    continue;
+                }
+
+                $obs = 'AUTO-COBERTURA por ' . $motivo . ': reemplaza a ' . $nombreOriginal . ' | turno original #' . $turno['id'];
+                $ok = $this->insertarTurnoCobertura($cand['id'], $puestoId, $turno['turno_id'], $turno['fecha'], $obs);
+                if ($ok) {
+                    $resultado['cubiertos']++;
+                    $resultado['detalle'][] = [
+                        'turno_id' => $turno['id'],
+                        'fecha' => $turno['fecha'],
+                        'status' => 'cubierto',
+                        'reemplazo_trabajador_id' => $cand['id'],
+                        'reemplazo_trabajador' => $cand['nombre'] ?? null
+                    ];
+                    $cubierto = true;
+                    break;
+                }
+            }
+
+            if (!$cubierto) {
+                $resultado['sin_cobertura']++;
+                $resultado['detalle'][] = [
+                    'turno_id' => $turno['id'],
+                    'fecha' => $turno['fecha'],
+                    'status' => 'sin_cobertura',
+                    'motivo' => 'Sin reemplazo disponible'
+                ];
+            }
+        }
+
+        return $resultado;
+    }
+
+    private function insertarTurnoCobertura($trabajador_id, $puesto_id, $turno_id, $fecha, $observaciones) {
+        try {
+            $puestoCol = Database::getColumnName('turnos_asignados', 'puesto_trabajo_id', 'puesto_id');
+            if ($puestoCol) {
+                $sql = "INSERT INTO turnos_asignados
+                        (trabajador_id, " . $puestoCol . ", turno_id, fecha, estado, observaciones, created_by)
+                        VALUES (:trabajador_id, :puesto_id, :turno_id, :fecha, 'programado', :observaciones, :created_by)";
+                $params = [
+                    ':trabajador_id' => $trabajador_id,
+                    ':puesto_id' => $puesto_id,
+                    ':turno_id' => $turno_id,
+                    ':fecha' => $fecha,
+                    ':observaciones' => $observaciones,
+                    ':created_by' => 1
+                ];
+            } else {
+                $sql = "INSERT INTO turnos_asignados
+                        (trabajador_id, turno_id, fecha, estado, observaciones, created_by)
+                        VALUES (:trabajador_id, :turno_id, :fecha, 'programado', :observaciones, :created_by)";
+                $params = [
+                    ':trabajador_id' => $trabajador_id,
+                    ':turno_id' => $turno_id,
+                    ':fecha' => $fecha,
+                    ':observaciones' => $observaciones,
+                    ':created_by' => 1
+                ];
+            }
+
+            $stmt = $this->db->prepare($sql);
+            $stmt->execute($params);
+            return true;
+        } catch (PDOException $e) {
+            error_log('[DiasEspeciales::insertarTurnoCobertura] ' . $e->getMessage());
+            return false;
+        }
     }
     
     
