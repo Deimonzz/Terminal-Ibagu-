@@ -63,7 +63,7 @@ class Trabajadores {
                 )
                 AND t.id NOT IN (
                     SELECT trabajador_id FROM dias_especiales
-                    WHERE tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS', 'CAP', 'ADM', 'ADMM', 'ADMT')
+                    WHERE tipo IN ('LC', 'L', 'L8', 'VAC', 'SUS', 'CAP')
                     AND :fecha_lib BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                     AND estado IN ('programado', 'activo')
                 )";
@@ -73,6 +73,40 @@ class Trabajadores {
             ':fecha_inca' => $fecha,
             ':fecha_lib' => $fecha
         ];
+
+        // ADM (administrativo completo): bloquea cualquier turno operativo del día
+        $sql .= "
+            AND t.id NOT IN (
+                SELECT trabajador_id FROM dias_especiales
+                WHERE tipo = 'ADM'
+                AND :fecha_adm BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
+                AND estado IN ('programado', 'activo')
+            )";
+        $params[':fecha_adm'] = $fecha;
+
+        // ADMM (administrativo mañana): bloquea T2 y T3
+        if ($numeroTurno == 2 || $numeroTurno == 3) {
+            $sql .= "
+                AND t.id NOT IN (
+                    SELECT trabajador_id FROM dias_especiales
+                    WHERE tipo = 'ADMM'
+                    AND :fecha_admm BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
+                    AND estado IN ('programado', 'activo')
+                )";
+            $params[':fecha_admm'] = $fecha;
+        }
+
+        // ADMT (administrativo tarde): bloquea T1 y T3
+        if ($numeroTurno == 1 || $numeroTurno == 3) {
+            $sql .= "
+                AND t.id NOT IN (
+                    SELECT trabajador_id FROM dias_especiales
+                    WHERE tipo = 'ADMT'
+                    AND :fecha_admt BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
+                    AND estado IN ('programado', 'activo')
+                )";
+            $params[':fecha_admt'] = $fecha;
+        }
 
         if ($numeroTurno == 3) {
             $sql .= "
@@ -646,7 +680,7 @@ class Trabajadores {
                 )
                 AND t.id NOT IN (
                     SELECT trabajador_id FROM dias_especiales
-                    WHERE tipo IN ('LC','L','L8','VAC','SUS','CAP','ADM','ADMM','ADMT')
+                    WHERE tipo IN ('LC','L','L8','VAC','SUS','CAP')
                     AND :fecha_lib BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                     AND estado IN ('programado','activo')
                 )";
@@ -656,6 +690,16 @@ class Trabajadores {
             ':fecha_inca'     => $fecha,
             ':fecha_lib'      => $fecha,
         ];
+
+        // ADM (administrativo completo): bloquea cualquier turno operativo del día
+        $sql .= "
+            AND t.id NOT IN (
+                SELECT trabajador_id FROM dias_especiales
+                WHERE tipo = 'ADM'
+                AND :fecha_adm BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
+                AND estado IN ('programado','activo')
+            )";
+        $params[':fecha_adm'] = $fecha;
 
         // ADMM (admin mañana): solo disponible para T1 → bloquear T2 y T3
         if ($numeroTurno == 2 || $numeroTurno == 3) {
@@ -854,7 +898,7 @@ class Trabajadores {
                     )
                     AND t.id NOT IN (
                         SELECT trabajador_id FROM dias_especiales
-                        WHERE tipo IN ('LC','L','L8','VAC','SUS','CAP','ADM','ADMM','ADMT')
+                        WHERE tipo IN ('LC','L','L8','VAC','SUS','CAP')
                         AND :fecha3 BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                         AND estado IN ('programado','activo')
                     )
