@@ -171,34 +171,34 @@ async function cargarConfiguracionTurnos() {
   }
 }
 const horariosEspeciales = {
-    16: [ // G - Equipajes (solo 2 turnos, sin L4)
+    'G': [ // G - Equipajes (solo 2 turnos, sin L4)
         {numero: 1, nombre: 'Turno 1 - Mañana', inicio: '06:00', fin: '14:00'},
         {numero: 2, nombre: 'Turno 2 - Tarde',  inicio: '14:00', fin: '22:00'}
     ],
-    9: [ // F14 - Fox 14 (horarios especiales, sin L4)
+    'F14': [ // F14 - Fox 14 (horarios especiales, sin L4)
         {numero: 1, nombre: 'Turno 1 - Mañana', inicio: '04:00', fin: '12:00'},
         {numero: 2, nombre: 'Turno 2 - Tarde',  inicio: '12:00', fin: '20:00'},
         {numero: 3, nombre: 'Turno 3 - Noche',  inicio: '20:00', fin: '04:00'}
     ],
-    6: [ // F5 - Fox 5 (turnos normales + L4 14:00-18:00)
+    'F5': [ // F5 - Fox 5 (turnos normales + L4 14:00-18:00)
         {numero: 1, nombre: 'Turno 1 - Mañana', inicio: '06:00', fin: '14:00'},
         {numero: 2, nombre: 'Turno 2 - Tarde',  inicio: '14:00', fin: '22:00'},
         {numero: 3, nombre: 'Turno 3 - Noche',  inicio: '22:00', fin: '06:00'},
         {numero: 4, nombre: 'L4 - Tarde (4h)',   inicio: '14:00', fin: '18:00', esL4: true}
     ],
-    10: [ // F15 - Fox 15 (turnos normales + L4 14:00-18:00)
+    'F15': [ // F15 - Fox 15 (turnos normales + L4 14:00-18:00)
         {numero: 1, nombre: 'Turno 1 - Mañana', inicio: '06:00', fin: '14:00'},
         {numero: 2, nombre: 'Turno 2 - Tarde',  inicio: '14:00', fin: '22:00'},
         {numero: 3, nombre: 'Turno 3 - Noche',  inicio: '22:00', fin: '06:00'},
         {numero: 4, nombre: 'L4 - Tarde (4h)',   inicio: '14:00', fin: '18:00', esL4: true}
     ],
-    2: [ // D2 - Delta 2 (turnos normales + L4 16:00-20:00)
+    'D2': [ // D2 - Delta 2 (turnos normales + L4 16:00-20:00)
         {numero: 1, nombre: 'Turno 1 - Mañana', inicio: '06:00', fin: '14:00'},
         {numero: 2, nombre: 'Turno 2 - Tarde',  inicio: '14:00', fin: '22:00'},
         {numero: 3, nombre: 'Turno 3 - Noche',  inicio: '22:00', fin: '06:00'},
         {numero: 4, nombre: 'L4 - Tarde (4h)',   inicio: '16:00', fin: '20:00', esL4: true}
     ],
-    8: [ // F11 - Fox 11 (turnos normales + L4 06:00-10:00)
+    'F11': [ // F11 - Fox 11 (turnos normales + L4 06:00-10:00)
         {numero: 1, nombre: 'Turno 1 - Mañana', inicio: '06:00', fin: '14:00'},
         {numero: 2, nombre: 'Turno 2 - Tarde',  inicio: '14:00', fin: '22:00'},
         {numero: 3, nombre: 'Turno 3 - Noche',  inicio: '22:00', fin: '06:00'},
@@ -206,11 +206,46 @@ const horariosEspeciales = {
     ]
 };
 
+function obtenerCodigoPuestoPorId(puestoId) {
+    const pid = String(puestoId || '');
+    for (const area of Object.keys(puestosData || {})) {
+        const p = (puestosData[area] || []).find(x => String(x.id) === pid);
+        if (p) return String(p.codigo || '').toUpperCase();
+    }
+    return null;
+}
+
 function obtenerHorariosPuesto(puestoId) {
-    const h = horariosEspeciales[puestoId];
+    const codigo = obtenerCodigoPuestoPorId(puestoId);
+    const h = codigo ? horariosEspeciales[codigo] : null;
     return (h && h.length > 0) ? h : null;
 }
 async function cargarPuestosTrabajo() {
+    try {
+        const res = await fetch(API_BASE + 'turnos.php?action=puestos');
+        const data = await res.json();
+        if (data.success && Array.isArray(data.data) && data.data.length > 0) {
+            const grouped = {};
+            data.data.forEach(p => {
+                const area = p.area || 'OTROS';
+                if (!grouped[area]) grouped[area] = [];
+                grouped[area].push({
+                    id: Number(p.id),
+                    codigo: String(p.codigo || '').toUpperCase(),
+                    nombre: p.nombre,
+                    area: area
+                });
+            });
+            Object.keys(grouped).forEach(a => {
+                grouped[a].sort((x, y) => String(x.codigo).localeCompare(String(y.codigo), 'es', { sensitivity: 'base' }));
+            });
+            puestosData = grouped;
+            return;
+        }
+    } catch (e) {
+        console.warn('No se pudo cargar puestos desde API, usando fallback local.');
+    }
+
     puestosData = {
         'DELTA': [
             {id: 1, codigo: 'D1', nombre: 'Delta 1', area: 'DELTA'},
@@ -227,15 +262,15 @@ async function cargarPuestosTrabajo() {
             {id: 10, codigo: 'F15', nombre: 'Fox 15', area: 'FOX'}
         ],
         'VIGIA': [
-            {id: 11, codigo: 'V1', nombre: 'Vigía 1', area: 'VIGIA'},
-            {id: 12, codigo: 'V2', nombre: 'Vigía 2', area: 'VIGIA'}
+            {id: 11, codigo: 'V1', nombre: 'Vigia 1', area: 'VIGIA'},
+            {id: 12, codigo: 'V2', nombre: 'Vigia 2', area: 'VIGIA'}
         ],
         'TASA DE USO': [
             {id: 14, codigo: 'C', nombre: 'Tasa de Uso', area: 'TASA DE USO'},
-            {id: 16, codigo: 'C2', nombre: 'Tasa de Uso C2', area: 'TASA DE USO'},
+            {id: 16, codigo: 'C2', nombre: 'Tasa de Uso C2', area: 'TASA DE USO'}
         ],
         'EQUIPAJES': [
-            {id: 15, codigo: 'G', nombre: 'Equipajes', area: 'EQUIPAJES'},
+            {id: 15, codigo: 'G', nombre: 'Equipajes', area: 'EQUIPAJES'}
         ]
     };
 }
@@ -1912,15 +1947,16 @@ function renderizarVistaDiaria(turnos, fecha, filtroTurno, admList = [], supervi
     // El T3 solo tiene un subconjunto de puestos activos
     const PUESTOS_T3 = new Set(['V1','V2','C','C2','D3','F6','F11']);
 
-    // Indexar turnos asignados por puesto_id + numero_turno_normalizado
-    const idxTurnos = {}; // "puestoId_numNorm" → turno
+    // Indexar turnos asignados por codigo de puesto + numero_turno_normalizado
+    const idxTurnos = {}; // "codigo_numNorm" -> turno
     turnosFiltrados.forEach(t => {
         if (t.tipo_especial) return;
         let n = Number(t.numero_turno);
         if ([4,9].includes(n))  n = 1;
         if ([5,10].includes(n)) n = 2;
-        const pid = t.puesto_id || t.puesto_trabajo_id;
-        idxTurnos[pid + '_' + n] = t;
+        const codigo = String(t.puesto_codigo || '').toUpperCase();
+        if (!codigo) return;
+        idxTurnos[codigo + '_' + n] = t;
     });
 
     const especialesDesdeTurnos = turnosFiltrados.filter(t => t.tipo_especial);
@@ -1960,7 +1996,7 @@ function renderizarVistaDiaria(turnos, fecha, filtroTurno, admList = [], supervi
             areaConf.puestos.forEach(p => {
                 if (num === 3 && !PUESTOS_T3.has(p.cod)) return;
                 // T1/T2 muestran todos los puestos
-                if (idxTurnos[p.id + '_' + num]) asignadosEste++;
+                if (idxTurnos[p.cod + '_' + num]) asignadosEste++;
             });
         });
 
@@ -2054,7 +2090,7 @@ function renderizarVistaDiaria(turnos, fecha, filtroTurno, admList = [], supervi
                     return;
                 }
 
-                const t       = idxTurnos[p.id + '_' + num];
+                const t       = idxTurnos[p.cod + '_' + num];
                 const l4cfg   = PUESTOS_L4[p.cod];
                 const tieneL4 = !!(l4cfg && l4cfg.turno === num);
                 const l4param = tieneL4 ? `,true,${l4cfg.id}` : ',false,null';
@@ -2075,7 +2111,8 @@ function renderizarVistaDiaria(turnos, fecha, filtroTurno, admList = [], supervi
                     html += '<span style="color:' + (npStyle?'#dc3545':'#495057') + ';font-size:0.85rem;flex:1;' + (npStyle?'text-decoration:line-through;opacity:0.7;':'') + '">' + (t.trabajador||'') + '</span>';
                     if (npStyle) html += '<span style="background:#dc3545;color:white;font-size:0.75rem;padding:2px 7px;border-radius:4px;font-weight:800;">TNR</span>';
                     html += '<button style="padding:2px 6px;border:none;background:transparent;cursor:pointer;" title="Editar"';
-                    html += ' onclick="editarAsignacion(' + (t.id||0) + ',' + p.id + ",'" + f + "'," + origNum + ',' + (t.trabajador_id||'null') + ",'" + p.cod + "'" + l4param + ')"><i class="fas fa-edit" style="font-size:0.8rem;color:#6c757d;"></i></button>';
+                    const pidTurno = t.puesto_id || t.puesto_trabajo_id || p.id;
+                    html += ' onclick="editarAsignacion(' + (t.id||0) + ',' + pidTurno + ",'" + f + "'," + origNum + ',' + (t.trabajador_id||'null') + ",'" + p.cod + "'" + l4param + ')"><i class="fas fa-edit" style="font-size:0.8rem;color:#6c757d;"></i></button>';
                     html += '</div>';
                     const esNP = t.estado === 'no_presentado';
                     html += '<div style="display:flex;gap:3px;margin-top:2px;">';
