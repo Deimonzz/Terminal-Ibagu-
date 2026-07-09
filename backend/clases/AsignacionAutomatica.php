@@ -594,7 +594,11 @@ class AsignacionAutomatica {
 
                         if ($turno == 3 && !in_array($codigoPuesto, $puestosNocturnos)) continue;
 
-                        $forzar8h = in_array($codigoPuesto, ['D3','V1','V2','C','F6','F11']) && in_array((int)$turno, [2,3]);
+                        // Regla de negocio:
+                        // - C siempre debe quedar en 8h (todos sus turnos).
+                        // - D3, V1, V2, F6 y F11 se fuerzan a 8h en tarde/noche.
+                        $forzar8h = ($codigoPuesto === 'C')
+                            || (in_array($codigoPuesto, ['D3','V1','V2','F6','F11']) && in_array((int)$turno, [2,3]));
                         if ($forzar8h && !$this->tieneOpcionTurnoMinHoras($turnoOpcionesPorNumero[$turno] ?? [], 7.5)) {
                             $errores[] = [
                                 'fecha'  => $fecha,
