@@ -1,6 +1,7 @@
 //Variables Globales
 
 const API_BASE = 'backend/api/'; 
+window.API_BASE = API_BASE;
 
 function cerrarModal() {
     const overlay = document.getElementById('modal-overlay');
@@ -14,6 +15,13 @@ let anioActual = new Date().getFullYear();
 let puestosData = [];
 let turnosData = [];
 let trabajadoresData = [];
+
+function formatearFechaLocalYMD(fecha) {
+    const anio = fecha.getFullYear();
+    const mes = String(fecha.getMonth() + 1).padStart(2, '0');
+    const dia = String(fecha.getDate()).padStart(2, '0');
+    return `${anio}-${mes}-${dia}`;
+}
 
 //Inicia al cargar la pagina
 document.addEventListener('DOMContentLoaded', function() {
@@ -210,9 +218,14 @@ function obtenerCodigoPuestoPorId(puestoId) {
     const pid = String(puestoId || '');
     for (const area of Object.keys(puestosData || {})) {
         const p = (puestosData[area] || []).find(x => String(x.id) === pid);
-        if (p) return String(p.codigo || '').toUpperCase();
+        if (p) return normalizarCodigoPuesto(p.codigo || '');
     }
     return null;
+}
+
+function normalizarCodigoPuesto(codigo) {
+    const valor = String(codigo || '').trim().toUpperCase();
+    return valor === 'F4' ? 'F2' : valor;
 }
 
 function obtenerHorariosPuesto(puestoId) {
@@ -2506,7 +2519,7 @@ async function cargarGrillaMensual() {
             const dt = new Date(anioGrilla, mesGrilla, d);
             dias.push({
                 num: d,
-                fecha: dt.toISOString().split('T')[0],
+                fecha: formatearFechaLocalYMD(dt),
                 diaSemana: dt.toLocaleDateString('es-CO', { weekday: 'short' }).toUpperCase()
             });
         }
@@ -2591,7 +2604,7 @@ async function cargarGrillaMensual() {
                             const esCap   = tipoEspecial === 'CAP';
                             const inicio = (a.horas_inicio || a.hora_inicio || '').substring(0,5);
                             const fin    = (a.horas_fin   || a.hora_fin   || '').substring(0,5);
-                            const capPuesto = (a.puesto_codigo || '').trim();
+                            const capPuesto = normalizarCodigoPuesto(a.puesto_codigo || '');
                             const capBase = `CAP${capPuesto}`;
                             const capLabel = esCap && inicio && fin ? `${capBase} ${inicio.replace(/:00$/, '')}-${fin.replace(/:00$/, '')}` : capBase;
                             const tooltip_extra = a.descripcion ? ' — ' + a.descripcion : '';
@@ -2603,7 +2616,7 @@ async function cargarGrillaMensual() {
                             if (!origNum || Number.isNaN(origNum)) {
                                 const inicio = (a.horas_inicio || a.hora_inicio || '').substring(0,5);
                                 const fin    = (a.horas_fin   || a.hora_fin   || '').substring(0,5);
-                                const capPuesto = (a.puesto_codigo || '').trim();
+                                const capPuesto = normalizarCodigoPuesto(a.puesto_codigo || '');
                                 const capBase = `CAP${capPuesto}`;
                                 etiqueta = (inicio && fin) ? `${capBase} ${inicio.replace(/:00$/, '')}-${fin.replace(/:00$/, '')}` : capBase;
                                 bg = '#e9ecef';
@@ -2614,10 +2627,11 @@ async function cargarGrillaMensual() {
                                 else if (origNum === 5) num = 2;
                                 const es6h = Number(a.horas_laborales) === 6;
 
+                                const puestoCodigo = normalizarCodigoPuesto(a.puesto_codigo || '');
                                 if (origNum >= 4) {
-                                    etiqueta = String(num) + (a.puesto_codigo || '') + 'L4';
+                                    etiqueta = String(num) + puestoCodigo + 'L4';
                                 } else {
-                                    etiqueta = String(num) + (a.puesto_codigo || '') + (es6h ? ' 6H' : '');
+                                    etiqueta = String(num) + puestoCodigo + (es6h ? ' 6H' : '');
                                 }
 
                                 bg    = num === 1 ? '#d1ecf1' : num === 2 ? '#fff3cd' : '#1a1a2e';
@@ -2747,7 +2761,7 @@ function construirCodigoTurnoExport(t, puestoCodigo = '', opciones = {}) {
 
     const orig = Number(t.numero_turno) || 0;
     const base = [4, 9].includes(orig) ? 1 : [5, 10].includes(orig) ? 2 : orig;
-    const codigo = (t.puesto_codigo || puestoCodigo || '');
+    const codigo = normalizarCodigoPuesto(t.puesto_codigo || puestoCodigo || '');
     const horas = obtenerHorasTurnoExport(t);
     const horasTag = Number.isFinite(horas) ? ` ${Math.round(horas)}H` : '';
     const esL4 = [4, 5, 9, 10].includes(orig) || (Number.isFinite(horas) && horas <= 4.5 && [1, 2].includes(base));
@@ -4362,7 +4376,8 @@ function abrirPopoverMensual(celda, trabId, fecha, nombre, asigsSafeStr, cargo =
             const esL4 = [4,5,9,10].includes(origNum);
             const num = [4,9].includes(origNum) ? 1 : [5,10].includes(origNum) ? 2 : origNum;
             const es6h = Number(a.horas_laborales) === 6;
-            const etiqueta = esL4 ? `${num}${a.puesto_codigo||''}L4` : `T${num} ${a.puesto_codigo||''}${es6h ? ' 6H' : ''}`;
+            const puestoCodigo = normalizarCodigoPuesto(a.puesto_codigo || '');
+            const etiqueta = esL4 ? `${num}${puestoCodigo}L4` : `T${num} ${puestoCodigo}${es6h ? ' 6H' : ''}`;
             const nombreT = esL4 ? `L4 ${num===1?'Mañana':'Tarde'}` : num===1?'Mañana':num===2?'Tarde':num===3?'Noche':'Especial';
             const bgT = num===1?'#d1ecf1':num===2?'#fff3cd':'#1a1a2e';
             const colT = num===1?'#0c5460':num===2?'#856404':'#e0e0e0';
@@ -5056,7 +5071,7 @@ async function asignarTurnoRapidoMensual(trabId, fecha, nombre, cargo = '') {
     }
 
     mostrarSpinner('Cargando opciones...');
-    let puestos = [], turnosConf = [];
+    let puestos = [], turnosConf = [], turnosDia = [];
     try {
         const [rP, rT] = await Promise.all([
             fetch(API_BASE + 'turnos.php?action=puestos').then(r => r.json()),
@@ -5065,7 +5080,14 @@ async function asignarTurnoRapidoMensual(trabId, fecha, nombre, cargo = '') {
         puestos    = (rP.success && rP.data) ? rP.data : [];
         turnosConf = (rT.success && rT.data) ? rT.data.filter(t => [1,2,3,4,5].includes(Number(t.numero_turno))) : [];
     } catch(e) {}
+
+    try {
+        const rD = await fetch(API_BASE + 'turnos.php?fecha=' + fecha).then(r => r.json());
+        turnosDia = (rD.success && Array.isArray(rD.data)) ? rD.data.filter(t => t.estado !== 'cancelado') : [];
+    } catch(e) {}
     ocultarSpinner();
+
+    const turnosOrdenados = turnosConf.slice().sort((a, b) => Number(a.numero_turno) - Number(b.numero_turno));
 
     // Deduplicar turnos — preferir L4 (id=9,10) sobre Turno Especial (id=4,5)
     const ID_PREFERIDO_R = { 4: 9, 5: 10 };
@@ -5085,15 +5107,102 @@ async function asignarTurnoRapidoMensual(trabId, fecha, nombre, cargo = '') {
         optsPuestos += '</optgroup>';
     });
     const nombresR = {1:'T1 — Mañana (06-14h)', 2:'T2 — Tarde (14-22h)', 3:'T3 — Noche (22-06h)', 4:'L4 — 4h Mañana', 5:'L4 — 4h Tarde'};
-    let optsTurnos = '<optgroup label="Turnos">';
-    optsTurnos += turnosUnicos.filter(t=>[1,2,3].includes(Number(t.numero_turno))).map(t => `<option value="${t.id}" data-numero="${t.numero_turno}">${nombresR[Number(t.numero_turno)]||t.nombre}</option>`).join('');
-    optsTurnos += '</optgroup><optgroup label="L4 (4 horas)">';
-    optsTurnos += turnosUnicos.filter(t=>[4,5].includes(Number(t.numero_turno))).map(t => `<option value="${t.id}" data-numero="${t.numero_turno}">${nombresR[Number(t.numero_turno)]||t.nombre}</option>`).join('');
-    optsTurnos += '</optgroup><optgroup label="Disponibilidades">';
-    optsTurnos += `<option value="ADMM" data-tipo="especial">ADMM — Disponible Mañana</option>`;
-    optsTurnos += `<option value="ADMT" data-tipo="especial">ADMT — Disponible Tarde</option>`;
-    optsTurnos += `<option value="ADM"  data-tipo="especial">ADM — Disponible Día Completo</option>`;
-    optsTurnos += '</optgroup>';
+    const PUESTOS_NOCTURNOS_R = new Set(['V1','V2','C','C2','D3','F6','F11']);
+    const PUESTOS_L4_R = new Set(['F5','F15','D2','D1','F11']);
+
+    const normalizarNumeroTurnoRapido = (num) => {
+        const n = Number(num);
+        if ([9].includes(n)) return 4;
+        if ([10].includes(n)) return 5;
+        return n;
+    };
+
+    const normalizarCodigoRapido = (codigo) => String(codigo || '').trim().toUpperCase();
+
+    const PUESTOS_SISTEMA_R = {
+        'DELTA':       ['D1','D2','D3','D4'],
+        'FOX':         ['F2','F5','F6','F11','F14','F15'],
+        'VIGÍA':       ['V1','V2'],
+        'TASA DE USO': ['C','C2'],
+        'EQUIPAJES':   ['G']
+    };
+    const SOLO_NOCHE_R = new Set(['V1','V2','C','C2','D3','F6','F11']);
+    const TURNOS_R = [1, 2, 3];
+
+    const puestosSinCubrirParaTurno = (numeroTurno) => {
+        const turnoNorm = normalizarNumeroTurnoRapido(numeroTurno);
+        if (!turnoNorm || [0, NaN].includes(turnoNorm)) return [];
+        if (['ADMM', 'ADMT', 'ADM'].includes(String(numeroTurno))) return [];
+
+        const cubiertos = new Set();
+        turnosDia.forEach(t => {
+            const num = normalizarNumeroTurnoRapido(t.numero_turno);
+            if (num !== turnoNorm) return;
+            if (t.puesto_codigo) cubiertos.add(normalizarCodigoRapido(t.puesto_codigo));
+        });
+
+        return puestos.filter(p => {
+            const cod = normalizarCodigoRapido(p.codigo);
+            if (turnoNorm === 3) return PUESTOS_NOCTURNOS_R.has(cod) && !cubiertos.has(cod);
+            if (turnoNorm === 4 || turnoNorm === 5) return PUESTOS_L4_R.has(cod) && !cubiertos.has(cod);
+            return !cubiertos.has(cod);
+        });
+    };
+
+    const obtenerPuestosSinCubrirDia = (fechaSeleccionada) => {
+        const cubiertos = new Set();
+        const turnosDiaSeleccionado = Array.isArray(turnosDia) ? turnosDia : [];
+        turnosDiaSeleccionado.forEach(t => {
+            if (t.tipo_especial) return;
+            let n = Number(t.numero_turno);
+            if (n === 4) n = 1; else if (n === 5) n = 2;
+            if (t.puesto_codigo) cubiertos.add(n + '|' + normalizarCodigoRapido(t.puesto_codigo));
+        });
+
+        const sinCubrir = [];
+        Object.entries(PUESTOS_SISTEMA_R).forEach(([area, puestosArea]) => {
+            puestosArea.forEach(puesto => {
+                TURNOS_R.forEach(n => {
+                    if (n === 3 && !SOLO_NOCHE_R.has(puesto)) return;
+                    if (!cubiertos.has(n + '|' + puesto)) {
+                        sinCubrir.push({ area, puesto, turno: n });
+                    }
+                });
+            });
+        });
+        return sinCubrir;
+    };
+
+    const construirHtmlTurnos = (turnosDisponibles, cantidadPorTurno = {}) => {
+        const normales = turnosDisponibles.filter(t => [1,2,3].includes(Number(t.numero_turno)));
+        const l4 = turnosDisponibles.filter(t => [4,5].includes(Number(t.numero_turno)));
+        let html = '<option value="">Seleccione turno...</option>';
+        if (normales.length > 0) {
+            html += '<optgroup label="Turnos disponibles">';
+            html += normales.map(t => {
+                const num = Number(t.numero_turno);
+                const cant = cantidadPorTurno[num] ?? 0;
+                return `<option value="${t.id}" data-numero="${num}" data-tipo="normal">${nombresR[num] || t.nombre}${cant ? ` (${cant} candidatos)` : ''}</option>`;
+            }).join('');
+            html += '</optgroup>';
+        }
+        if (l4.length > 0) {
+            html += '<optgroup label="L4 disponibles">';
+            html += l4.map(t => {
+                const num = Number(t.numero_turno);
+                const cant = cantidadPorTurno[num] ?? 0;
+                return `<option value="${t.id}" data-numero="${num}" data-tipo="normal">${nombresR[num] || t.nombre}${cant ? ` (${cant} candidatos)` : ''}</option>`;
+            }).join('');
+            html += '</optgroup>';
+        }
+        html += '<optgroup label="Disponibilidades">';
+        html += `<option value="ADMM" data-tipo="especial">ADMM — Disponible Mañana</option>`;
+        html += `<option value="ADMT" data-tipo="especial">ADMT — Disponible Tarde</option>`;
+        html += `<option value="ADM"  data-tipo="especial">ADM — Disponible Día Completo</option>`;
+        html += '</optgroup>';
+        return html;
+    };
+    const optsTurnos = construirHtmlTurnos(turnosOrdenados);
 
     document.getElementById('overlay-rapido-normal')?.remove();
     document.getElementById('popover-rapido-normal')?.remove();
@@ -5115,6 +5224,10 @@ async function asignarTurnoRapidoMensual(trabId, fecha, nombre, cargo = '') {
         <label style="font-size:0.82rem;font-weight:600;color:#495057;">Puesto</label>
         <select id="sel-puesto-rapido" style="width:100%;padding:7px 10px;border:1px solid #dee2e6;border-radius:8px;margin:4px 0 18px;font-size:0.88rem;">${optsPuestos}</select>
         </div>
+        <div id="info-turnos-rapido" style="display:none;margin:-4px 0 14px;padding:8px 10px;border-radius:8px;font-size:0.82rem;background:#eef6ff;border:1px solid #b6d4fe;color:#0b5ed7;"></div>
+        <div id="info-puestos-sin-cubrir-rapido" style="display:none;margin:-6px 0 14px;padding:8px 10px;border-radius:8px;font-size:0.82rem;background:#fff3cd;border:1px solid #ffe69c;color:#856404;"></div>
+        <div id="lista-puestos-sin-cubrir-rapido" style="display:none;margin:-6px 0 14px;padding:10px 12px;border-radius:8px;font-size:0.82rem;background:#f8f9fa;border:1px solid #dee2e6;color:#495057;max-height:180px;overflow:auto;"></div>
+        <div id="lista-candidatos-rapido" style="display:none;margin:-6px 0 14px;padding:10px 12px;border-radius:8px;font-size:0.82rem;background:#f8f9fa;border:1px solid #dee2e6;color:#495057;"></div>
         <div style="display:flex;gap:8px;">
             <button id="btn-asignar-rapido" style="flex:1;background:#0d6efd;color:white;border:none;border-radius:8px;padding:9px;font-weight:600;cursor:pointer;">Asignar</button>
             <button id="btn-cancelar-rapido-normal" style="background:#6c757d;color:white;border:none;border-radius:8px;padding:9px 16px;cursor:pointer;">Cancelar</button>
@@ -5127,15 +5240,96 @@ async function asignarTurnoRapidoMensual(trabId, fecha, nombre, cargo = '') {
     pop.querySelector('#btn-cancelar-rapido-normal')?.addEventListener('click', cerrarRapidoNormal);
 
     // Listener dinámico para filtrar puestos según turno seleccionado
-    const PUESTOS_L4_R = new Set(['F5','F15','D2','D1','F11']);
     const optsL4Rapido = (() => {
         let html = '';
-        puestos.filter(p => PUESTOS_L4_R.has(p.codigo)).forEach(p => {
+        puestos.filter(p => PUESTOS_L4_R.has(normalizarCodigoRapido(p.codigo))).forEach(p => {
             html += `<option value="${p.id}">${p.codigo} — ${p.nombre}</option>`;
         });
         return html;
     })();
     const todosOptsRapido = pop.querySelector('#sel-puesto-rapido').innerHTML;
+    const infoTurnosRapido = pop.querySelector('#info-turnos-rapido');
+    const infoPuestosSinCubrirRapido = pop.querySelector('#info-puestos-sin-cubrir-rapido');
+    const listaPuestosSinCubrirRapido = pop.querySelector('#lista-puestos-sin-cubrir-rapido');
+    const listaCandidatosRapido = pop.querySelector('#lista-candidatos-rapido');
+
+    const renderPuestosSinCubrir = () => {
+        const faltantes = obtenerPuestosSinCubrirDia(fecha);
+        if (!faltantes.length) {
+            infoPuestosSinCubrirRapido.style.display = '';
+            infoPuestosSinCubrirRapido.textContent = `No hay puestos sin cubrir para ${fecha}.`;
+            listaPuestosSinCubrirRapido.style.display = 'none';
+            return;
+        }
+
+        infoPuestosSinCubrirRapido.style.display = '';
+        infoPuestosSinCubrirRapido.textContent = `Puestos sin cubrir de ${fecha}: ${faltantes.length}`;
+        listaPuestosSinCubrirRapido.style.display = '';
+        const grupos = {};
+        faltantes.forEach(p => {
+            if (!grupos[p.area]) grupos[p.area] = { 1: [], 2: [], 3: [] };
+            grupos[p.area][p.turno].push(p.puesto);
+        });
+        const BG_T = { 1: '#d1ecf1', 2: '#fff3cd', 3: '#1a1a2e' };
+        const CO_T = { 1: '#0c5460', 2: '#856404', 3: '#e0e0e0' };
+        let html = '<div style="max-height:220px;overflow-y:auto;">';
+        Object.entries(grupos).forEach(([area, ts]) => {
+            html += `<div style="margin-bottom:8px;"><span style="font-size:0.75rem;font-weight:700;color:#495057;text-transform:uppercase;letter-spacing:0.5px;">${area}</span><div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">`;
+            [1,2,3].forEach(n => {
+                ts[n].forEach(p => {
+                    html += `<span style="background:${BG_T[n]};color:${CO_T[n]};padding:2px 8px;border-radius:4px;font-size:0.78rem;font-weight:700;">${n}${p}</span>`;
+                });
+            });
+            html += '</div></div>';
+        });
+        html += '</div>';
+        listaPuestosSinCubrirRapido.innerHTML = html;
+    };
+
+    const cargarDisponibilidadRapida = async () => {
+        const puestoActual = pop.querySelector('#sel-puesto-rapido')?.value || null;
+        if (!puestoActual) {
+            infoTurnosRapido.style.display = '';
+            infoTurnosRapido.textContent = 'Selecciona un puesto para ver qué turnos están disponibles ese día.';
+            listaCandidatosRapido.style.display = 'none';
+            pop.querySelector('#sel-turno-rapido').innerHTML = '<option value="">Seleccione turno...</option>';
+            return;
+        }
+
+        const resultados = await Promise.all(turnosOrdenados.map(async turno => {
+            try {
+                const res = await fetch(API_BASE + `trabajadores.php?disponibles=1&puesto_id=${encodeURIComponent(puestoActual)}&turno_id=${turno.id}&fecha=${encodeURIComponent(fecha)}`);
+                const json = await res.json();
+                const lista = json.success && Array.isArray(json.data) ? json.data : [];
+                return { turno, lista };
+            } catch (_) {
+                return { turno, lista: [] };
+            }
+        }));
+
+        const disponibles = resultados.filter(r => r.lista.length > 0);
+        const conteoPorTurno = {};
+        disponibles.forEach(r => { conteoPorTurno[Number(r.turno.numero_turno)] = r.lista.length; });
+        pop.querySelector('#sel-turno-rapido').innerHTML = construirHtmlTurnos(disponibles.map(r => r.turno), conteoPorTurno);
+
+        if (disponibles.length === 0) {
+            infoTurnosRapido.style.display = '';
+            infoTurnosRapido.textContent = 'No hay turnos disponibles para el puesto seleccionado en esta fecha.';
+            listaCandidatosRapido.style.display = 'none';
+            return;
+        }
+
+        infoTurnosRapido.style.display = '';
+        infoTurnosRapido.textContent = `Hay ${disponibles.length} turno${disponibles.length === 1 ? '' : 's'} disponibles para este puesto en ${fecha}.`;
+
+        const turnoSeleccionado = pop.querySelector('#sel-turno-rapido').value;
+        const turnoActual = disponibles.find(r => String(r.turno.id) === String(turnoSeleccionado)) || disponibles[0];
+        if (turnoActual) {
+            const nombres = turnoActual.lista.slice(0, 8).map(t => t.nombre).join(', ');
+            listaCandidatosRapido.style.display = '';
+            listaCandidatosRapido.innerHTML = `<strong>Candidatos para ${nombresR[Number(turnoActual.turno.numero_turno)] || turnoActual.turno.nombre}:</strong> ${nombres || 'sin candidatos visibles'}`;
+        }
+    };
 
     pop.querySelector('#sel-turno-rapido').addEventListener('change', function() {
         const num = Number(this.selectedOptions[0]?.dataset?.numero);
@@ -5151,8 +5345,35 @@ async function asignarTurnoRapidoMensual(trabId, fecha, nombre, cargo = '') {
             wrapP.style.display = '';
             selP.innerHTML = todosOptsRapido;
         }
+        const turnoTexto = this.selectedOptions[0]?.textContent || '';
+        if (listaCandidatosRapido) {
+            listaCandidatosRapido.textContent = turnoTexto ? `Buscando candidatos para ${turnoTexto}...` : '';
+            listaCandidatosRapido.style.display = turnoTexto ? '' : 'none';
+        }
+        renderPuestosSinCubrir();
     });
     pop.querySelector('#sel-turno-rapido').dispatchEvent(new Event('change'));
+    pop.querySelector('#sel-puesto-rapido')?.addEventListener('change', cargarDisponibilidadRapida);
+    pop.querySelector('#sel-turno-rapido')?.addEventListener('change', async () => {
+        const turnoSel = pop.querySelector('#sel-turno-rapido');
+        const puestoActual = pop.querySelector('#sel-puesto-rapido')?.value || null;
+        if (!puestoActual || !turnoSel.value || ['ADMM','ADMT','ADM'].includes(turnoSel.value)) {
+            return;
+        }
+        try {
+            const res = await fetch(API_BASE + `trabajadores.php?disponibles=1&puesto_id=${encodeURIComponent(puestoActual)}&turno_id=${encodeURIComponent(turnoSel.value)}&fecha=${encodeURIComponent(fecha)}`);
+            const json = await res.json();
+            const lista = json.success && Array.isArray(json.data) ? json.data : [];
+            if (listaCandidatosRapido) {
+                listaCandidatosRapido.style.display = '';
+                listaCandidatosRapido.innerHTML = lista.length > 0
+                    ? `<strong>Candidatos disponibles:</strong> ${lista.map(t => t.nombre).slice(0, 8).join(', ')}`
+                    : '<strong>Candidatos disponibles:</strong> ninguno para este turno';
+            }
+        } catch (_) {}
+    });
+    await cargarDisponibilidadRapida();
+    renderPuestosSinCubrir();
 
     pop.querySelector('#btn-asignar-rapido').onclick = async () => {
         const selTurno = pop.querySelector('#sel-turno-rapido');
@@ -5863,18 +6084,20 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
   modalBody.innerHTML = '<p>Cargando trabajadores...</p>';
   modalOverlay.classList.add('active');
 
-  try {
-    // Cargar trabajadores, turnos del día, días libres y puestos en paralelo
-    const [resTodos, resDia, resPuestos, resDiasEsp] = await Promise.all([
-      fetch(API_BASE + 'trabajadores.php'),
-      fetch(API_BASE + 'turnos.php?fecha=' + fecha),
-      fetch(API_BASE + 'turnos.php?action=puestos'),
-      fetch(API_BASE + 'dias_especiales.php?fecha=' + fecha)
-    ]);
+    try {
+        // Cargar trabajadores, turnos del día, configuración, días libres y puestos en paralelo
+        const [resTodos, resDia, resPuestos, resDiasEsp, resConfig] = await Promise.all([
+            fetch(API_BASE + 'trabajadores.php'),
+            fetch(API_BASE + 'turnos.php?fecha=' + fecha),
+            fetch(API_BASE + 'turnos.php?action=puestos'),
+            fetch(API_BASE + 'dias_especiales.php?fecha=' + fecha),
+            fetch(API_BASE + 'turnos.php?action=configuracion')
+        ]);
     const dataTodos   = await resTodos.json();
     const dataDia     = await resDia.json();
     const dataPuestos = await resPuestos.json();
     const dataDiasEsp = await resDiasEsp.json();
+        const dataConfig   = await resConfig.json();
 
     if (!dataTodos.success) {
       modalBody.innerHTML = '<p class="alert alert-danger">Error cargando trabajadores</p>';
@@ -5894,7 +6117,28 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
     const todosActivos = (dataTodos.data || []).filter(t => t.activo);
     const todos = todosActivos.filter(t => String(t.cargo || '').toLowerCase() !== 'supervisor');
 
-    // Separar en tres categorías
+        const turnosConf = (dataConfig.success && Array.isArray(dataConfig.data))
+            ? dataConfig.data.filter(t => [1,2,3,4,5].includes(Number(t.numero_turno)))
+            : [];
+
+        const puestosDisp = (dataPuestos.success ? dataPuestos.data : []);
+        const puestosHtml = (() => {
+            const grouped = {};
+            puestosDisp.forEach(p => {
+                if (!grouped[p.area]) grouped[p.area] = [];
+                grouped[p.area].push(p);
+            });
+            return Object.entries(grouped).map(([area, ps]) => {
+                const opts = ps.map(p => `<option value="${p.id}" data-codigo="${p.codigo}">${p.codigo} — ${p.nombre}</option>`).join('');
+                return `<optgroup label="${area}">${opts}</optgroup>`;
+            }).join('');
+        })();
+
+        const esNuevaAsignacion = esNuevo;
+        const turnoInicialId = turnosConf.find(t => Number(t.numero_turno) === 1)?.id || turnosConf[0]?.id || '';
+        const puestoInicialId = puestoId || puestosDisp.find(p => String(p.codigo || '').toUpperCase() === String(puestoCodigo || '').toUpperCase())?.id || '';
+
+    // Separar en tres categorías para la vista general
     const disponibles = todos.filter(t => !conTurnoHoy.has(t.id) && !conDiaLibreHoy.has(t.id));
     const ocupados    = todos.filter(t => conTurnoHoy.has(t.id));
     const conLibre    = todos.filter(t => conDiaLibreHoy.has(t.id));
@@ -5933,29 +6177,27 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
       opciones += '</optgroup>';
     }
 
-    // Panel informativo con estadísticas
-    const panelEstadisticas = `
-      <div style="background:#f8f9fa;border:1px solid #dee2e6;border-radius:8px;padding:12px;margin-bottom:16px;font-size:0.85rem;">
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;">
-          <div style="text-align:center;padding:8px;background:white;border-radius:6px;border-left:4px solid #28a745;">
-            <div style="font-size:1.8rem;font-weight:700;color:#28a745;">${disponibles.length}</div>
-            <div style="font-size:0.75rem;color:#6c757d;margin-top:2px;">✅ DISPONIBLES</div>
-            <div style="font-size:0.7rem;color:#999;margin-top:2px;">Sin turno ni día libre</div>
-          </div>
-          <div style="text-align:center;padding:8px;background:white;border-radius:6px;border-left:4px solid #dc3545;">
-            <div style="font-size:1.8rem;font-weight:700;color:#dc3545;">${ocupados.length}</div>
-            <div style="font-size:0.75rem;color:#6c757d;margin-top:2px;">⚠️ CON TURNO</div>
-            <div style="font-size:0.7rem;color:#999;margin-top:2px;">Ya asignados hoy</div>
-          </div>
-          <div style="text-align:center;padding:8px;background:white;border-radius:6px;border-left:4px solid #ffc107;">
-            <div style="font-size:1.8rem;font-weight:700;color:#ffc107;">${conLibre.length}</div>
-            <div style="font-size:0.75rem;color:#6c757d;margin-top:2px;">🏖️ DÍA LIBRE</div>
-            <div style="font-size:0.7rem;color:#999;margin-top:2px;">Día libre programado</div>
-          </div>
-        </div>
-      </div>
-    `;
+        const seccionNuevaAsignacion = esNuevaAsignacion ? `
+            <div style="margin:12px 0;padding:12px;background:#eef6ff;border-radius:8px;border:1px solid #b6d4fe;">
+                <div style="font-size:0.8rem;font-weight:700;color:#0b5ed7;margin-bottom:8px;">📅 Asignación nueva para ${fecha}</div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
+                    <div>
+                        <label style="font-size:0.82rem;font-weight:600;color:#495057;display:block;margin-bottom:4px;">Puesto</label>
+                        <select id="sel-puesto-nuevo" style="width:100%;padding:7px 10px;border:1px solid #dee2e6;border-radius:8px;font-size:0.88rem;">${puestosHtml}</select>
+                    </div>
+                    <div>
+                        <label style="font-size:0.82rem;font-weight:600;color:#495057;display:block;margin-bottom:4px;">Turno disponible</label>
+                        <select id="sel-turno-nuevo" style="width:100%;padding:7px 10px;border:1px solid #dee2e6;border-radius:8px;font-size:0.88rem;">
+                            <option value="">Cargando turnos...</option>
+                        </select>
+                    </div>
+                </div>
+                <small style="display:block;color:#6c757d;margin-bottom:8px;">Primero elige puesto y turno. La lista de trabajadores se ajusta a la disponibilidad real de ese día.</small>
+                <div id="info-turno-nuevo" style="display:none;margin-bottom:8px;padding:8px 10px;background:#fff3cd;border:1px solid #ffe69c;border-radius:6px;color:#856404;font-size:0.82rem;"></div>
+            </div>
+        ` : '';
 
+        // Panel informativo con estadísticas
     // Sección L4 si el puesto tiene esa opción para este turno
     const numNormActual = [4,9].includes(Number(numeroTurno)) ? 1 : [5,10].includes(Number(numeroTurno)) ? 2 : Number(numeroTurno);
     const seccionL4 = (tieneL4 && l4TurnoId) ? `
@@ -5976,9 +6218,9 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
     ` : '';
 
     // Construir opciones de puestos compatibles con este turno para el selector de mover
-    const puestosDisp = (dataPuestos.success ? dataPuestos.data : []);
+    const puestosDispMover = (dataPuestos.success ? dataPuestos.data : []);
     const NOCTURNOS_COD = new Set(['V1','V2','C','C2','D3','F6','F11']);
-    const puestosFiltrados = puestosDisp.filter(p => {
+    const puestosFiltrados = puestosDispMover.filter(p => {
         if (numNormActual === 3) return NOCTURNOS_COD.has(p.codigo);
         return !new Set(['V1','V2','C','C2']).has(p.codigo); // en T1/T2 no mostrar exclusivos nocturnos
     });
@@ -6004,6 +6246,8 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
       </div>
     ` : '';
 
+        const panelEstadisticas = '';
+
     modalBody.innerHTML = `
       <form id="form-editar-asignacion">
         <div class="form-grid">
@@ -6016,7 +6260,8 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
             <input type="text" disabled value="T${esEspecial ? turnoLabelNum : numNormActual} — ${esEspecial ? (turnoLabelNum===2?'Tarde':'Mañana') : (numNormActual===1?'Mañana':numNormActual===2?'Tarde':'Noche')}" style="background:#f8f9fa;">
           </div>
         </div>
-        ${esEspecial ? seccionEspecialInfo : ''}
+                ${esEspecial ? seccionEspecialInfo : ''}
+                ${seccionNuevaAsignacion}
         ${seccionMover}
         ${seccionL4}
         ${panelEstadisticas}
@@ -6036,6 +6281,94 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
         </div>
       </form>
     `;
+
+        const selPuestoNuevo = document.getElementById('sel-puesto-nuevo');
+        const selTurnoNuevo = document.getElementById('sel-turno-nuevo');
+        const selTrabajador = document.getElementById('nuevo-trabajador-select');
+        const infoTurnoNuevo = document.getElementById('info-turno-nuevo');
+
+        const construirOpcionesTrabajadores = (lista, turnoTexto = '') => {
+            const disponiblesTurno = (lista || []).filter(t => t.activo && String(t.cargo || '').toLowerCase() !== 'supervisor');
+            let html = '<option value="">Seleccione trabajador...</option>';
+            if (disponiblesTurno.length > 0) {
+                html += `<optgroup label="✅ Disponibles ${turnoTexto ? 'para ' + turnoTexto : 'para este turno'}">`;
+                disponiblesTurno.forEach(t => {
+                    html += `<option value="${t.id}" ${t.id == trabajadorActualId ? 'selected' : ''}>${t.nombre} — ${t.cedula}</option>`;
+                });
+                html += '</optgroup>';
+            } else {
+                html += '<option value="">No hay trabajadores disponibles para este turno</option>';
+            }
+            return html;
+        };
+
+        const cargarTurnosDisponibles = async () => {
+            if (!esNuevaAsignacion || !selPuestoNuevo || !selTurnoNuevo) return;
+            const puestoActual = selPuestoNuevo.value || puestoInicialId || '';
+            const candidatos = await Promise.all(turnosConf.map(async (turno) => {
+                try {
+                    const res = await fetch(API_BASE + `trabajadores.php?disponibles=1&puesto_id=${encodeURIComponent(puestoActual)}&turno_id=${turno.id}&fecha=${encodeURIComponent(fecha)}`);
+                    const json = await res.json();
+                    const lista = json.success && Array.isArray(json.data) ? json.data : [];
+                    return { turno, lista };
+                } catch (_) {
+                    return { turno, lista: [] };
+                }
+            }));
+
+            const disponibles = candidatos.filter(x => x.lista.length > 0);
+            let htmlTurnos = '';
+            disponibles.forEach(({ turno }) => {
+                const horas = Number(turno.horas_laborales);
+                const etiquetaHoras = Number.isFinite(horas) ? ` (${Math.round(horas)}H)` : '';
+                htmlTurnos += `<option value="${turno.id}" data-numero="${turno.numero_turno}">${turno.nombre}${etiquetaHoras}</option>`;
+            });
+
+            if (!htmlTurnos) {
+                htmlTurnos = '<option value="">No hay turnos disponibles para este puesto y fecha</option>';
+                infoTurnoNuevo.style.display = 'block';
+                infoTurnoNuevo.textContent = 'No hay turnos disponibles para el puesto seleccionado en esta fecha.';
+            } else {
+                infoTurnoNuevo.style.display = 'none';
+            }
+
+            selTurnoNuevo.innerHTML = htmlTurnos;
+            if (selTurnoNuevo.options.length > 0 && !selTurnoNuevo.value) {
+                selTurnoNuevo.selectedIndex = 0;
+            }
+
+            const turnoSeleccionado = selTurnoNuevo.value;
+            if (turnoSeleccionado) {
+                await cargarTrabajadoresPorTurno(turnoSeleccionado);
+            } else {
+                selTrabajador.innerHTML = '<option value="">Seleccione trabajador...</option>';
+            }
+        };
+
+        const cargarTrabajadoresPorTurno = async (turnoIdSeleccionado) => {
+            if (!esNuevaAsignacion || !selPuestoNuevo || !selTrabajador) return;
+            const puestoActual = selPuestoNuevo.value || puestoInicialId || '';
+            try {
+                const res = await fetch(API_BASE + `trabajadores.php?disponibles=1&puesto_id=${encodeURIComponent(puestoActual)}&turno_id=${encodeURIComponent(turnoIdSeleccionado)}&fecha=${encodeURIComponent(fecha)}`);
+                const json = await res.json();
+                const lista = json.success && Array.isArray(json.data) ? json.data : [];
+                const turnoTexto = selTurnoNuevo.selectedOptions[0]?.textContent || '';
+                selTrabajador.innerHTML = construirOpcionesTrabajadores(lista, turnoTexto);
+            } catch (e) {
+                selTrabajador.innerHTML = '<option value="">Error cargando trabajadores</option>';
+            }
+        };
+
+        if (esNuevaAsignacion && selPuestoNuevo && selTurnoNuevo) {
+            selPuestoNuevo.addEventListener('change', () => {
+                selTurnoNuevo.innerHTML = '<option value="">Cargando turnos...</option>';
+                cargarTurnosDisponibles();
+            });
+            selTurnoNuevo.addEventListener('change', () => {
+                cargarTrabajadoresPorTurno(selTurnoNuevo.value);
+            });
+            await cargarTurnosDisponibles();
+        }
 
     // Mostrar aviso de conflicto al seleccionar alguien ocupado o con día libre
     document.getElementById('nuevo-trabajador-select').addEventListener('change', function() {
@@ -6096,8 +6429,9 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
       if (!nuevoId) { mostrarAlerta('Seleccione un trabajador', 'warning'); return; }
 
       try {
-        const puestoDestino = document.getElementById('sel-puesto-destino')?.value || puestoId;
-        const turnoIdBase    = TURNO_ID_MAP[Number(numeroTurno)] || numeroTurno;
+                const puestoDestino = document.getElementById('sel-puesto-nuevo')?.value || document.getElementById('sel-puesto-destino')?.value || puestoId;
+                const turnoSeleccionado = document.getElementById('sel-turno-nuevo')?.value || null;
+                const turnoIdBase    = turnoSeleccionado || TURNO_ID_MAP[Number(numeroTurno)] || numeroTurno;
         const puestoCambio   = String(puestoDestino) !== String(puestoId);
 
         let result;
@@ -7264,6 +7598,7 @@ async function activarTrabajador(id) {
 async function cargarTablaRestricciones() {
     const tabla = document.getElementById('tabla-restricciones');
     if (!tabla) return;
+    asegurarFiltroRestriccionesUI();
     try {
         const [resTrab, resRestr] = await Promise.all([
             fetch(API_BASE + 'trabajadores.php').then(r => r.json()),
@@ -7272,13 +7607,113 @@ async function cargarTablaRestricciones() {
         const trabajadores = resTrab.success ? resTrab.data.filter(t => t.activo) : [];
         const restricciones = resRestr.success ? (resRestr.data || []) : [];
 
+        tabla.dataset.restricciones = JSON.stringify(restricciones);
+        tabla.dataset.trabajadoresRestr = JSON.stringify(trabajadores);
+
         if (restricciones.length === 0) {
             tabla.innerHTML = '<p class="info-box">No hay restricciones registradas.</p>';
             return;
         }
-        let html = '<table><thead><tr style="background:linear-gradient(135deg,var(--terminal) 0%,#027433 100%);color:white;">';
-        html += '<th>Trabajador</th><th>Tipo</th><th>Descripción</th><th>Vigencia</th><th>Acciones</th></tr></thead><tbody>';
-        restricciones.forEach(r => {
+        renderTablaRestricciones(tabla);
+    } catch(e) {
+        tabla.innerHTML = '<p class="alert alert-danger">Error al cargar restricciones</p>';
+    }
+}
+
+function asegurarFiltroRestriccionesUI() {
+    const panelLista = document.getElementById('panel-restr-lista');
+    const panelMatriz = document.getElementById('panel-restr-matriz');
+    if (!panelLista && !panelMatriz) return;
+
+    const crearBarra = (inputId, countId) => `
+        <div class="restricciones-filter-container" style="margin-bottom:12px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+            <div style="position:relative;flex:1;min-width:220px;">
+                <i class="fas fa-search" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:#adb5bd;font-size:0.85rem;"></i>
+                <input type="text" id="${inputId}" placeholder="Buscar trabajador por nombre o cédula..."
+                    style="width:100%;padding:8px 8px 8px 32px;border:1px solid #ced4da;border-radius:6px;font-size:0.9rem;box-sizing:border-box;">
+            </div>
+            <span id="${countId}" style="font-size:0.85rem;color:#6c757d;white-space:nowrap;"></span>
+        </div>`;
+
+    const insertarBarra = (panel, inputId, countId) => {
+        if (!panel || panel.querySelector('#' + inputId)) return;
+        const wrapper = document.createElement('div');
+        wrapper.innerHTML = crearBarra(inputId, countId);
+        panel.insertBefore(wrapper.firstElementChild, panel.firstChild);
+        const input = document.getElementById(inputId);
+        input?.addEventListener('input', () => sincronizarFiltroRestriccionesUI(inputId));
+    };
+
+    insertarBarra(panelLista, 'buscar-restriccion-trabajador-lista', 'restricciones-count');
+    insertarBarra(panelMatriz, 'buscar-restriccion-trabajador-matriz', 'restricciones-count-matriz');
+}
+
+function obtenerTextoBusquedaRestricciones() {
+    return (
+        document.getElementById('buscar-restriccion-trabajador-lista')?.value ||
+        document.getElementById('buscar-restriccion-trabajador-matriz')?.value ||
+        ''
+    ).toLowerCase().trim();
+}
+
+function sincronizarFiltroRestriccionesUI(origenId) {
+    const valor = document.getElementById(origenId)?.value || '';
+    const ids = ['buscar-restriccion-trabajador-lista', 'buscar-restriccion-trabajador-matriz'];
+    ids.forEach(id => {
+        const el = document.getElementById(id);
+        if (el && id !== origenId && el.value !== valor) {
+            el.value = valor;
+        }
+    });
+    filtrarRestriccionesVista();
+}
+
+function filtrarRestriccionesVista() {
+    const tabla = document.getElementById('tabla-restricciones');
+    const cont = document.getElementById('matriz-puestos-container');
+    const q = obtenerTextoBusquedaRestricciones();
+
+    if (tabla?.dataset?.restricciones) {
+        renderTablaRestricciones(tabla, q);
+    }
+    if (cont?.dataset?.trabajadoresRestr) {
+        renderMatrizPuestos(cont, q);
+    }
+}
+
+function renderTablaRestricciones(tabla, q = '') {
+    const restricciones = JSON.parse(tabla.dataset.restricciones || '[]');
+    const trabajadores = JSON.parse(tabla.dataset.trabajadoresRestr || '[]');
+    const trabajadorPorId = {};
+    trabajadores.forEach(t => { trabajadorPorId[String(t.id)] = t; });
+
+    let lista = restricciones.slice();
+    if (q) {
+        lista = lista.filter(r => {
+            const t = trabajadorPorId[String(r.trabajador_id)] || {};
+            const texto = [t.nombre, t.cedula, r.tipo_restriccion || r.tipo, r.descripcion, r.puesto_codigo, r.puesto_nombre]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase();
+            return texto.includes(q);
+        });
+    }
+
+    const counter = document.getElementById('restricciones-count');
+    if (counter) {
+        counter.textContent = q ? `${lista.length} de ${restricciones.length} restricciones` : `${restricciones.length} restricciones`;
+    }
+
+    if (lista.length === 0) {
+        tabla.innerHTML = q
+            ? '<p class="info-box">No se encontraron restricciones para "<strong>' + q + '</strong>".</p>'
+            : '<p class="info-box">No hay restricciones registradas.</p>';
+        return;
+    }
+
+    let html = '<table><thead><tr style="background:linear-gradient(135deg,var(--terminal) 0%,#027433 100%);color:white;">';
+    html += '<th>Trabajador</th><th>Tipo</th><th>Descripción</th><th>Vigencia</th><th>Acciones</th></tr></thead><tbody>';
+    lista.forEach(r => {
             const tipo = r.tipo_restriccion || r.tipo || '-';
             let descripcion = r.descripcion || '-';
             
@@ -7317,9 +7752,61 @@ async function cargarTablaRestricciones() {
         });
         html += '</tbody></table>';
         tabla.innerHTML = html;
-    } catch(e) {
-        tabla.innerHTML = '<p class="alert alert-danger">Error al cargar restricciones</p>';
+}
+
+function renderMatrizPuestos(cont, q = '') {
+    const trabajadores = JSON.parse(cont.dataset.trabajadoresRestr || '[]');
+    const restricciones = JSON.parse(cont.dataset.restricciones || '[]');
+
+    if (trabajadores.length === 0) {
+        cont.innerHTML = '<p class="info-box">No hay trabajadores activos para mostrar la matriz.</p>';
+        return;
     }
+
+    const tipos = ['no_fuerza_fisica', 'no_turno_noche', 'movilidad_limitada', 'problema_visual', 'puesto_especifico'];
+    const etiquetas = {
+        no_fuerza_fisica: 'No fuerza física',
+        no_turno_noche: 'No turno noche',
+        movilidad_limitada: 'Movilidad limitada',
+        problema_visual: 'Problema visual',
+        puesto_especifico: 'Puesto específico'
+    };
+
+    const restrPorTrab = {};
+    restricciones.forEach(r => {
+        if (!restrPorTrab[r.trabajador_id]) restrPorTrab[r.trabajador_id] = [];
+        restrPorTrab[r.trabajador_id].push(r);
+    });
+
+    let html = '<div style="overflow:auto;">';
+    html += '<table><thead><tr style="background:linear-gradient(135deg,var(--terminal) 0%,#027433 100%);color:white;">';
+    html += '<th>Trabajador</th>';
+    tipos.forEach(tipo => html += `<th>${etiquetas[tipo]}</th>`);
+    html += '<th>Acciones</th></tr></thead><tbody>';
+
+    trabajadores.forEach(t => {
+        if (q) {
+            const texto = [t.nombre, t.cedula].filter(Boolean).join(' ').toLowerCase();
+            if (!texto.includes(q)) return;
+        }
+
+        const restrs = restrPorTrab[t.id] || [];
+        html += '<tr>';
+        html += '<td>' + t.nombre + ' <span style="color:#6c757d;font-size:0.85rem;">(' + (t.cedula||'-') + ')</span></td>';
+        tipos.forEach(tipo => {
+            const restr = restrs.find(r => (r.tipo_restriccion || r.tipo) === tipo);
+            if (restr) {
+                html += '<td style="text-align:center;"><span style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:999px;background:#f8d7da;color:#721c24;font-size:0.82rem;">Bloqueado</span></td>';
+            } else {
+                html += '<td style="text-align:center;"><span style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:999px;background:#d4edda;color:#155724;font-size:0.82rem;">Permitido</span></td>';
+            }
+        });
+        html += `<td style="text-align:center;"><button class="btn btn-sm btn-secondary" onclick="verRestriccionesTrabajador(${t.id})"><i class="fas fa-eye"></i></button></td>`;
+        html += '</tr>';
+    });
+
+    html += '</tbody></table></div>';
+    cont.innerHTML = html;
 }
 
 function cambiarTabRestricciones(tab) {
@@ -7351,6 +7838,7 @@ function cambiarTabRestricciones(tab) {
 async function cargarMatrizPuestos() {
     const cont = document.getElementById('matriz-puestos-container');
     if (!cont) return;
+    asegurarFiltroRestriccionesUI();
     cont.innerHTML = '<div class="dash-loading"><i class="fas fa-spinner fa-spin"></i> Cargando matriz...</div>';
 
     try {
@@ -7361,50 +7849,10 @@ async function cargarMatrizPuestos() {
         const trabajadores = resTrab.success ? (resTrab.data || []).filter(t => t.activo) : [];
         const restricciones = resRestr.success ? (resRestr.data || []) : [];
 
-        if (trabajadores.length === 0) {
-            cont.innerHTML = '<p class="info-box">No hay trabajadores activos para mostrar la matriz.</p>';
-            return;
-        }
+        cont.dataset.trabajadoresRestr = JSON.stringify(trabajadores);
+        cont.dataset.restricciones = JSON.stringify(restricciones);
 
-        const tipos = ['no_fuerza_fisica', 'no_turno_noche', 'movilidad_limitada', 'problema_visual', 'puesto_especifico'];
-        const etiquetas = {
-            no_fuerza_fisica: 'No fuerza física',
-            no_turno_noche: 'No turno noche',
-            movilidad_limitada: 'Movilidad limitada',
-            problema_visual: 'Problema visual',
-            puesto_especifico: 'Puesto específico'
-        };
-
-        const restrPorTrab = {};
-        restricciones.forEach(r => {
-            if (!restrPorTrab[r.trabajador_id]) restrPorTrab[r.trabajador_id] = [];
-            restrPorTrab[r.trabajador_id].push(r);
-        });
-
-        let html = '<div style="overflow:auto;">';
-        html += '<table><thead><tr style="background:linear-gradient(135deg,var(--terminal) 0%,#027433 100%);color:white;">';
-        html += '<th>Trabajador</th>';
-        tipos.forEach(tipo => html += `<th>${etiquetas[tipo]}</th>`);
-        html += '<th>Acciones</th></tr></thead><tbody>';
-
-        trabajadores.forEach(t => {
-            const restrs = restrPorTrab[t.id] || [];
-            html += '<tr>';
-            html += '<td>' + t.nombre + ' <span style="color:#6c757d;font-size:0.85rem;">(' + (t.cedula||'-') + ')</span></td>';
-            tipos.forEach(tipo => {
-                const restr = restrs.find(r => (r.tipo_restriccion || r.tipo) === tipo);
-                if (restr) {
-                    html += '<td style="text-align:center;"><span style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:999px;background:#f8d7da;color:#721c24;font-size:0.82rem;">Bloqueado</span></td>';
-                } else {
-                    html += '<td style="text-align:center;"><span style="display:inline-flex;align-items:center;gap:4px;padding:4px 8px;border-radius:999px;background:#d4edda;color:#155724;font-size:0.82rem;">Permitido</span></td>';
-                }
-            });
-            html += `<td style="text-align:center;"><button class="btn btn-sm btn-secondary" onclick="verRestriccionesTrabajador(${t.id})"><i class="fas fa-eye"></i></button></td>`;
-            html += '</tr>';
-        });
-
-        html += '</tbody></table></div>';
-        cont.innerHTML = html;
+        renderMatrizPuestos(cont, obtenerTextoBusquedaRestricciones());
     } catch (error) {
         cont.innerHTML = '<p class="alert alert-danger">Error al cargar matriz de restricciones</p>';
     }

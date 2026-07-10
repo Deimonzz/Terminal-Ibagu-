@@ -82,7 +82,7 @@ function generarReporteTurnosMes($db, $formato) {
             ta.fecha,
             t.nombre as trabajador,
             t.cedula,
-            pt.codigo as puesto,
+            CASE WHEN pt.codigo = 'F4' THEN 'F2' ELSE pt.codigo END as puesto,
             pt.area,
             ct.numero_turno,
             ct.nombre as turno_nombre,
@@ -198,7 +198,7 @@ function generarReporteTrabajador($db, $trabajador_id, $formato) {
     $sql = "SELECT 
             ta.fecha,
             ct.nombre as turno_nombre,
-            pt.codigo as puesto,
+            CASE WHEN pt.codigo = 'F4' THEN 'F2' ELSE pt.codigo END as puesto,
             pt.area,
             ta.estado
             FROM turnos_asignados ta

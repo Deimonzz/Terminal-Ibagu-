@@ -10,6 +10,8 @@ class Trabajadores {
     private $disponiblesL4Cache = [];
     private $restriccionPuestoEspecificoCache = [];
     private $restriccionTipoCache = [];
+    private const PUESTOS_FIJOS_8H = ['C', 'D3', 'V1', 'V2', 'F6', 'F11'];
+    private const PUESTOS_MOVILIDAD_LIMITADA = ['V1', 'V2'];
     
     public function __construct() {
         $this->db = Database::getInstance()->getConnection();
@@ -27,11 +29,50 @@ class Trabajadores {
 
     private function getTurno($turno_id) {
         if (!isset($this->turnoCache[$turno_id])) {
-            $stmt = $this->db->prepare("SELECT es_nocturno, numero_turno FROM configuracion_turnos WHERE id = :turno_id");
+            $stmt = $this->db->prepare("SELECT es_nocturno, numero_turno, horas_laborales FROM configuracion_turnos WHERE id = :turno_id");
             $stmt->execute([':turno_id' => $turno_id]);
             $this->turnoCache[$turno_id] = $stmt->fetch();
         }
         return $this->turnoCache[$turno_id];
+    }
+
+    private function esPuestoFijo8h($puesto) {
+        return $puesto && in_array(strtoupper((string)($puesto['codigo'] ?? '')), self::PUESTOS_FIJOS_8H, true);
+    }
+
+    private function filtrarCandidatosPorRestricciones($disponibles, $puesto, $turno, $fecha) {
+        if (empty($disponibles) || !$puesto) {
+            return $disponibles;
+        }
+
+        $codigoPuesto = strtoupper((string)($puesto['codigo'] ?? ''));
+        $bloqueados = [];
+
+        if ($this->restriccionPuestoColumn) {
+            $bloqueados = array_merge($bloqueados, $this->obtenerTrabajadoresConRestriccionPuestoEspecifico($puesto['id'], $fecha));
+        }
+
+        if (!empty($puesto['requiere_fuerza_fisica'])) {
+            $bloqueados = array_merge($bloqueados, $this->obtenerTrabajadoresConRestriccionTipoFecha('no_fuerza_fisica', $fecha));
+        }
+
+        if (in_array($codigoPuesto, self::PUESTOS_MOVILIDAD_LIMITADA, true)) {
+            $bloqueados = array_merge($bloqueados, $this->obtenerTrabajadoresConRestriccionTipoFecha('movilidad_limitada', $fecha));
+        }
+
+        $numeroTurno = $turno['numero_turno'] ?? null;
+        if ((int)$numeroTurno === 3) {
+            $bloqueados = array_merge($bloqueados, $this->obtenerTrabajadoresConRestriccionTipoFecha('no_turno_noche', $fecha));
+        }
+
+        if (empty($bloqueados)) {
+            return $disponibles;
+        }
+
+        $bloqueados = array_unique($bloqueados);
+        return array_values(array_filter($disponibles, function ($t) use ($bloqueados) {
+            return !in_array($t['id'], $bloqueados);
+        }));
     }
 
     public function obtenerDisponiblesTurno($turno_id, $fecha) {
@@ -624,27 +665,15 @@ class Trabajadores {
 
     public function obtenerDisponibles($puesto_id, $turno_id, $fecha) {
         $puesto = $this->getPuesto($puesto_id);
+        $turno = $this->getTurno($turno_id);
+        $codigoPuesto = strtoupper((string)($puesto['codigo'] ?? ''));
+
+        if ($this->esPuestoFijo8h($puesto) && (float)($turno['horas_laborales'] ?? 0) < 7.5) {
+            return [];
+        }
+
         $disponibles = $this->obtenerDisponiblesTurno($turno_id, $fecha);
-
-        $bloqueados = [];
-        if ($puesto && $this->restriccionPuestoColumn) {
-            $bloqueados = array_merge($bloqueados, $this->obtenerTrabajadoresConRestriccionPuestoEspecifico($puesto['id'], $fecha));
-        }
-        if ($puesto && !empty($puesto['requiere_fuerza_fisica'])) {
-            $bloqueados = array_merge($bloqueados, $this->obtenerTrabajadoresConRestriccionTipoFecha('no_fuerza_fisica', $fecha));
-        }
-        if ($puesto && !empty($puesto['requiere_movilidad'])) {
-            $bloqueados = array_merge($bloqueados, $this->obtenerTrabajadoresConRestriccionTipoFecha('movilidad_limitada', $fecha));
-        }
-
-        if (!empty($bloqueados)) {
-            $bloqueados = array_unique($bloqueados);
-            $disponibles = array_values(array_filter($disponibles, function ($t) use ($bloqueados) {
-                return !in_array($t['id'], $bloqueados);
-            }));
-        }
-
-        return $disponibles;
+        return $this->filtrarCandidatosPorRestricciones($disponibles, $puesto, $turno, $fecha);
     }
 
     /**
@@ -690,6 +719,12 @@ class Trabajadores {
             ':fecha_inca'     => $fecha,
             ':fecha_lib'      => $fecha,
         ];
+
+        $puesto = $this->getPuesto($puesto_id);
+        $codigoPuesto = strtoupper((string)($puesto['codigo'] ?? ''));
+        if ($this->esPuestoFijo8h($puesto) && (float)($turno['horas_laborales'] ?? 0) < 7.5) {
+            return [];
+        }
 
         // ADM (administrativo completo): bloquea cualquier turno operativo del día
         $sql .= "
@@ -789,30 +824,7 @@ class Trabajadores {
         $stmt->execute($params);
         $disponibles = $stmt->fetchAll();
 
-        // Restricciones de puesto: se aplican en todos los modos excepto 'minimo'
-        if ($modo !== 'minimo' && !empty($disponibles)) {
-            $puesto     = $this->getPuesto($puesto_id);
-            $bloqueados = [];
-            if ($puesto && $this->restriccionPuestoColumn) {
-                $bloqueados = array_merge($bloqueados,
-                    $this->obtenerTrabajadoresConRestriccionPuestoEspecifico($puesto_id, $fecha));
-            }
-            if ($puesto && !empty($puesto['requiere_fuerza_fisica'])) {
-                $bloqueados = array_merge($bloqueados,
-                    $this->obtenerTrabajadoresConRestriccionTipoFecha('no_fuerza_fisica', $fecha));
-            }
-            if ($puesto && !empty($puesto['requiere_movilidad'])) {
-                $bloqueados = array_merge($bloqueados,
-                    $this->obtenerTrabajadoresConRestriccionTipoFecha('movilidad_limitada', $fecha));
-            }
-            if (!empty($bloqueados)) {
-                $bloqueados  = array_unique($bloqueados);
-                $disponibles = array_values(array_filter($disponibles,
-                    function($t) use ($bloqueados) { return !in_array($t['id'], $bloqueados); }));
-            }
-        }
-
-        return $disponibles;
+        return $this->filtrarCandidatosPorRestricciones($disponibles, $puesto, $turno, $fecha);
     }
 
     public function contarTurnosNocheEnMes($trabajador_id, $mes, $anio) {
@@ -910,16 +922,10 @@ class Trabajadores {
         }
 
         $disponibles = $this->disponiblesL4Cache[$cacheKey];
-        if (!empty($puesto_id) && $this->restriccionPuestoColumn) {
-            $bloqueados = $this->obtenerTrabajadoresConRestriccionPuestoEspecifico($puesto_id, $fecha);
-            if (!empty($bloqueados)) {
-                $disponibles = array_values(array_filter($disponibles, function ($t) use ($bloqueados) {
-                    return !in_array($t['id'], $bloqueados);
-                }));
-            }
-        }
+        $puesto = !empty($puesto_id) ? $this->getPuesto($puesto_id) : null;
+        $turno  = !empty($turno_id) ? $this->getTurno($turno_id) : null;
 
-        return $disponibles;
+        return $this->filtrarCandidatosPorRestricciones($disponibles, $puesto, $turno, $fecha);
     }
 }
 ?>

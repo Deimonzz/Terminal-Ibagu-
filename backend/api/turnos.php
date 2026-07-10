@@ -65,7 +65,7 @@ try {
                     $db->prepare("INSERT INTO puestos_trabajo (id, codigo, nombre, area, activo) VALUES (16, 'C2', 'Tasa de Uso C2', 'TASA DE USO', 1) ON DUPLICATE KEY UPDATE codigo = VALUES(codigo)")->execute();
                 }
 
-                $resultado = $db->query("SELECT id, codigo, nombre, area FROM puestos_trabajo WHERE activo = TRUE ORDER BY area, codigo")->fetchAll();
+                $resultado = $db->query("SELECT id, CASE WHEN codigo = 'F4' THEN 'F2' ELSE codigo END AS codigo, nombre, area FROM puestos_trabajo WHERE activo = TRUE ORDER BY area, codigo")->fetchAll();
                 echo json_encode(['success' => true, 'data' => $resultado]);
                 break;
             } elseif ($action === 'configuracion') {

@@ -2,6 +2,7 @@
 
 const IA_HISTORIAL = [];
 let iaAbierto = false;
+const IA_API_BASE = window.API_BASE || 'backend/api/';
 
 function toggleChat() {
     iaAbierto = !iaAbierto;
@@ -204,10 +205,10 @@ async function generarExcelIA(cfg) {
             .catch(() => ({success:false}));
 
         const [rTurnos, rTrab, rDiasEsp, rInc] = await Promise.all([
-            safeFetchXls(API_BASE + 'turnos.php?fecha_inicio=' + primerDia + '&fecha_fin=' + ultimoDia),
-            safeFetchXls(API_BASE + 'trabajadores.php'),
-            safeFetchXls(API_BASE + 'dias_especiales.php?fecha_inicio=' + primerDia + '&fecha_fin=' + ultimoDia),
-            safeFetchXls(API_BASE + 'incapacidades.php?fecha_inicio=' + primerDia + '&fecha_fin=' + ultimoDia)
+            safeFetchXls(IA_API_BASE + 'turnos.php?fecha_inicio=' + primerDia + '&fecha_fin=' + ultimoDia),
+            safeFetchXls(IA_API_BASE + 'trabajadores.php'),
+            safeFetchXls(IA_API_BASE + 'dias_especiales.php?fecha_inicio=' + primerDia + '&fecha_fin=' + ultimoDia),
+            safeFetchXls(IA_API_BASE + 'incapacidades.php?fecha_inicio=' + primerDia + '&fecha_fin=' + ultimoDia)
         ]);
 
         const todosTurnos   = rTurnos.success  ? (rTurnos.data  || []) : [];
@@ -445,7 +446,7 @@ async function ejecutarComandoIA(comando) {
 
         try {
             // Primero validar
-            const validacion = await fetch(`${API_BASE}turnos.php?action=validar`, {
+            const validacion = await fetch(`${IA_API_BASE}turnos.php?action=validar`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(datos)
@@ -468,7 +469,7 @@ async function ejecutarComandoIA(comando) {
             agregarMensaje('✅ Validación exitosa. Ejecutando asignación...', false);
 
             // Luego asignar
-            const response = await fetch(`${API_BASE}turnos.php`, {
+            const response = await fetch(`${IA_API_BASE}turnos.php`, {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(datos)
@@ -550,19 +551,19 @@ async function obtenerContextoSistema() {
             .catch(() => ({ success: false }));
 
         const [rTrab, rTurnosHoy, rTurnosSemana, rIncap, rDiasEspSemana, rTurnosMes, rDiasEspMes, rPuestos, rIncapMes, rTurnosMesAnterior, rDiasEspMesAnterior, rIncapMesAnterior, rSupervisores] = await Promise.all([
-            safeFetch(API_BASE + 'trabajadores.php'),
-            safeFetch(API_BASE + 'turnos.php?fecha=' + hoy),
-            safeFetch(API_BASE + 'turnos.php?fecha_inicio=' + inicioSemana + '&fecha_fin=' + finSemana),
-            safeFetch(API_BASE + 'incapacidades.php?activas=1'),
-            safeFetch(API_BASE + 'dias_especiales.php?fecha_inicio=' + inicioSemana + '&fecha_fin=' + finSemana),
-            safeFetch(API_BASE + 'turnos.php?fecha_inicio=' + primerDiaMes + '&fecha_fin=' + ultimoDiaMes),
-            safeFetch(API_BASE + 'dias_especiales.php?fecha_inicio=' + primerDiaMes + '&fecha_fin=' + ultimoDiaMes),
-            safeFetch(API_BASE + 'turnos.php?action=puestos'),
-            safeFetch(API_BASE + 'incapacidades.php?fecha_inicio=' + primerDiaMes + '&fecha_fin=' + ultimoDiaMes),
-            safeFetch(API_BASE + 'turnos.php?fecha_inicio=' + primerDiaMesAnterior + '&fecha_fin=' + ultimoDiaMesAnterior),
-            safeFetch(API_BASE + 'dias_especiales.php?fecha_inicio=' + primerDiaMesAnterior + '&fecha_fin=' + ultimoDiaMesAnterior),
-            safeFetch(API_BASE + 'incapacidades.php?fecha_inicio=' + primerDiaMesAnterior + '&fecha_fin=' + ultimoDiaMesAnterior),
-            safeFetch(API_BASE + 'supervisores_turno.php?fecha_inicio=' + inicioSemana + '&fecha_fin=' + finSemana)
+            safeFetch(IA_API_BASE + 'trabajadores.php'),
+            safeFetch(IA_API_BASE + 'turnos.php?fecha=' + hoy),
+            safeFetch(IA_API_BASE + 'turnos.php?fecha_inicio=' + inicioSemana + '&fecha_fin=' + finSemana),
+            safeFetch(IA_API_BASE + 'incapacidades.php?activas=1'),
+            safeFetch(IA_API_BASE + 'dias_especiales.php?fecha_inicio=' + inicioSemana + '&fecha_fin=' + finSemana),
+            safeFetch(IA_API_BASE + 'turnos.php?fecha_inicio=' + primerDiaMes + '&fecha_fin=' + ultimoDiaMes),
+            safeFetch(IA_API_BASE + 'dias_especiales.php?fecha_inicio=' + primerDiaMes + '&fecha_fin=' + ultimoDiaMes),
+            safeFetch(IA_API_BASE + 'turnos.php?action=puestos'),
+            safeFetch(IA_API_BASE + 'incapacidades.php?fecha_inicio=' + primerDiaMes + '&fecha_fin=' + ultimoDiaMes),
+            safeFetch(IA_API_BASE + 'turnos.php?fecha_inicio=' + primerDiaMesAnterior + '&fecha_fin=' + ultimoDiaMesAnterior),
+            safeFetch(IA_API_BASE + 'dias_especiales.php?fecha_inicio=' + primerDiaMesAnterior + '&fecha_fin=' + ultimoDiaMesAnterior),
+            safeFetch(IA_API_BASE + 'incapacidades.php?fecha_inicio=' + primerDiaMesAnterior + '&fecha_fin=' + ultimoDiaMesAnterior),
+            safeFetch(IA_API_BASE + 'supervisores_turno.php?fecha_inicio=' + inicioSemana + '&fecha_fin=' + finSemana)
         ]);
 
         const trabajadores     = (rTrab.success ? rTrab.data : []).filter(t => t.activo);
@@ -988,7 +989,7 @@ ${contexto}`;
             content: m.content
         }));
 
-        const response = await fetch(API_BASE + 'ia_proxy.php', {
+        const response = await fetch(IA_API_BASE + 'ia_proxy.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -1094,9 +1095,9 @@ async function verificarAlertasIA() {
         const mañana = new Date(Date.now() + 86400000).toISOString().split('T')[0];
 
         const [rTurnosHoy, rTrab, rTurnosMañana] = await Promise.all([
-            fetch(API_BASE + 'turnos.php?fecha=' + hoy).then(r => r.json()),
-            fetch(API_BASE + 'trabajadores.php').then(r => r.json()),
-            fetch(API_BASE + 'turnos.php?fecha=' + mañana).then(r => r.json()).catch(() => ({ success: false }))
+            fetch(IA_API_BASE + 'turnos.php?fecha=' + hoy).then(r => r.json()),
+            fetch(IA_API_BASE + 'trabajadores.php').then(r => r.json()),
+            fetch(IA_API_BASE + 'turnos.php?fecha=' + mañana).then(r => r.json()).catch(() => ({ success: false }))
         ]);
 
         const turnosHoy  = (rTurnosHoy.success ? rTurnosHoy.data : []).filter(t => t.estado !== 'cancelado');
@@ -1131,7 +1132,7 @@ async function verificarAlertasIA() {
             return new Date(d.setDate(diff)).toISOString().split('T')[0];
         })();
 
-        const rDiasEsp = await fetch(API_BASE + 'dias_especiales.php?fecha_inicio=' + inicioSemana + '&fecha_fin=' + mañana).then(r => r.json()).catch(() => ({ success: false }));
+        const rDiasEsp = await fetch(IA_API_BASE + 'dias_especiales.php?fecha_inicio=' + inicioSemana + '&fecha_fin=' + mañana).then(r => r.json()).catch(() => ({ success: false }));
         const diasEspSemana = rDiasEsp.success ? rDiasEsp.data : [];
 
         const libresEstaSemana = new Set(

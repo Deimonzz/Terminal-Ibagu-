@@ -6,6 +6,8 @@ require_once __DIR__ . '/Trabajadores.php';
 class TurnosAsignados {
     private $db;
     private $trabajadores;
+    private const PUESTOS_FIJOS_8H = ['C', 'D3', 'V1', 'V2', 'F6', 'F11'];
+    private const PUESTOS_MOVILIDAD_LIMITADA = ['V1', 'V2'];
     
     public function __construct() {
         $this->db = Database::getInstance()->getConnection();
@@ -28,7 +30,7 @@ class TurnosAsignados {
                 t.nombre as trabajador,
                 t.cedula,
                 " . ($puestoCol ? "pt.id as puesto_id," : "NULL as puesto_id,") . "
-                " . ($puestoCol ? "pt.codigo as puesto_codigo," : "NULL as puesto_codigo,") . "
+                " . ($puestoCol ? "CASE WHEN pt.codigo = 'F4' THEN 'F2' ELSE pt.codigo END as puesto_codigo," : "NULL as puesto_codigo,") . "
                 " . ($puestoCol ? "pt.nombre as puesto_nombre," : "NULL as puesto_nombre,") . "
                 " . ($puestoCol ? "pt.area," : "NULL as area,") . "
                 ct.numero_turno,
@@ -162,7 +164,7 @@ class TurnosAsignados {
         
         // 4. Verificar si el turno es nocturno y las reglas de descanso
         try {
-            $sql = "SELECT es_nocturno, numero_turno FROM configuracion_turnos WHERE id = :turno_id";
+            $sql = "SELECT es_nocturno, numero_turno, horas_laborales FROM configuracion_turnos WHERE id = :turno_id";
             $stmt = $this->db->prepare($sql);
             $stmt->execute([':turno_id' => $turno_id]);
             $turno = $stmt->fetch();
@@ -198,6 +200,13 @@ class TurnosAsignados {
             $stmt = $this->db->prepare($sql);
             $stmt->execute([':puesto_id' => $puesto_id]);
             $puesto = $stmt->fetch();
+            $codigoPuesto = strtoupper((string)($puesto['codigo'] ?? ''));
+
+            $esPuestoFijo8h = $puesto && in_array($codigoPuesto, self::PUESTOS_FIJOS_8H, true);
+
+            if ($esPuestoFijo8h && $turno && (float)($turno['horas_laborales'] ?? 0) < 7.5) {
+                $errores[] = 'Este puesto fijo solo puede asignarse con turnos de 8 horas';
+            }
             
             if ($puesto && $puesto['requiere_fuerza_fisica']) {
                 // Intentar primero con método puedeHacerFuerza
@@ -233,7 +242,9 @@ class TurnosAsignados {
         }
         
         try {
-            if ($puesto && $puesto['requiere_movilidad']) {
+            $requiereMovilidad = $puesto && in_array($codigoPuesto ?? '', self::PUESTOS_MOVILIDAD_LIMITADA, true);
+
+            if ($requiereMovilidad) {
                 // Validación directa en BD
                 try {
                     $sql = "SELECT COUNT(*) as count FROM restricciones_trabajador 
@@ -710,7 +721,7 @@ class TurnosAsignados {
                 ta.estado,
                 t.nombre as trabajador,
                 t.cedula,
-                " . ($puestoCol ? "pt.codigo as puesto_codigo," : "NULL as puesto_codigo,") . "
+                " . ($puestoCol ? "CASE WHEN pt.codigo = 'F4' THEN 'F2' ELSE pt.codigo END as puesto_codigo," : "NULL as puesto_codigo,") . "
                 " . ($puestoCol ? "pt.nombre as puesto_nombre," : "NULL as puesto_nombre,") . "
                 " . ($puestoCol ? "pt.area," : "NULL as area,") . "
                 ct.numero_turno,
