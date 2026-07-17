@@ -6,7 +6,9 @@ require_once __DIR__ . '/Trabajadores.php';
 class TurnosAsignados {
     private $db;
     private $trabajadores;
-    private const PUESTOS_FIJOS_8H = ['C', 'D3', 'V1', 'V2', 'F6', 'F11'];
+    private $validacionCache = [];
+    private const PUESTOS_FIJOS_8H = ['C', 'D3', 'F6', 'F11', 'F14', 'G', 'V1', 'V2'];
+    private const PUESTOS_DIURNOS_7H = ['D1', 'D2', 'D4', 'F15', 'F2', 'F5'];
     private const PUESTOS_MOVILIDAD_LIMITADA = ['V1', 'V2'];
     
     public function __construct() {
@@ -91,7 +93,16 @@ class TurnosAsignados {
     
      // Validar asignación de turno
      
+    private function invalidarCacheValidaciones() {
+        $this->validacionCache = [];
+    }
+
     public function validarAsignacion($trabajador_id, $puesto_id, $turno_id, $fecha, $exclude_id = null) {
+        $cacheKey = 'v|' . (int)$trabajador_id . '|' . (int)($puesto_id ?? 0) . '|' . (int)$turno_id . '|' . (string)$fecha . '|' . (string)($exclude_id ?? '');
+        if (array_key_exists($cacheKey, $this->validacionCache)) {
+            return $this->validacionCache[$cacheKey];
+        }
+
         $errores = [];
         
         // Detectar el nombre correcto de la columna puesto en turnos_asignados
@@ -161,22 +172,49 @@ class TurnosAsignados {
         if ($result['count'] > 0) {
             $errores[] = 'El trabajador tiene día especial: ' . $result['tipos'];
         }
+
+        // 3.1 Verificar que el trabajador no tenga ya otro turno operativo ese día.
+        // Se mantiene como regla general para evitar dobles asignaciones por cache o reintentos.
+        $sql = "SELECT COUNT(*) as count
+                FROM turnos_asignados
+                WHERE trabajador_id = :trabajador_id
+                AND fecha = :fecha
+                AND estado IN ('programado', 'activo')";
+        $params = [
+            ':trabajador_id' => $trabajador_id,
+            ':fecha' => $fecha
+        ];
+        if ($exclude_id !== null) {
+            $sql .= " AND id != :exclude_id";
+            $params[':exclude_id'] = $exclude_id;
+        }
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $result = $stmt->fetch();
+        if ((int)($result['count'] ?? 0) > 0) {
+            $errores[] = 'El trabajador ya tiene otro turno asignado ese día';
+        }
         
-        // 4. Verificar si el turno es nocturno y las reglas de descanso
+        // 4. Verificar restricciones obligatorias de forma general para cualquier turno
         try {
             $sql = "SELECT es_nocturno, numero_turno, horas_laborales FROM configuracion_turnos WHERE id = :turno_id";
             $stmt = $this->db->prepare($sql);
             $stmt->execute([':turno_id' => $turno_id]);
             $turno = $stmt->fetch();
             
-            if ($turno && $turno['es_nocturno']) {
-                if (!$this->trabajadores->puedeTrabajarNoche($trabajador_id, $fecha)) {
-                    $errores[] = 'El trabajador tiene restricción para trabajar en turno nocturno';
-                }
+            $esTurnoNocturno = $turno && (
+                !empty($turno['es_nocturno'])
+                || (int)($turno['numero_turno'] ?? 0) === 3
+            );
 
+            if (!$this->trabajadores->puedeAsignarTurno($trabajador_id, $puesto_id, $turno_id, $fecha)) {
+                $errores[] = 'El trabajador tiene una restricción que impide trabajar en este turno';
+            }
+
+            if ($esTurnoNocturno) {
                 $mes = (int)date('n', strtotime($fecha));
                 $anio = (int)date('Y', strtotime($fecha));
-                if ($this->trabajadores->contarTurnosNocheEnMes($trabajador_id, $mes, $anio) >= 7) {
+                if ($this->trabajadores->contarTurnosNocheEnMes($trabajador_id, $mes, $anio, $exclude_id) >= 7) {
                     $errores[] = 'El trabajador ya tiene el máximo de 7 turnos de noche en el mes';
                 }
 
@@ -188,6 +226,108 @@ class TurnosAsignados {
             if ($turno && (int)$turno['numero_turno'] === 1) {
                 if ($this->trabajadores->tieneTurnoNocheDiaAnterior($trabajador_id, $fecha)) {
                     $errores[] = 'El trabajador no puede tener turno en la mañana si tuvo turno de noche la noche anterior';
+                }
+            }
+
+            // Regla de coexistencia por puesto/base:
+            // en un mismo puesto y dia, una base (manana/tarde) permite:
+            // - 1 turno normal (7h/8h), o
+            // - hasta 2 turnos L4 encadenados.
+            if ($puestoCol && $turno && $puesto_id) {
+                $numTurnoActual = (int)($turno['numero_turno'] ?? 0);
+                $horasTurnoActual = (float)($turno['horas_laborales'] ?? 0);
+                $esL4Actual = in_array($numTurnoActual, [4, 5], true)
+                    && $horasTurnoActual >= 3.5
+                    && $horasTurnoActual <= 4.5;
+
+                $baseTurno = null;
+                if ($esL4Actual) {
+                    $baseTurno = ($numTurnoActual === 4) ? 1 : 2;
+                } elseif (in_array($numTurnoActual, [1, 2], true)) {
+                    $baseTurno = $numTurnoActual;
+                }
+
+                if ($baseTurno !== null) {
+                    $l4Numero = ($baseTurno === 1) ? 4 : 5;
+
+                    if ($esL4Actual) {
+                        // Si existe turno normal base, no permitir L4.
+                        $sqlNormalBase = "SELECT COUNT(*) as count
+                                          FROM turnos_asignados ta
+                                          INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
+                                          WHERE ta." . $puestoCol . " = :puesto_id
+                                          AND ta.fecha = :fecha
+                                          AND ta.estado IN ('programado', 'activo')
+                                          AND ct.numero_turno = :base_turno";
+                        $paramsNormalBase = [
+                            ':puesto_id' => $puesto_id,
+                            ':fecha' => $fecha,
+                            ':base_turno' => $baseTurno
+                        ];
+                        if ($exclude_id !== null) {
+                            $sqlNormalBase .= " AND ta.id != :exclude_id";
+                            $paramsNormalBase[':exclude_id'] = $exclude_id;
+                        }
+
+                        $stmtNormalBase = $this->db->prepare($sqlNormalBase);
+                        $stmtNormalBase->execute($paramsNormalBase);
+                        $countNormalBase = (int)($stmtNormalBase->fetch()['count'] ?? 0);
+                        if ($countNormalBase > 0) {
+                            $errores[] = 'No se puede asignar L4: el puesto ya tiene turno normal en esa franja';
+                        }
+
+                        // Maximo 2 L4 por base/dia.
+                        $sqlL4Base = "SELECT COUNT(*) as count
+                                      FROM turnos_asignados ta
+                                      INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
+                                      WHERE ta." . $puestoCol . " = :puesto_id
+                                      AND ta.fecha = :fecha
+                                      AND ta.estado IN ('programado', 'activo')
+                                      AND ct.numero_turno = :l4_turno
+                                      AND ct.horas_laborales BETWEEN 3.5 AND 4.5";
+                        $paramsL4Base = [
+                            ':puesto_id' => $puesto_id,
+                            ':fecha' => $fecha,
+                            ':l4_turno' => $l4Numero
+                        ];
+                        if ($exclude_id !== null) {
+                            $sqlL4Base .= " AND ta.id != :exclude_id";
+                            $paramsL4Base[':exclude_id'] = $exclude_id;
+                        }
+
+                        $stmtL4Base = $this->db->prepare($sqlL4Base);
+                        $stmtL4Base->execute($paramsL4Base);
+                        $countL4Base = (int)($stmtL4Base->fetch()['count'] ?? 0);
+                        if ($countL4Base >= 2) {
+                            $errores[] = 'No se puede asignar L4: ya hay dos turnos L4 en esa franja para este puesto';
+                        }
+                    } else {
+                        // Si existe L4 en esa base, no permitir turno normal.
+                        $sqlL4Existente = "SELECT COUNT(*) as count
+                                           FROM turnos_asignados ta
+                                           INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
+                                           WHERE ta." . $puestoCol . " = :puesto_id
+                                           AND ta.fecha = :fecha
+                                           AND ta.estado IN ('programado', 'activo')
+                                           AND ct.numero_turno = :l4_turno
+                                           AND ct.horas_laborales BETWEEN 3.5 AND 4.5";
+                        $paramsL4Existente = [
+                            ':puesto_id' => $puesto_id,
+                            ':fecha' => $fecha,
+                            ':l4_turno' => $l4Numero
+                        ];
+                        if ($exclude_id !== null) {
+                            $sqlL4Existente .= " AND ta.id != :exclude_id";
+                            $paramsL4Existente[':exclude_id'] = $exclude_id;
+                        }
+
+                        $stmtL4Existente = $this->db->prepare($sqlL4Existente);
+                        $stmtL4Existente->execute($paramsL4Existente);
+                        $countL4Existente = (int)($stmtL4Existente->fetch()['count'] ?? 0);
+                        if ($countL4Existente > 0) {
+                            $errores[] = 'No se puede asignar turno normal: el puesto ya tiene L4 en esa franja';
+                        }
+                    }
                 }
             }
         } catch (Exception $e) {
@@ -203,9 +343,20 @@ class TurnosAsignados {
             $codigoPuesto = strtoupper((string)($puesto['codigo'] ?? ''));
 
             $esPuestoFijo8h = $puesto && in_array($codigoPuesto, self::PUESTOS_FIJOS_8H, true);
+            $esPuestoDiurno7h = $puesto
+                && $turno
+                && in_array((int)($turno['numero_turno'] ?? 0), [1, 2], true)
+                && in_array($codigoPuesto, self::PUESTOS_DIURNOS_7H, true);
 
             if ($esPuestoFijo8h && $turno && (float)($turno['horas_laborales'] ?? 0) < 7.5) {
                 $errores[] = 'Este puesto fijo solo puede asignarse con turnos de 8 horas';
+            }
+
+            if ($esPuestoDiurno7h && $turno) {
+                $horasTurno = (float)($turno['horas_laborales'] ?? 0);
+                if ($horasTurno < 6.5 || $horasTurno >= 7.5) {
+                    $errores[] = 'Este puesto en manana/tarde solo puede asignarse con turnos de 7 horas';
+                }
             }
             
             if ($puesto && $puesto['requiere_fuerza_fisica']) {
@@ -270,55 +421,30 @@ class TurnosAsignados {
             }
 
             if ($puesto) {
-                // Intentar primero con COALESCE (funciona en MySQL)
                 try {
-                    $sql = "SELECT COUNT(*) as count FROM restricciones_trabajador
-                            WHERE trabajador_id = :trabajador_id
-                            AND tipo_restriccion = 'puesto_especifico'
-                            AND activa = true
-                            AND COALESCE(puesto_trabajo_id, puesto_id) = :puesto_id
-                            AND :fecha >= fecha_inicio
-                            AND (:fecha2 <= fecha_fin OR fecha_fin IS NULL)";
-                    $stmt = $this->db->prepare($sql);
-                    $stmt->execute([
-                        ':trabajador_id' => $trabajador_id,
-                        ':puesto_id' => $puesto_id,
-                        ':fecha' => $fecha,
-                        ':fecha2' => $fecha
-                    ]);
-                    $result = $stmt->fetch();
-                    if ($result['count'] > 0) {
-                        $errores[] = 'El trabajador tiene restricción para este puesto específico';
-                    }
-                } catch (Exception $e) {
-                    // Si falla COALESCE (PostgreSQL sin puesto_id), intentar con detección de columna
-                    error_log("[TurnosAsignados::validarAsignacion] COALESCE falló: " . $e->getMessage());
-                    try {
-                        $columnName = Database::getColumnName('restricciones_trabajador', 'puesto_trabajo_id', 'puesto_id');
-                        if ($columnName) {
-                            // Construir SQL ANTES de prepare() con el nombre de columna seguro
-                            $sql2 = "SELECT COUNT(*) as count FROM restricciones_trabajador
-                                    WHERE trabajador_id = :trabajador_id
-                                    AND tipo_restriccion = 'puesto_especifico'
-                                    AND activa = true
-                                    AND " . $columnName . " = :puesto_id
-                                    AND :fecha >= fecha_inicio
-                                    AND (:fecha2 <= fecha_fin OR fecha_fin IS NULL)";
-                            $stmt = $this->db->prepare($sql2);
-                            $stmt->execute([
-                                ':trabajador_id' => $trabajador_id,
-                                ':puesto_id' => $puesto_id,
-                                ':fecha' => $fecha,
-                                ':fecha2' => $fecha
-                            ]);
-                            $result = $stmt->fetch();
-                            if ($result['count'] > 0) {
-                                $errores[] = 'El trabajador tiene restricción para este puesto específico';
-                            }
+                    $columnName = Database::getColumnName('restricciones_trabajador', 'puesto_trabajo_id', 'puesto_id');
+                    if ($columnName) {
+                        $sql = "SELECT COUNT(*) as count FROM restricciones_trabajador
+                                WHERE trabajador_id = :trabajador_id
+                                AND tipo_restriccion = 'puesto_especifico'
+                                AND activa = true
+                                AND " . $columnName . " = :puesto_id
+                                AND :fecha >= fecha_inicio
+                                AND (:fecha2 <= fecha_fin OR fecha_fin IS NULL)";
+                        $stmt = $this->db->prepare($sql);
+                        $stmt->execute([
+                            ':trabajador_id' => $trabajador_id,
+                            ':puesto_id' => $puesto_id,
+                            ':fecha' => $fecha,
+                            ':fecha2' => $fecha
+                        ]);
+                        $result = $stmt->fetch();
+                        if ($result['count'] > 0) {
+                            $errores[] = 'El trabajador tiene restricción para este puesto específico';
                         }
-                    } catch (Exception $e2) {
-                        error_log("[TurnosAsignados::validarAsignacion] Fallback también falló: " . $e2->getMessage());
                     }
+                } catch (Exception $e2) {
+                    error_log("[TurnosAsignados::validarAsignacion] Error validando puesto_especifico: " . $e2->getMessage());
                 }
             }
         } catch (Exception $e) {
@@ -340,10 +466,12 @@ class TurnosAsignados {
             $errores[] = 'Error en validación: ' . $e->getMessage();
         }
         
-        return [
+        $resultado = [
             'valido' => count($errores) === 0,
             'errores' => $errores
         ];
+        $this->validacionCache[$cacheKey] = $resultado;
+        return $resultado;
     }
     
     
@@ -410,6 +538,7 @@ class TurnosAsignados {
                                      $datos['turno_id'], $datos['fecha'], 'creado', $datos['created_by'] ?? null);
             
             $this->db->commit();
+            $this->invalidarCacheValidaciones();
             
             return [
                 'success' => true,
@@ -445,7 +574,10 @@ class TurnosAsignados {
         }
         
         try {
-            $this->db->beginTransaction();
+            $manejaTransaccion = !$this->db->inTransaction();
+            if ($manejaTransaccion) {
+                $this->db->beginTransaction();
+            }
             
             // Detectar el nombre correcto de la columna puesto
             $puestoCol = Database::getColumnName('turnos_asignados', 'puesto_trabajo_id', 'puesto_id');
@@ -485,7 +617,10 @@ class TurnosAsignados {
             $this->registrarHistorial($turno_id, $datos['trabajador_id'], $datos['puesto_trabajo_id'], 
                                      $datos['turno_id'], $datos['fecha'], 'creado', $datos['created_by'] ?? null);
 
-            $this->db->commit();
+            if ($manejaTransaccion) {
+                $this->db->commit();
+            }
+            $this->invalidarCacheValidaciones();
             
             error_log("[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=" . $datos['trabajador_id'] . 
                      ", puesto=" . ($datos['puesto_trabajo_id'] ?? 'NULL') . ", fecha=" . $datos['fecha']);
@@ -496,7 +631,9 @@ class TurnosAsignados {
                 'message' => 'Turno asignado exitosamente'
             ];
         } catch (PDOException $e) {
-            $this->db->rollBack();
+            if ($this->db->inTransaction()) {
+                $this->db->rollBack();
+            }
             error_log("[TurnosAsignados::asignarDirecto] ❌ Error: " . $e->getMessage());
             return [
                 'success' => false,

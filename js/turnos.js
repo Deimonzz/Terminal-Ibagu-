@@ -1106,8 +1106,8 @@ async function asignacionAutomaticaMes() {
 
     
     htmlContent += '<div class="alert alert-warning" style="margin-top: 1rem;">';
-    htmlContent += '<strong>⚠️ Advertencia:</strong> Si ya existen turnos asignados para este mes, NO se sobrescribirán. Solo se llenarán los espacios vacíos.';
-    htmlContent += '<br><strong>Nota:</strong> Es necesario hacer la asignación automática varias veces, para cubrir la mayor cantidad de turnos posible.';
+    htmlContent += '<strong>⚠️ Recalculo automático:</strong> Al generar, el sistema borra y reconstruye únicamente las asignaciones automáticas del mes.';
+    htmlContent += '<br><strong>Nota:</strong> Las asignaciones manuales se conservan y ya no deberías necesitar ejecutar varias veces para mejorar cobertura.';
     htmlContent += '</div>';
     
     htmlContent += '<div class="form-actions">';
@@ -1197,7 +1197,7 @@ async function ejecutarAsignacionAutomatica(e) {
     
     const mesNombre = nombresMeses[mes] || 'Desconocido';
     
-    const okAuto = await confirmarAccion({ titulo: 'Generar asignaciones automáticas', mensaje: 'Se generarán asignaciones para ' + mesNombre + ' ' + anio + '. Los turnos ya asignados no se tocarán.', textoBtn: 'Generar', tipoBtn: 'primary', icono: 'fa-magic' });
+    const okAuto = await confirmarAccion({ titulo: 'Generar asignaciones automáticas', mensaje: 'Se recalcularán las asignaciones automáticas para ' + mesNombre + ' ' + anio + ' y se mantendrán las manuales.', textoBtn: 'Generar', tipoBtn: 'primary', icono: 'fa-magic' });
     if (!okAuto) return;
     
     cerrarModal();
@@ -1241,17 +1241,22 @@ async function ejecutarAsignacionAutomatica(e) {
 
         clearInterval(intervalo);
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error('Error HTTP: ' + response.status + ' - ' + (errorText || response.statusText));
-        }
-
         const rawResponse = await response.text();
         let result;
         try {
             result = JSON.parse(rawResponse);
         } catch (jsonError) {
+            if (!response.ok) {
+                throw new Error('Error HTTP: ' + response.status + ' - ' + (rawResponse || response.statusText));
+            }
             throw new Error('Respuesta no válida del servidor: ' + rawResponse.substring(0, 500));
+        }
+
+        if (!response.ok && result && result.message) {
+            throw new Error(result.message);
+        }
+        if (!response.ok) {
+            throw new Error('Error HTTP: ' + response.status + ' - ' + (result.message || rawResponse || response.statusText));
         }
 
         // Completar al 100%
@@ -1300,7 +1305,6 @@ async function ejecutarAsignacionAutomatica(e) {
                 const modalOverlay = document.getElementById('modal-overlay');
                 const modalTitulo  = document.getElementById('modal-titulo');
                 const modalBody    = document.getElementById('modal-body');
-                modalTitulo.textContent = 'Resultado de asignación automática';
                 modalBody.innerHTML = `
                     <div style="display:flex;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
                         <div style="flex:1;min-width:120px;background:#d4edda;border-radius:8px;padding:12px;text-align:center;">
@@ -1460,7 +1464,7 @@ async function cargarTrabajadoresEspecial(tipo, fecha) {
                 otros.forEach(t => {
                     const o = document.createElement('option');
                     o.value = t.id;
-                    o.textContent = t.nombre + ' (' + t.cedula + ')';
+                            const sufijoHoras = obtenerMarcadorHorasTurno(a.horas_laborales);
                     sel.appendChild(o);
                 });
             }
@@ -1891,6 +1895,7 @@ function renderizarVistaDiaria(turnos, fecha, filtroTurno, admList = [], supervi
             return String(t.numero_turno) === String(filtroTurno);
         });
     }
+    anotarBloquesL4EnLista(turnosFiltrados);
 
     // Agrupar por número de turno
     const turnosPorNumero = {};
@@ -1961,7 +1966,7 @@ function renderizarVistaDiaria(turnos, fecha, filtroTurno, admList = [], supervi
     const PUESTOS_T3 = new Set(['V1','V2','C','C2','D3','F6','F11']);
 
     // Indexar turnos asignados por codigo de puesto + numero_turno_normalizado
-    const idxTurnos = {}; // "codigo_numNorm" -> turno
+    const idxTurnos = {}; // "codigo_numNorm" -> [turnos]
     turnosFiltrados.forEach(t => {
         if (t.tipo_especial) return;
         let n = Number(t.numero_turno);
@@ -1969,7 +1974,12 @@ function renderizarVistaDiaria(turnos, fecha, filtroTurno, admList = [], supervi
         if ([5,10].includes(n)) n = 2;
         const codigo = String(t.puesto_codigo || '').toUpperCase();
         if (!codigo) return;
-        idxTurnos[codigo + '_' + n] = t;
+        const key = codigo + '_' + n;
+        if (!idxTurnos[key]) idxTurnos[key] = [];
+        idxTurnos[key].push(t);
+    });
+    Object.keys(idxTurnos).forEach(k => {
+        idxTurnos[k].sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
     });
 
     const especialesDesdeTurnos = turnosFiltrados.filter(t => t.tipo_especial);
@@ -2009,7 +2019,8 @@ function renderizarVistaDiaria(turnos, fecha, filtroTurno, admList = [], supervi
             areaConf.puestos.forEach(p => {
                 if (num === 3 && !PUESTOS_T3.has(p.cod)) return;
                 // T1/T2 muestran todos los puestos
-                if (idxTurnos[p.cod + '_' + num]) asignadosEste++;
+                const lista = idxTurnos[p.cod + '_' + num] || [];
+                asignadosEste += lista.length;
             });
         });
 
@@ -2102,19 +2113,20 @@ function renderizarVistaDiaria(turnos, fecha, filtroTurno, admList = [], supervi
                     html += '</td>';
                     return;
                 }
-
-                const t       = idxTurnos[p.cod + '_' + num];
+                const turnosCelda = idxTurnos[p.cod + '_' + num] || [];
                 const l4cfg   = PUESTOS_L4[p.cod];
                 const tieneL4 = !!(l4cfg && l4cfg.turno === num);
                 const l4param = tieneL4 ? `,true,${l4cfg.id}` : ',false,null';
 
-                if (t) {
+                if (turnosCelda.length > 0) {
+                    const listaRender = tieneL4 ? turnosCelda : [turnosCelda[0]];
+                    listaRender.forEach(t => {
                     // Celda CON asignación
                     const origNum = Number(t.numero_turno) || 0;
                     const esL4    = [4,5,9,10].includes(origNum);
                     const numNorm = [4,9].includes(origNum) ? 1 : [5,10].includes(origNum) ? 2 : origNum;
                     const codigo  = esL4
-                        ? String(numNorm) + p.cod + 'L4'
+                        ? construirCodigoTurnoExport(t, p.cod)
                         : String(origNum) + p.cod;
                     const f       = (t.fecha||fecha||'').replace(/'/g, "\\'");
                     const npStyle = t.estado === 'no_presentado';
@@ -2127,12 +2139,11 @@ function renderizarVistaDiaria(turnos, fecha, filtroTurno, admList = [], supervi
                     const pidTurno = t.puesto_id || t.puesto_trabajo_id || p.id;
                     html += ' onclick="editarAsignacion(' + (t.id||0) + ',' + pidTurno + ",'" + f + "'," + origNum + ',' + (t.trabajador_id||'null') + ",'" + p.cod + "'" + l4param + ')"><i class="fas fa-edit" style="font-size:0.8rem;color:#6c757d;"></i></button>';
                     html += '</div>';
-                    const esNP = t.estado === 'no_presentado';
-                    html += '<div style="display:flex;gap:3px;margin-top:2px;">';
                     html += '<button style="padding:2px 6px;border:none;background:transparent;cursor:pointer;" title="Eliminar" data-turno-id="' + (t.id||0) + '" data-trabajador="' + (t.trabajador||'') + '" data-fecha="' + f + '" onclick="eliminarTurnoBtn(this)"><i class="fas fa-trash-alt" style="font-size:0.8rem;color:#dc3545;"></i></button>';
-                    html += '<button style="padding:2px 8px;border:none;border-radius:4px;font-size:0.75rem;cursor:pointer;background:' + (esNP?'#dc3545':'#f8f9fa') + ';color:' + (esNP?'white':'#6c757d') + ';border:1px solid ' + (esNP?'#dc3545':'#dee2e6') + ';" data-turno-id="' + (t.id||0) + '" data-trabajador="' + (t.trabajador||'') + '" data-estado="' + (t.estado||'programado') + '" onclick="toggleNoPresentado(this)">';
-                    html += esNP ? '<i class="fas fa-times-circle"></i> TNR' : '<i class="fas fa-user-times"></i> TNR';
+                    html += '<button style="padding:2px 8px;border:none;border-radius:4px;font-size:0.75rem;cursor:pointer;background:' + (npStyle?'#dc3545':'#f8f9fa') + ';color:' + (npStyle?'white':'#6c757d') + ';border:1px solid ' + (npStyle?'#dc3545':'#dee2e6') + ';" data-turno-id="' + (t.id||0) + '" data-trabajador="' + (t.trabajador||'') + '" data-estado="' + (t.estado||'programado') + '" onclick="toggleNoPresentado(this)">';
+                    html += npStyle ? '<i class="fas fa-times-circle"></i> TNR' : '<i class="fas fa-user-times"></i> TNR';
                     html += '</button></div>';
+                    });
 
                 } else {
                     // Celda VACÍA — clickeable para asignar
@@ -2412,6 +2423,7 @@ async function cargarGrillaMensual() {
         }
 
         const turnos      = dataTurnos.data.filter(t => t.estado !== 'cancelado');
+        anotarBloquesL4EnLista(turnos);
         const trabajadores = dataTrab.data.filter(t => t.activo);
 
         trabajadores.sort((a, b) => {
@@ -2565,7 +2577,9 @@ async function cargarGrillaMensual() {
                     horas_laborales: a.horas_laborales||null,
                     puesto_trabajo_id: a.puesto_trabajo_id||null, puesto_nombre: a.puesto_nombre||null,
                     hora_inicio: a.hora_inicio||null, hora_fin: a.hora_fin||null,
-                    horas_inicio: a.horas_inicio||null, horas_fin: a.horas_fin||null
+                    horas_inicio: a.horas_inicio||null, horas_fin: a.horas_fin||null,
+                    _l4_bloque_idx: a._l4_bloque_idx||null,
+                    _l4_bloque_total: a._l4_bloque_total||null
                 }))).replace(/'/g, '&#39;').replace(/"/g, '&quot;');
                 const nombreSafe = trab.nombre.replace(/'/g, '&#39;');
                 const cargoSafeAttr = (trab.cargo || '').replace(/'/g, '&#39;');
@@ -2625,13 +2639,16 @@ async function cargarGrillaMensual() {
                                 let num = origNum;
                                 if (origNum === 4) num = 1;
                                 else if (origNum === 5) num = 2;
-                                const es6h = Number(a.horas_laborales) === 6;
+                                const sufijoHoras = obtenerMarcadorHorasTurno(a.horas_laborales);
 
                                 const puestoCodigo = normalizarCodigoPuesto(a.puesto_codigo || '');
                                 if (origNum >= 4) {
-                                    etiqueta = String(num) + puestoCodigo + 'L4';
+                                    const baseCodigo = String(num) + puestoCodigo + 'L4';
+                                    const bloqueIdx = Number(a._l4_bloque_idx) === 2 ? 2 : 1;
+                                    const rangoL4 = obtenerRangoBloqueL4(num, bloqueIdx);
+                                    etiqueta = baseCodigo + '\n' + rangoL4.replace('-', ' - ');
                                 } else {
-                                    etiqueta = String(num) + puestoCodigo + (es6h ? ' 6H' : '');
+                                    etiqueta = String(num) + puestoCodigo + sufijoHoras;
                                 }
 
                                 bg    = num === 1 ? '#d1ecf1' : num === 2 ? '#fff3cd' : '#1a1a2e';
@@ -2643,10 +2660,21 @@ async function cargarGrillaMensual() {
                         tooltip_extra = undefined; // reset
                         const esAusente = a.estado === 'no_presentado';
                         if (esAusente) { bg = '#dc3545'; color = 'white'; }
-                        html += '<span title="' + tooltip + (esAusente?' — TNR: Turno No Realizado':'') + '" ';
-                        html += 'style="display:inline-block;background:' + bg + ';color:' + color + ';';
-                        html += 'padding:2px 5px;border-radius:4px;font-weight:700;font-size:0.72rem;margin:1px;white-space:nowrap;' + (esAusente ? 'letter-spacing:1px;font-weight:800;' : '') + '">';
-                        html += esAusente ? 'TNR' : etiqueta;
+                        const esL4Visual = !tipoEspecial && Number(a.numero_turno) >= 4;
+                        if (esL4Visual && !esAusente) {
+                            const [codigoL4, rangoL4] = String(etiqueta).split('\n');
+                            html += '<span title="' + tooltip + '" ';
+                            html += 'style="display:inline-flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;background:' + bg + ';color:' + color + ';';
+                            html += 'padding:3px 6px;border-radius:4px;font-weight:700;font-size:0.72rem;margin:1px;white-space:normal;line-height:1.05;' + (esAusente ? 'letter-spacing:1px;font-weight:800;' : '') + '">';
+                            html += '<span style="font-weight:800;">' + codigoL4 + '</span>';
+                            html += '<span style="font-size:0.68rem;font-weight:600;opacity:0.95;">' + (rangoL4 || '') + '</span>';
+                            html += '</span>';
+                        } else {
+                            html += '<span title="' + tooltip + (esAusente?' — TNR: Turno No Realizado':'') + '" ';
+                            html += 'style="display:inline-block;background:' + bg + ';color:' + color + ';';
+                            html += 'padding:2px 5px;border-radius:4px;font-weight:700;font-size:0.72rem;margin:1px;white-space:nowrap;' + (esAusente ? 'letter-spacing:1px;font-weight:800;' : '') + '">';
+                            html += esAusente ? 'TNR' : etiqueta;
+                        }
                     });
                 }
                 html += '</td>';
@@ -2736,6 +2764,24 @@ function calcularHorasDecimal(horaInicio, horaFin) {
     return minutos / 60;
 }
 
+function obtenerMarcadorHorasTurno(horas, opciones = {}) {
+    const cfg = {
+        mostrar8hPorDefecto: false,
+        conEspacio: true,
+        ...opciones
+    };
+    const prefijo = cfg.conEspacio ? ' ' : '';
+    const h = Number(horas);
+
+    if (!Number.isFinite(h) || h <= 0) {
+        return cfg.mostrar8hPorDefecto ? prefijo + '8H' : '';
+    }
+    if (h >= 6.5 && h < 7.5) return prefijo + '7L';
+    if (h >= 7.5) return cfg.mostrar8hPorDefecto ? prefijo + '8H' : '';
+    if (h >= 3.5 && h <= 4.5) return prefijo + '4H';
+    return prefijo + Math.round(h) + 'H';
+}
+
 function obtenerHorasTurnoExport(t) {
     const h = Number(t?.horas_laborales);
     if (Number.isFinite(h) && h > 0) return h;
@@ -2750,9 +2796,58 @@ function obtenerHorasTurnoExport(t) {
     return null;
 }
 
+function esTurnoL4Visual(t) {
+    const orig = Number(t?.numero_turno) || 0;
+    if ([4, 5, 9, 10].includes(orig)) return true;
+    const horas = Number(t?.horas_laborales);
+    const base = [4, 9].includes(orig) ? 1 : [5, 10].includes(orig) ? 2 : orig;
+    return Number.isFinite(horas) && horas >= 3.5 && horas <= 4.5 && [1, 2].includes(base);
+}
+
+function obtenerRangoBloqueL4(baseTurno, bloque) {
+    const base = Number(baseTurno);
+    const idx = Number(bloque) === 2 ? 2 : 1;
+    if (base === 1) return idx === 1 ? '06:00-10:00' : '10:00-14:00';
+    return idx === 1 ? '14:00-18:00' : '18:00-22:00';
+}
+
+function anotarBloquesL4EnLista(turnos = []) {
+    const grupos = {};
+
+    turnos.forEach(t => {
+        if (!t || t.tipo_especial || !esTurnoL4Visual(t)) return;
+
+        const orig = Number(t.numero_turno) || 0;
+        const base = [4, 9].includes(orig) ? 1 : [5, 10].includes(orig) ? 2 : 2;
+        const fecha = String(t.fecha || '');
+        const puesto = String(t.puesto_id || t.puesto_trabajo_id || t.puesto_codigo || '');
+        if (!fecha || !puesto) return;
+
+        const key = `${fecha}|${puesto}|${base}`;
+        if (!grupos[key]) grupos[key] = [];
+        grupos[key].push(t);
+    });
+
+    Object.values(grupos).forEach(lista => {
+        lista.sort((a, b) => {
+            const idA = Number(a?.id) || 0;
+            const idB = Number(b?.id) || 0;
+            if (idA !== idB) return idA - idB;
+            return (Number(a?.trabajador_id) || 0) - (Number(b?.trabajador_id) || 0);
+        });
+
+        const total = lista.length;
+        lista.forEach((t, i) => {
+            t._l4_bloque_idx = i + 1;
+            t._l4_bloque_total = total;
+        });
+    });
+}
+
 function construirCodigoTurnoExport(t, puestoCodigo = '', opciones = {}) {
     const cfg = {
         prefijoT: false,
+        mostrarRangoL4: true,
         ...opciones
     };
 
@@ -2767,6 +2862,13 @@ function construirCodigoTurnoExport(t, puestoCodigo = '', opciones = {}) {
     const esL4 = [4, 5, 9, 10].includes(orig) || (Number.isFinite(horas) && horas <= 4.5 && [1, 2].includes(base));
 
     if (esL4) {
+        if (cfg.mostrarRangoL4) {
+            const bloque = Number(t._l4_bloque_idx) === 2 ? 2 : 1;
+            const rango = obtenerRangoBloqueL4(base, bloque);
+            return cfg.prefijoT
+                ? `T${base}${codigo ? ' ' + codigo : ''} L4 ${rango}`
+                : `${base}${codigo}L4 ${rango}`;
+        }
         return cfg.prefijoT
             ? `T${base}${codigo ? ' ' + codigo : ''} L4 4H`
             : `${base}${codigo}L4 4H`;
@@ -2786,6 +2888,7 @@ async function exportarDiaExcel() {
         ]);
 
         const turnos  = (rTurnos.success ? rTurnos.data : []).filter(t => t.estado !== 'cancelado');
+        anotarBloquesL4EnLista(turnos);
         const idx     = exportBuildIdx(turnos);
         const especiales = turnos.filter(t => t.tipo_especial);
 
@@ -3204,6 +3307,7 @@ async function exportarMesExcel() {
     }
 
     const turnos = dataTurnos.data.filter(t => t.estado !== 'cancelado');
+    anotarBloquesL4EnLista(turnos);
     const supervisores = dataSupervisores.success ? dataSupervisores.data : [];
     const novedades = dataNovedades.success ? dataNovedades.data : [];
 
@@ -3591,7 +3695,7 @@ async function exportarMesExcel() {
     const leyendaRow = ws2_data.length; // siguiente fila libre (0-indexed)
     const leyendaItems = [
             { label: 'T1/T2/T3 (8H)',pal: PAL.T1  },
-            { label: 'Turno 6H',      pal: PAL.T2  },
+            { label: 'Turno 7L',      pal: PAL.T2  },
             { label: 'L4 (4H)',       pal: PAL.L4  },
       { label: 'L - Libre',    pal: PAL.L   },
       { label: 'VAC',          pal: PAL.VAC },
@@ -4375,9 +4479,9 @@ function abrirPopoverMensual(celda, trabId, fecha, nombre, asigsSafeStr, cargo =
             const origNum = Number(a.numero_turno);
             const esL4 = [4,5,9,10].includes(origNum);
             const num = [4,9].includes(origNum) ? 1 : [5,10].includes(origNum) ? 2 : origNum;
-            const es6h = Number(a.horas_laborales) === 6;
+            const sufijoHoras = obtenerMarcadorHorasTurno(a.horas_laborales);
             const puestoCodigo = normalizarCodigoPuesto(a.puesto_codigo || '');
-            const etiqueta = esL4 ? `${num}${puestoCodigo}L4` : `T${num} ${puestoCodigo}${es6h ? ' 6H' : ''}`;
+            const etiqueta = esL4 ? `${num}${puestoCodigo}L4` : `T${num} ${puestoCodigo}${sufijoHoras}`;
             const nombreT = esL4 ? `L4 ${num===1?'Mañana':'Tarde'}` : num===1?'Mañana':num===2?'Tarde':num===3?'Noche':'Especial';
             const bgT = num===1?'#d1ecf1':num===2?'#fff3cd':'#1a1a2e';
             const colT = num===1?'#0c5460':num===2?'#856404':'#e0e0e0';
@@ -5865,8 +5969,8 @@ function renderCeldaMensual(asigs, trabId, fecha, nombre) {
                 let num = origNum;
                 if (origNum === 4 || origNum === 9)  num = 1;
                 if (origNum === 5 || origNum === 10) num = 2;
-                const es6h = Number(a.horas_laborales) === 6;
-                etiqueta = origNum >= 4 ? `${num}${a.puesto_codigo||''}L4` : `${num}${a.puesto_codigo||''}${es6h ? ' 6H' : ''}`;
+                const sufijoHoras = obtenerMarcadorHorasTurno(a.horas_laborales);
+                etiqueta = origNum >= 4 ? `${num}${a.puesto_codigo||''}L4` : `${num}${a.puesto_codigo||''}${sufijoHoras}`;
                 bg    = num===1?'#d1ecf1':num===2?'#fff3cd':'#1a1a2e';
                 color = num===1?'#0c5460':num===2?'#856404':'#e0e0e0';
             }
@@ -6072,9 +6176,6 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
   const esNuevo = !turnoId;
   const esEspecial = !!tipoEspecial;
 
-  // Mapa numero_turno → turno_id de configuracion_turnos
-  const TURNO_ID_MAP = { 1: 1, 2: 2, 3: 3 };
-
   const modalOverlay = document.getElementById('modal-overlay');
   const modalTitulo  = document.getElementById('modal-titulo');
   const modalBody    = document.getElementById('modal-body');
@@ -6120,6 +6221,14 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
         const turnosConf = (dataConfig.success && Array.isArray(dataConfig.data))
             ? dataConfig.data.filter(t => [1,2,3,4,5].includes(Number(t.numero_turno)))
             : [];
+        const turnoIdPorNumero = {};
+        turnosConf.forEach(t => {
+            const num = Number(t.numero_turno);
+            if (![1,2,3].includes(num)) return;
+            if (!turnoIdPorNumero[num]) {
+                turnoIdPorNumero[num] = Number(t.id);
+            }
+        });
 
         const puestosDisp = (dataPuestos.success ? dataPuestos.data : []);
         const puestosHtml = (() => {
@@ -6138,64 +6247,41 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
         const turnoInicialId = turnosConf.find(t => Number(t.numero_turno) === 1)?.id || turnosConf[0]?.id || '';
         const puestoInicialId = puestoId || puestosDisp.find(p => String(p.codigo || '').toUpperCase() === String(puestoCodigo || '').toUpperCase())?.id || '';
 
-    // Separar en tres categorías para la vista general
-    const disponibles = todos.filter(t => !conTurnoHoy.has(t.id) && !conDiaLibreHoy.has(t.id));
-    const ocupados    = todos.filter(t => conTurnoHoy.has(t.id));
-    const conLibre    = todos.filter(t => conDiaLibreHoy.has(t.id));
+    const turnoIdSlot = esEspecial ? null : (turnoIdPorNumero[turnoLabelNum] || null);
 
-    // Construir opciones con separadores
-    let opciones = '<option value="">Seleccione trabajador...</option>';
+        // Para vista diaria se muestra disponibilidad real del puesto/turno clicado.
+        let opciones = '<option value="">Seleccione trabajador...</option>';
+        if (!esEspecial && puestoInicialId && turnoIdSlot) {
+                try {
+                        const rDisp = await fetch(API_BASE + `trabajadores.php?disponibles=1&puesto_id=${encodeURIComponent(puestoInicialId)}&turno_id=${encodeURIComponent(turnoIdSlot)}&fecha=${encodeURIComponent(fecha)}`);
+                        const jDisp = await rDisp.json();
+                        const disponiblesSlot = (jDisp.success && Array.isArray(jDisp.data))
+                                ? jDisp.data.filter(t => String(t.cargo || '').toLowerCase() !== 'supervisor')
+                                : [];
+                        if (disponiblesSlot.length > 0) {
+                                opciones += '<optgroup label="✅ Disponibles para este puesto/turno">';
+                                disponiblesSlot.forEach(t => {
+                                        opciones += `<option value="${t.id}" ${t.id == trabajadorActualId ? 'selected' : ''}>${t.nombre} — ${t.cedula}</option>`;
+                                });
+                                opciones += '</optgroup>';
+                        } else {
+                                opciones += '<option value="">No hay trabajadores disponibles para este puesto/turno</option>';
+                        }
+                } catch (_) {
+                        opciones += '<option value="">Error cargando disponibilidad del puesto</option>';
+                }
+        } else {
+                const disponibles = todos.filter(t => !conTurnoHoy.has(t.id) && !conDiaLibreHoy.has(t.id));
+                if (disponibles.length > 0) {
+                        opciones += '<optgroup label="✅ Disponibles hoy">';
+                        disponibles.forEach(t => {
+                                opciones += `<option value="${t.id}" ${t.id == trabajadorActualId ? 'selected' : ''}>${t.nombre} — ${t.cedula}</option>`;
+                        });
+                        opciones += '</optgroup>';
+                }
+        }
 
-    if (disponibles.length > 0) {
-      opciones += '<optgroup label="✅ Disponibles hoy">';
-      disponibles.forEach(t => {
-        opciones += `<option value="${t.id}" ${t.id == trabajadorActualId ? 'selected' : ''}>${t.nombre} — ${t.cedula}</option>`;
-      });
-      opciones += '</optgroup>';
-    }
-
-    if (ocupados.length > 0) {
-      opciones += '<optgroup label="⚠️ Ya tienen turno este día">';
-      ocupados.forEach(t => {
-        // Buscar qué turno tiene para mostrarlo
-        const turnoActual = turnosHoy.find(x => Number(x.trabajador_id) === t.id);
-        const detalle = turnoActual
-          ? ` (${turnoActual.puesto_codigo || turnoActual.tipo_especial || 'T'+turnoActual.numero_turno})`
-          : '';
-        opciones += `<option value="${t.id}" ${t.id == trabajadorActualId ? 'selected' : ''}>${t.nombre} — ${t.cedula}${detalle}</option>`;
-      });
-      opciones += '</optgroup>';
-    }
-
-    if (conLibre.length > 0) {
-      opciones += '<optgroup label="🏖️ Con día libre este día">';
-      conLibre.forEach(t => {
-        const diaLibre = diasLibre.find(d => Number(d.trabajador_id) === t.id);
-        const tipoLibre = diaLibre ? diaLibre.tipo : 'L';
-        opciones += `<option value="${t.id}" ${t.id == trabajadorActualId ? 'selected' : ''}>${t.nombre} — ${t.cedula} (${tipoLibre})</option>`;
-      });
-      opciones += '</optgroup>';
-    }
-
-        const seccionNuevaAsignacion = esNuevaAsignacion ? `
-            <div style="margin:12px 0;padding:12px;background:#eef6ff;border-radius:8px;border:1px solid #b6d4fe;">
-                <div style="font-size:0.8rem;font-weight:700;color:#0b5ed7;margin-bottom:8px;">📅 Asignación nueva para ${fecha}</div>
-                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px;">
-                    <div>
-                        <label style="font-size:0.82rem;font-weight:600;color:#495057;display:block;margin-bottom:4px;">Puesto</label>
-                        <select id="sel-puesto-nuevo" style="width:100%;padding:7px 10px;border:1px solid #dee2e6;border-radius:8px;font-size:0.88rem;">${puestosHtml}</select>
-                    </div>
-                    <div>
-                        <label style="font-size:0.82rem;font-weight:600;color:#495057;display:block;margin-bottom:4px;">Turno disponible</label>
-                        <select id="sel-turno-nuevo" style="width:100%;padding:7px 10px;border:1px solid #dee2e6;border-radius:8px;font-size:0.88rem;">
-                            <option value="">Cargando turnos...</option>
-                        </select>
-                    </div>
-                </div>
-                <small style="display:block;color:#6c757d;margin-bottom:8px;">Primero elige puesto y turno. La lista de trabajadores se ajusta a la disponibilidad real de ese día.</small>
-                <div id="info-turno-nuevo" style="display:none;margin-bottom:8px;padding:8px 10px;background:#fff3cd;border:1px solid #ffe69c;border-radius:6px;color:#856404;font-size:0.82rem;"></div>
-            </div>
-        ` : '';
+        const seccionNuevaAsignacion = '';
 
         // Panel informativo con estadísticas
     // Sección L4 si el puesto tiene esa opción para este turno
@@ -6228,16 +6314,7 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
         `<option value="${p.id}" ${p.id == puestoId ? 'selected' : ''}>${p.codigo} — ${p.nombre}</option>`
     ).join('');
 
-    const seccionMover = !esNuevo ? `
-      <div style="margin:10px 0 4px;">
-        <label style="font-size:0.82rem;font-weight:700;color:#495057;display:block;margin-bottom:4px;">
-          📍 Puesto destino
-          <span style="font-weight:400;color:#6c757d;font-size:0.78rem;"> — cambia si quieres mover a otro puesto</span>
-        </label>
-        <select id="sel-puesto-destino" style="width:100%;padding:8px;border:1px solid #dee2e6;border-radius:8px;font-size:0.85rem;">
-          ${optsPuestoDestino}
-        </select>
-      </div>` : '';
+        const seccionMover = '';
 
     const seccionEspecialInfo = esEspecial ? `
       <div style="margin-bottom:12px;padding:10px 12px;background:#fff7ed;border:1px solid #fdba74;border-radius:8px;font-size:0.84rem;color:#9a2c00;">
@@ -6429,9 +6506,9 @@ async function editarAsignacion(turnoId, puestoId, fecha, numeroTurno, trabajado
       if (!nuevoId) { mostrarAlerta('Seleccione un trabajador', 'warning'); return; }
 
       try {
-                const puestoDestino = document.getElementById('sel-puesto-nuevo')?.value || document.getElementById('sel-puesto-destino')?.value || puestoId;
+                const puestoDestino = puestoId;
                 const turnoSeleccionado = document.getElementById('sel-turno-nuevo')?.value || null;
-                const turnoIdBase    = turnoSeleccionado || TURNO_ID_MAP[Number(numeroTurno)] || numeroTurno;
+                const turnoIdBase    = turnoSeleccionado || turnoIdPorNumero[Number(numeroTurno)] || numeroTurno;
         const puestoCambio   = String(puestoDestino) !== String(puestoId);
 
         let result;

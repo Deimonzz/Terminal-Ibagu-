@@ -3,7 +3,7 @@
 
 // Detectar automáticamente el entorno
 // Usa la variable de entorno APP_ENV. Por defecto usa LOCAL
-$appEnv = getenv('APP_ENV') ?: 'PRODUCTION';
+$appEnv = getenv('APP_ENV') ?: 'ENV';
 $isProduction = strtoupper($appEnv) === 'PRODUCTION';
 
 if ($isProduction) {
@@ -41,8 +41,15 @@ class Database {
             $this->connection = new PDO($dsn, DB_USER, DB_PASS, [
                 PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
                 PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-                PDO::ATTR_EMULATE_PREPARES => false
+                PDO::ATTR_EMULATE_PREPARES => false,
+                PDO::ATTR_TIMEOUT => 600,
             ]);
+
+            // Operaciones largas (asignación automática) pueden tardar varios minutos.
+            $this->connection->exec('SET SESSION net_read_timeout = 600');
+            $this->connection->exec('SET SESSION net_write_timeout = 600');
+            $this->connection->exec('SET SESSION innodb_lock_wait_timeout = 120');
+            $this->connection->exec('SET SESSION wait_timeout = 28800');
         } catch (PDOException $e) {
             $isProduction = strtoupper(getenv('APP_ENV') ?: 'LOCAL') === 'PRODUCTION';
             $errorMsg = $isProduction ? 'Error de conexión con la base de datos' : 'Error de conexión: ' . $e->getMessage();

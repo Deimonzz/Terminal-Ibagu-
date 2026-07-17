@@ -242,7 +242,9 @@ async function generarExcelIA(cfg) {
             const base = [4,9].includes(orig) ? 1 : [5,10].includes(orig) ? 2 : orig;
             const esL4 = [4,5,9,10].includes(orig);
             const horas = Number(t?.horas_laborales);
-            const horasTag = Number.isFinite(horas) ? ` ${Math.round(horas)}H` : (esL4 ? ' 4H' : '');
+            const horasTag = Number.isFinite(horas)
+                ? (horas >= 6.5 && horas < 7.5 ? ' 7L' : ` ${Math.round(horas)}H`)
+                : (esL4 ? ' 4H' : '');
             const puesto = t?.puesto_codigo || '';
 
             if (esL4) return prefijoT ? `T${base} ${puesto} L4 4H`.trim() : `${base}${puesto}L4 4H`;
