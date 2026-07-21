@@ -5,12 +5,6 @@ header('Connection: close');
 
 ini_set('display_errors', '0');
 error_reporting(0);
-// Tope duro de 110s para que PHP aborte el script y libere el lock si el cliente se cuelga.
-@ini_set('max_execution_time', '110');
-@ini_set('memory_limit', '512M');
-@ini_set('default_socket_timeout', '120');
-@set_time_limit(110);
-ignore_user_abort(false);
 
 // Setup de logging
 $logDir = __DIR__ . '/../logs';
@@ -19,10 +13,49 @@ if (!is_dir($logDir)) {
 }
 $logFile = $logDir . '/asignacion_errors.log';
 
-// Funciones de error ANTES de cualquier require
+ini_set('log_errors', '1');
+ini_set('error_log', $logFile);
+
 function logError($msg) {
     global $logFile;
     error_log('[' . date('Y-m-d H:i:s') . '] ' . $msg . "\n", 3, $logFile);
+}
+
+@ini_set('max_execution_time', '0');
+@ini_set('memory_limit', '512M');
+@ini_set('default_socket_timeout', '300');
+@set_time_limit(0);
+ignore_user_abort(true);
+if (function_exists('opcache_invalidate')) {
+    @opcache_invalidate(__FILE__, true);
+    @opcache_invalidate(__DIR__ . '/../clases/AsignacionAutomatica.php', true);
+    @opcache_invalidate(__DIR__ . '/../clases/Trabajadores.php', true);
+    @opcache_invalidate(__DIR__ . '/../clases/TurnosAsignados.php', true);
+}
+logError('Runtime limits set and script loaded: max_execution_time=' . ini_get('max_execution_time') . ' ignore_user_abort=' . (ignore_user_abort() ? 'true' : 'false') . ' disable_functions=' . ini_get('disable_functions') . ' script=' . __FILE__);
+
+$rawInput = file_get_contents('php://input');
+
+set_error_handler(function($errno, $errstr, $errfile, $errline) {
+    if (!(error_reporting() & $errno)) {
+        return false;
+    }
+    logError("PHP error [{$errno}]: {$errstr} in {$errfile}:{$errline}");
+    return false;
+});
+
+register_shutdown_function(function() {
+    $err = error_get_last();
+    if ($err && in_array($err['type'], [E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR, E_USER_ERROR], true)) {
+        logError('Fatal shutdown error: ' . $err['message'] . ' in ' . $err['file'] . ':' . $err['line']);
+    }
+});
+
+if (!empty($_SERVER['REQUEST_METHOD'])) {
+    logError('API start: METHOD=' . ($_SERVER['REQUEST_METHOD'] ?? 'UNKNOWN') .
+             ' URI=' . ($_SERVER['REQUEST_URI'] ?? 'UNKNOWN') .
+             ' REMOTE_ADDR=' . ($_SERVER['REMOTE_ADDR'] ?? 'LOCAL') .
+             ' BODY=' . substr($rawInput ?? '', 0, 2000));
 }
 
 function sendJson($success, $message = '', $data = []) {
@@ -226,10 +259,14 @@ $method = $_SERVER['REQUEST_METHOD'];
 
 try {
     if ($method === 'POST') {
-        $rawInput = file_get_contents('php://input');
         $datos = json_decode($rawInput, true);
-        
-        if (!$datos) {
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            ob_end_clean();
+            logError('JSON decode error: ' . json_last_error_msg() . ' RAW=' . substr($rawInput ?? '', 0, 2000));
+            sendJson(false, 'JSON inválido en POST');
+        }
+
+        if (!$datos || !is_array($datos)) {
             ob_end_clean();
             sendJson(false, 'JSON inválido en POST');
         }

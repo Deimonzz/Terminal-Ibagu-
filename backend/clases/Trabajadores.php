@@ -39,6 +39,13 @@ class Trabajadores {
         return $this->turnoCache[$turno_id];
     }
 
+    private function esTurnoNocturno($turno) {
+        if (empty($turno) || !is_array($turno)) {
+            return false;
+        }
+        return !empty($turno['es_nocturno']) || (int)($turno['numero_turno'] ?? 0) === 3;
+    }
+
     private function esPuestoFijo8h($puesto) {
         return $puesto && in_array(strtoupper((string)($puesto['codigo'] ?? '')), self::PUESTOS_FIJOS_8H, true);
     }
@@ -94,7 +101,8 @@ class Trabajadores {
         }
 
         $numeroTurno = $turno['numero_turno'] ?? null;
-        if ((int)$numeroTurno === 3) {
+        $esNocturno = $this->esTurnoNocturno($turno);
+        if ($esNocturno) {
             $bloqueados = array_merge($bloqueados, $this->obtenerTrabajadoresConRestriccionTipoFecha('no_turno_noche', $fecha));
         }
 
@@ -116,6 +124,7 @@ class Trabajadores {
 
         $turno = $this->getTurno($turno_id);
         $numeroTurno = $turno['numero_turno'] ?? null;
+        $esNocturno = $this->esTurnoNocturno($turno);
         $fechaSiguiente = date('Y-m-d', strtotime($fecha . ' +1 day'));
         $fechaAnterior = date('Y-m-d', strtotime($fecha . ' -1 day'));
         $fechaInicioMes = date('Y-m-01', strtotime($fecha));
@@ -162,7 +171,7 @@ class Trabajadores {
             $params[] = $numeroTurno;
         }
 
-        if ($numeroTurno == 3) {
+        if ($esNocturno) {
             $sql .= "
                 AND t.id NOT IN (
                     SELECT trabajador_id FROM restricciones_trabajador
@@ -174,11 +183,11 @@ class Trabajadores {
                 AND t.id NOT IN (
                     SELECT ta.trabajador_id FROM turnos_asignados ta
                     INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
-                    WHERE ct.numero_turno = 3
+                    WHERE (ct.es_nocturno = true OR ct.numero_turno = 3)
                     AND ta.fecha BETWEEN ? AND ?
                     AND ta.estado IN ('programado', 'activo')
                     GROUP BY ta.trabajador_id
-                    HAVING COUNT(*) >= 7
+                    HAVING COUNT(*) >= 6
                 )
                 AND t.id NOT IN (
                     SELECT ta2.trabajador_id FROM turnos_asignados ta2
@@ -797,117 +806,107 @@ class Trabajadores {
     public function obtenerDisponiblesRelajado($puesto_id, $turno_id, $fecha, $modo = 'minimo') {
         $turno       = $this->getTurno($turno_id);
         $numeroTurno = $turno['numero_turno'] ?? null;
+        $esNocturno  = !empty($turno['es_nocturno']) || $numeroTurno === 3;
         $fechaSig    = date('Y-m-d', strtotime($fecha . ' +1 day'));
         $fechaAnt    = date('Y-m-d', strtotime($fecha . ' -1 day'));
         $fechaIniMes = date('Y-m-01', strtotime($fecha));
         $fechaFinMes = date('Y-m-t',  strtotime($fecha));
 
-        // Bloqueos siempre activos (incapacidad + día libre + ya asignado hoy)
+        $puesto = $this->getPuesto($puesto_id);
+        if ($this->esPuestoFijo8h($puesto) && (float)($turno['horas_laborales'] ?? 0) < 7.5) {
+            return [];
+        }
+
+        // Usar parámetros con nombre para evitar mezcla posicional/nombre
         $sql = "SELECT DISTINCT t.id, t.nombre
                 FROM trabajadores t
                 WHERE t.activo = true
                 AND LOWER(COALESCE(t.cargo, '')) != 'supervisor'
                 AND t.id NOT IN (
                     SELECT trabajador_id FROM turnos_asignados
-                    WHERE fecha = :fecha_assigned
+                    WHERE fecha = :fecha
                     AND estado IN ('programado','activo')
                 )
                 AND t.id NOT IN (
                     SELECT trabajador_id FROM incapacidades
-                    WHERE :fecha_inca BETWEEN fecha_inicio AND fecha_fin
+                    WHERE :fecha BETWEEN fecha_inicio AND fecha_fin
                     AND estado = 'activa'
                 )
                 AND t.id NOT IN (
                     SELECT trabajador_id FROM dias_especiales
                     WHERE tipo IN ('LC','L','L8','VAC','SUS','CAP')
-                    AND :fecha_lib BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
+                    AND :fecha BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                     AND estado IN ('programado','activo')
                 )";
 
-        $params = [
-            ':fecha_assigned' => $fecha,
-            ':fecha_inca'     => $fecha,
-            ':fecha_lib'      => $fecha,
-        ];
-
-        $puesto = $this->getPuesto($puesto_id);
-        $codigoPuesto = strtoupper((string)($puesto['codigo'] ?? ''));
-        if ($this->esPuestoFijo8h($puesto) && (float)($turno['horas_laborales'] ?? 0) < 7.5) {
-            return [];
-        }
+        $params = [':fecha' => $fecha];
 
         $sql .= "
             AND t.id NOT IN (
                 SELECT trabajador_id FROM dias_especiales
                 WHERE tipo IN ('ADM', 'ADMM', 'ADMT')
-                AND :adm_fecha BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
+                AND :fecha BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                 AND estado IN ('programado','activo')
                 AND (
                     tipo = 'ADM'
-                    OR (tipo = 'ADMM' AND :adm_num IN (2, 3))
-                    OR (tipo = 'ADMT' AND :adm_num2 IN (1, 3))
+                    OR (tipo = 'ADMM' AND :numeroTurno IN (2, 3))
+                    OR (tipo = 'ADMT' AND :numeroTurno IN (1, 3))
                 )
             )";
-        $params[':adm_fecha'] = $fecha;
-        $params[':adm_num']   = $numeroTurno;
-        $params[':adm_num2']  = $numeroTurno;
+        $params[':numeroTurno'] = $numeroTurno;
 
         // Restricción no_turno_noche: es obligatoria en todos los modos.
-        if ($numeroTurno == 3) {
+        if ($esNocturno) {
             $sql .= "
                 AND t.id NOT IN (
                     SELECT trabajador_id FROM restricciones_trabajador
                     WHERE tipo_restriccion = 'no_turno_noche'
                     AND activa = true
-                    AND :no_noche_fi >= fecha_inicio
-                    AND (:no_noche_ff <= fecha_fin OR fecha_fin IS NULL)
+                    AND :fecha >= fecha_inicio
+                    AND (:fecha <= fecha_fin OR fecha_fin IS NULL)
                 )";
-            $params[':no_noche_fi'] = $fecha;
-            $params[':no_noche_ff'] = $fecha;
         }
 
-        // Límite 7 noches: solo se aplica en modo 'ignorar_consecutivo' (no en los otros relajados)
-        if ($numeroTurno == 3 && $modo === 'ignorar_consecutivo') {
+        // Límite 7 noches: se mantiene en modo normal y en ignorar_consecutivo.
+        if ($esNocturno && $modo !== 'ignorar_limite_noches' && $modo !== 'minimo') {
             $sql .= "
                 AND t.id NOT IN (
                     SELECT ta.trabajador_id FROM turnos_asignados ta
                     INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
-                    WHERE ct.numero_turno = 3
-                    AND ta.fecha BETWEEN :lim_noches_fi AND :lim_noches_ff
+                    WHERE (ct.es_nocturno = true OR ct.numero_turno = 3)
+                    AND ta.fecha BETWEEN :fi AND :ff
                     AND ta.estado IN ('programado','activo')
                     GROUP BY ta.trabajador_id
-                    HAVING COUNT(*) >= 7
+                    HAVING COUNT(*) >= 6
                 )";
-            $params[':lim_noches_fi'] = $fechaIniMes;
-            $params[':lim_noches_ff'] = $fechaFinMes;
+            $params[':fi'] = $fechaIniMes;
+            $params[':ff'] = $fechaFinMes;
         }
 
-        // Restricción T3→T1: no asignar T3 si mañana tiene T1.
-        // Regla dura de descanso: se mantiene en todos los modos.
-        if ($numeroTurno == 3) {
+        // Restricción T3→T1: no asignar turno nocturno si mañana tiene T1.
+        if ($esNocturno && in_array($modo, ['normal', 'ignorar_limite_noches'], true)) {
             $sql .= "
                 AND t.id NOT IN (
                     SELECT ta2.trabajador_id FROM turnos_asignados ta2
                     INNER JOIN configuracion_turnos ct2 ON ta2.turno_id = ct2.id
-                    WHERE ta2.fecha = :t3_t1_fecha
+                    WHERE ta2.fecha = :fechaSig
                     AND ct2.numero_turno = 1
                     AND ta2.estado IN ('programado','activo')
                 )";
-            $params[':t3_t1_fecha'] = $fechaSig;
+            $params[':fechaSig'] = $fechaSig;
         }
 
-        // Restricción T1→T3: no asignar T1 si ayer tuvo T3.
-        // Regla dura de descanso: se mantiene en todos los modos.
-        if ($numeroTurno == 1) {
+        // Restricción T1→T3: no asignar T1 si ayer tuvo noche.
+        if ($numeroTurno == 1 && in_array($modo, ['normal', 'ignorar_limite_noches'], true)) {
             $sql .= "
                 AND t.id NOT IN (
                     SELECT ta2.trabajador_id FROM turnos_asignados ta2
                     INNER JOIN configuracion_turnos ct2 ON ta2.turno_id = ct2.id
-                    WHERE ta2.fecha = :t1_t3_fecha
-                    AND ct2.numero_turno = 3
+                    WHERE ta2.fecha = :fechaAnt
+                    AND (ct2.es_nocturno = true OR ct2.numero_turno = 3)
                     AND ta2.estado IN ('programado','activo')
                 )";
-            $params[':t1_t3_fecha'] = $fechaAnt;
+            $params[':fechaAnt'] = $fechaAnt;
         }
 
         $sql .= " ORDER BY t.nombre ASC";
@@ -937,7 +936,7 @@ class Trabajadores {
         $sql = "SELECT COUNT(*) as count FROM turnos_asignados ta
                 INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
                 WHERE ta.trabajador_id = :id
-                AND ct.numero_turno = 3
+                AND (ct.es_nocturno = true OR ct.numero_turno = 3)
                 AND ta.fecha BETWEEN :fi AND :ff
                 AND ta.estado IN ('programado', 'activo')";
         $params = [':id' => $trabajador_id, ':fi' => $fechaInicio, ':ff' => $fechaFin];
@@ -957,7 +956,7 @@ class Trabajadores {
 
         $sql = "SELECT ta.trabajador_id, COUNT(*) as count FROM turnos_asignados ta
                 INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
-                WHERE ct.numero_turno = 3
+                WHERE (ct.es_nocturno = true OR ct.numero_turno = 3)
                 AND ta.fecha BETWEEN :fi AND :ff
                 AND ta.estado IN ('programado', 'activo')
                 GROUP BY ta.trabajador_id";
@@ -978,7 +977,7 @@ class Trabajadores {
                 INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
                 WHERE ta.trabajador_id = :id
                 AND ta.fecha = :fecha
-                AND ct.numero_turno = 3
+                AND (ct.es_nocturno = true OR ct.numero_turno = 3)
                 AND ta.estado IN ('programado', 'activo')";
         $stmt = $this->db->prepare($sql);
         $stmt->execute([':id' => $trabajador_id, ':fecha' => $fechaAnterior]);
@@ -1001,7 +1000,8 @@ class Trabajadores {
     }
 
     public function obtenerDisponiblesL4($puesto_id, $turno_id, $fecha) {
-        $cacheKey = $fecha;
+        // Caché con clave incluyendo puesto y turno para evitar reutilización incorrecta
+        $cacheKey = $fecha . '|' . ($puesto_id ?? '') . '|' . ($turno_id ?? '');
         if (!isset($this->disponiblesL4Cache[$cacheKey])) {
             $sql = "SELECT DISTINCT t.id, t.nombre
                     FROM trabajadores t
@@ -1026,14 +1026,16 @@ class Trabajadores {
 
             $stmt = $this->db->prepare($sql);
             $stmt->execute([':fecha1' => $fecha, ':fecha2' => $fecha, ':fecha3' => $fecha]);
-            $this->disponiblesL4Cache[$cacheKey] = $stmt->fetchAll();
+            $disponiblesBase = $stmt->fetchAll();
+
+            // Para L4, el filtro de restricciones de puesto/turno solo sirve como guía.
+            // La validación real en TurnosAsignados decidirá si el turno puede insertarse.
+            $puesto = !empty($puesto_id) ? $this->getPuesto($puesto_id) : null;
+            $turno  = !empty($turno_id) ? $this->getTurno($turno_id) : null;
+            $this->disponiblesL4Cache[$cacheKey] = $disponiblesBase;
         }
 
-        $disponibles = $this->disponiblesL4Cache[$cacheKey];
-        $puesto = !empty($puesto_id) ? $this->getPuesto($puesto_id) : null;
-        $turno  = !empty($turno_id) ? $this->getTurno($turno_id) : null;
-
-        return $this->filtrarCandidatosPorRestricciones($disponibles, $puesto, $turno, $fecha);
+        return $this->disponiblesL4Cache[$cacheKey];
     }
 }
 ?>

@@ -79,15 +79,37 @@ function agregarBotonesAccion(bubble, texto) {
     while ((excelMatch = excelRegex.exec(texto)) !== null) {
         try {
             const cfg = JSON.parse(excelMatch[1].trim());
-            acciones.push({
-                texto: cfg.boton || '📥 Descargar Excel',
-                accion: () => generarExcelIA(cfg)
-            });
+                acciones.push({
+                    texto: cfg.boton || '📥 Descargar Excel',
+                    accion: () => {
+                        if (cfg.server === true) {
+                            // solicitar generación server-side
+                            const ep = cfg.format && cfg.format.toLowerCase()==='xlsx' ? 'generar_reporte_xlsx.php' : 'generar_reporte.php';
+                            fetch(IA_API_BASE + ep + '?mes=' + (cfg.mes||'') + '&anio=' + (cfg.anio||'') + '&tipo=' + encodeURIComponent(cfg.tipo||''))
+                                .then(r => r.json())
+                                .then(j => {
+                                    if (j.success && j.file) {
+                                        window.open(j.file, '_blank');
+                                    } else {
+                                        alert('Error generando reporte en servidor');
+                                    }
+                                }).catch(e=>{console.error(e);alert('Error en request');});
+                        } else {
+                            generarExcelIA(cfg);
+                        }
+                    }
+                });
+            // Si la IA solicita descarga automática, lanzarla luego de renderizar botones
+            if (cfg.autodownload === true) {
+                setTimeout(() => {
+                    try { generarExcelIA(cfg); } catch (e) { console.warn('Autodownload failed', e); }
+                }, 80);
+            }
         } catch(e) { console.warn('Excel cmd parse error:', e); }
     }
 
     if (acciones.length === 0 && (texto.includes('reporte') || texto.includes('Reporte') || texto.includes('📊'))) {
-        acciones.push({ texto: '📊 Generar reporte Excel', accion: () => enviarMensajeIA_direct('Genera el reporte en Excel con todos los datos del mes actual') });
+        acciones.push({ texto: '📊 Generar reporte Excel', accion: () => abrirGeneradorReportes() });
     }
 
     if (acciones.length > 0) {
@@ -107,6 +129,25 @@ function agregarBotonesAccion(bubble, texto) {
 function enviarMensajeIA_direct(texto) {
     document.getElementById('ia-input').value = texto;
     enviarMensajeIA();
+}
+
+// Abre un prompt simple para elegir mes/año/tipo y genera el Excel via IA
+function abrirGeneradorReportes() {
+    try {
+        const mesInput = prompt('Mes (1-12) o deja vacío para mes actual:');
+        const anioInput = prompt('Año (YYYY) o deja vacío para año actual:');
+        const tipoInput = prompt('Tipo de reporte (equidad,cobertura,incapacidades,nocturno,trabajador,general,tnr,dias_libres) o deja vacío para general:');
+        const mes = mesInput ? Number(mesInput) : undefined;
+        const anio = anioInput ? Number(anioInput) : undefined;
+        const tipo = tipoInput ? tipoInput.trim() : undefined;
+        const cfg = {};
+        if (mes && Number.isFinite(mes) && mes >= 1 && mes <= 12) cfg.mes = mes;
+        if (anio && Number.isFinite(anio)) cfg.anio = anio;
+        if (tipo) cfg.tipo = tipo;
+        generarExcelIA(cfg);
+    } catch (e) {
+        console.warn('Generador de reportes cancelado o inválido', e);
+    }
 }
 
 function formatearMarkdown(texto) {

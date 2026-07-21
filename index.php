@@ -106,6 +106,17 @@
                     </div>
                 </div>
 
+            <!-- Modal exports -->
+            <div id="exports-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:2000;">
+                <div style="max-width:820px; margin:6% auto; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 6px 24px rgba(0,0,0,0.2);">
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid #eee;background:#f8f9fa;">
+                        <strong>Exportes guardados</strong>
+                        <button onclick="cerrarExports()" style="border:none;background:transparent;font-size:18px;cursor:pointer;">×</button>
+                    </div>
+                    <div id="exports-list" style="padding:12px 16px;max-height:60vh;overflow:auto;">Cargando...</div>
+                </div>
+            </div>
+
                 <!-- Progreso del día -->
                 <div class="dash-panel" id="panel-progreso" style="display:none;">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
@@ -361,6 +372,9 @@
                                 </button>
                                 <button class="btn-export pdf" onclick="exportarMesPDF()" title="Exportar mes completo">
                                     <i class="fas fa-file-pdf"></i> Mes
+                                </button>
+                                <button class="btn-export" onclick="abrirExports()" title="Ver exports guardados">
+                                    <i class="fas fa-folder-open"></i> Exportes
                                 </button>
                             </div>
                         </div>

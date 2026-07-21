@@ -1218,7 +1218,7 @@ async function ejecutarAsignacionAutomatica(e) {
     // Avanzar la barra mientras espera la respuesta
     let pasoIdx = 1;
     let esperaLarga = 0;
-    const TIMEOUT_CLIENTE_MS = 110000;
+    const TIMEOUT_CLIENTE_MS = 600000;
     const controller = new AbortController();
     const intervalo = setInterval(() => {
         if (pasoIdx < pasos.length) {
@@ -2929,10 +2929,20 @@ async function exportarDiaExcel() {
         ws_data.push(['','','','','','']);
         ws_data.push(['Código','Área','Turno','Trabajador','Cédula','Estado']);
 
+        // Determinar horarios reales desde los datos para soportar turnos de 7 horas
+        const determinarHorario = (num) => {
+            const t = turnos.find(x => Number(x.numero_turno) === num && !x.tipo_especial && x.hora_inicio && x.hora_fin);
+            if (t) return (String(t.hora_inicio).substring(0,5) || '') + ' - ' + (String(t.hora_fin).substring(0,5) || '');
+            // valores por defecto si no hay datos
+            if (num === 1) return '06:00 - 14:00';
+            if (num === 2) return '14:00 - 22:00';
+            return '22:00 - 06:00';
+        };
+
         const TURNOS_CFG = [
-            { num:1, nombre:'Turno 1 — Mañana', horario:'06:00 - 14:00', fillH:FILL_T1H, fill:FILL_T1 },
-            { num:2, nombre:'Turno 2 — Tarde',  horario:'14:00 - 22:00', fillH:FILL_T2H, fill:FILL_T2 },
-            { num:3, nombre:'Turno 3 — Noche',  horario:'22:00 - 06:00', fillH:FILL_T3H, fill:FILL_T3 },
+            { num:1, nombre:'Turno 1 — Mañana', horario: determinarHorario(1), fillH:FILL_T1H, fill:FILL_T1 },
+            { num:2, nombre:'Turno 2 — Tarde',  horario: determinarHorario(2), fillH:FILL_T2H, fill:FILL_T2 },
+            { num:3, nombre:'Turno 3 — Noche',  horario: determinarHorario(3), fillH:FILL_T3H, fill:FILL_T3 },
         ];
 
         TURNOS_CFG.forEach(cfg => {
@@ -3047,10 +3057,19 @@ async function exportarDiaPDF() {
         const VERDE   = [2, 91, 45];
         const VERDE_L = [235, 245, 239]; // verde muy suave para filas alternas
 
+        // Determinar horarios reales desde datos para soportar turnos de 7 horas
+        const determinarHorarioPDF = (num) => {
+            const t = turnos.find(x => Number(x.numero_turno) === num && !x.tipo_especial && x.hora_inicio && x.hora_fin);
+            if (t) return (String(t.hora_inicio).substring(0,5) || '') + ' - ' + (String(t.hora_fin).substring(0,5) || '');
+            if (num === 1) return '06:00 - 14:00';
+            if (num === 2) return '14:00 - 22:00';
+            return '22:00 - 06:00';
+        };
+
         const TURNOS_CFG = [
-            { num:1, nombre:'Turno 1 — Mañana', horario:'06:00 - 14:00' },
-            { num:2, nombre:'Turno 2 — Tarde',  horario:'14:00 - 22:00' },
-            { num:3, nombre:'Turno 3 — Noche',  horario:'22:00 - 06:00' },
+            { num:1, nombre:'Turno 1 — Mañana', horario: determinarHorarioPDF(1) },
+            { num:2, nombre:'Turno 2 — Tarde',  horario: determinarHorarioPDF(2) },
+            { num:3, nombre:'Turno 3 — Noche',  horario: determinarHorarioPDF(3) },
         ];
 
         let isFirst = true;
@@ -8227,4 +8246,63 @@ async function eliminarDiaEspecial(id, tipo) {
 
 function editarDiaEspecial(id) {
     mostrarAlerta('Para editar un día especial usa el formulario de nuevo día especial o la vista mensual del calendario.','info');
+}
+
+// ── Exports stored UI ───────────────────────────────────────────────────
+function abrirExports() {
+    const modal = document.getElementById('exports-modal');
+    if (!modal) return;
+    modal.style.display = 'block';
+    cargarExports();
+}
+
+function cerrarExports() {
+    const modal = document.getElementById('exports-modal');
+    if (!modal) return;
+    modal.style.display = 'none';
+}
+
+async function cargarExports() {
+    const list = document.getElementById('exports-list');
+    if (!list) return;
+    list.innerHTML = 'Cargando...';
+    try {
+        const res = await fetch(API_BASE + 'list_exports.php');
+        const j = await res.json();
+        if (!j.success) { list.innerHTML = 'Error al listar exports'; return; }
+        if (!j.files || j.files.length === 0) { list.innerHTML = 'No hay exports guardados.'; return; }
+        const ul = document.createElement('ul');
+        ul.style.listStyle = 'none'; ul.style.padding = '0';
+        j.files.forEach(f => {
+            const li = document.createElement('li');
+            li.style.padding = '8px 0';
+            const a = document.createElement('a');
+            a.href = f.url; a.target = '_blank'; a.textContent = f.name;
+            const meta = document.createElement('span');
+            meta.style.marginLeft = '8px'; meta.style.color = '#6c757d'; meta.textContent = '(' + (f.size/1024).toFixed(1) + ' KB)';
+            const btn = document.createElement('button');
+            btn.style.marginLeft = '12px'; btn.textContent = 'Eliminar'; btn.onclick = () => borrarExport(f.name);
+            li.appendChild(a); li.appendChild(meta); li.appendChild(btn);
+            ul.appendChild(li);
+        });
+        list.innerHTML = '';
+        list.appendChild(ul);
+    } catch (e) {
+        list.innerHTML = 'Error: ' + e.message;
+    }
+}
+
+async function borrarExport(name) {
+    if (!confirm('Eliminar ' + name + ' ?')) return;
+    try {
+        const res = await fetch(API_BASE + 'delete_export.php', { method: 'POST', headers: { 'Content-Type':'application/json' }, body: JSON.stringify({ name }) });
+        const j = await res.json();
+        if (j.success) {
+            cargarExports();
+        } else {
+            alert('Error: ' + (j.message || 'no pudo eliminar'));
+        }
+    } catch (e) {
+        alert('Error: ' + e.message);
+    }
 }

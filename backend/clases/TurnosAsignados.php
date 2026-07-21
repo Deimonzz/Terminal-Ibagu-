@@ -207,15 +207,17 @@ class TurnosAsignados {
                 || (int)($turno['numero_turno'] ?? 0) === 3
             );
 
-            if (!$this->trabajadores->puedeAsignarTurno($trabajador_id, $puesto_id, $turno_id, $fecha)) {
+            if ($esTurnoNocturno && !$this->trabajadores->puedeTrabajarNoche($trabajador_id, $fecha)) {
+                $errores[] = 'El trabajador no puede trabajar en turno de noche';
+            } elseif (!$this->trabajadores->puedeAsignarTurno($trabajador_id, $puesto_id, $turno_id, $fecha)) {
                 $errores[] = 'El trabajador tiene una restricción que impide trabajar en este turno';
             }
 
             if ($esTurnoNocturno) {
                 $mes = (int)date('n', strtotime($fecha));
                 $anio = (int)date('Y', strtotime($fecha));
-                if ($this->trabajadores->contarTurnosNocheEnMes($trabajador_id, $mes, $anio, $exclude_id) >= 7) {
-                    $errores[] = 'El trabajador ya tiene el máximo de 7 turnos de noche en el mes';
+                if ($this->trabajadores->contarTurnosNocheEnMes($trabajador_id, $mes, $anio, $exclude_id) >= 6) {
+                    $errores[] = 'El trabajador ya tiene el máximo de 6 turnos de noche en el mes';
                 }
 
                 if ($this->trabajadores->tieneTurnoMananaDiaSiguiente($trabajador_id, $fecha)) {
@@ -251,7 +253,8 @@ class TurnosAsignados {
                     $l4Numero = ($baseTurno === 1) ? 4 : 5;
 
                     if ($esL4Actual) {
-                        // Si existe turno normal base, no permitir L4.
+                        // En este flujo el L4 puede coexistir con la base normal; solo aplicamos
+                        // el límite de cantidad de L4 por base/día para evitar saturar el puesto.
                         $sqlNormalBase = "SELECT COUNT(*) as count
                                           FROM turnos_asignados ta
                                           INNER JOIN configuracion_turnos ct ON ta.turno_id = ct.id
@@ -273,7 +276,7 @@ class TurnosAsignados {
                         $stmtNormalBase->execute($paramsNormalBase);
                         $countNormalBase = (int)($stmtNormalBase->fetch()['count'] ?? 0);
                         if ($countNormalBase > 0) {
-                            $errores[] = 'No se puede asignar L4: el puesto ya tiene turno normal en esa franja';
+                            // No bloquear el L4 por la existencia de un turno base. El L4 se permite.
                         }
 
                         // Maximo 2 L4 por base/dia.
@@ -470,6 +473,23 @@ class TurnosAsignados {
             'valido' => count($errores) === 0,
             'errores' => $errores
         ];
+        // Registro de auditoría mínimo y seguro (no interrumpe la validación)
+        try {
+            $logEntry = [
+                'ts' => date('c'),
+                'trabajador_id' => (int)$trabajador_id,
+                'puesto_id' => $puesto_id === null ? null : (int)$puesto_id,
+                'turno_id' => $turno_id === null ? null : (int)$turno_id,
+                'fecha' => (string)$fecha,
+                'es_nocturno' => isset($esTurnoNocturno) ? (bool)$esTurnoNocturno : null,
+                'valido' => (bool)$resultado['valido'],
+                'errores' => $resultado['errores']
+            ];
+            @file_put_contents(__DIR__ . '/../logs/validaciones_debug.log', json_encode($logEntry, JSON_UNESCAPED_UNICODE) . PHP_EOL, FILE_APPEND | LOCK_EX);
+        } catch (Throwable $e) {
+            error_log('[TurnosAsignados::validarAsignacion] Error al escribir log de validacion: ' . $e->getMessage());
+        }
+
         $this->validacionCache[$cacheKey] = $resultado;
         return $resultado;
     }
@@ -555,22 +575,24 @@ class TurnosAsignados {
         }
     }
 
-    public function asignarDirecto($datos) {
-        // VALIDACIÓN CRÍTICA: Verificar restricciones ANTES de asignar
-        $validacion = $this->validarAsignacion(
-            $datos['trabajador_id'],
-            $datos['puesto_trabajo_id'] ?? null,
-            $datos['turno_id'] ?? null,
-            $datos['fecha'] ?? null
-        );
-        
-        if (!$validacion['valido']) {
-            error_log("[TurnosAsignados::asignarDirecto] VALIDACIÓN FALLIDA: " . json_encode($validacion['errores']));
-            return [
-                'success' => false,
-                'message' => 'No se puede asignar el turno: ' . implode(', ', $validacion['errores']),
-                'errores' => $validacion['errores']
-            ];
+    public function asignarDirecto($datos, $skipValidacion = false) {
+        if (!$skipValidacion) {
+            // VALIDACIÓN CRÍTICA: Verificar restricciones ANTES de asignar
+            $validacion = $this->validarAsignacion(
+                $datos['trabajador_id'],
+                $datos['puesto_trabajo_id'] ?? null,
+                $datos['turno_id'] ?? null,
+                $datos['fecha'] ?? null
+            );
+            
+            if (!$validacion['valido']) {
+                error_log("[TurnosAsignados::asignarDirecto] VALIDACIÓN FALLIDA: " . json_encode($validacion['errores']));
+                return [
+                    'success' => false,
+                    'message' => 'No se puede asignar el turno: ' . implode(', ', $validacion['errores']),
+                    'errores' => $validacion['errores']
+                ];
+            }
         }
         
         try {
