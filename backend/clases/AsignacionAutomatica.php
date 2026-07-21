@@ -363,14 +363,20 @@ class AsignacionAutomatica {
 
         $manejaTransaccion = !$this->db->inTransaction();
 
+        // La limpieza previa se hace ANTES de la transacción grande para no bloquear
+        // miles de filas y provocar lock wait timeout (error 1205). Cada DELETE hace
+        // autocommit propio y libera los locks inmediatamente.
+        $resumenLimpieza = $this->limpiarAsignacionesAutomaticasMes($fechaInicioMes, $fechaFinMes);
+        $warnings[] = 'Limpieza previa AUTO: turnos=' . (int)($resumenLimpieza['turnos_auto_eliminados'] ?? 0)
+            . ', libres=' . (int)($resumenLimpieza['libres_auto_eliminados'] ?? 0) . '.';
+
+        $inicioAsignacion = microtime(true);
+        $WATCHDOG_SEGUNDOS = 95.0;
+
         try {
             if ($manejaTransaccion) {
                 $this->db->beginTransaction();
             }
-
-            $resumenLimpieza = $this->limpiarAsignacionesAutomaticasMes($fechaInicioMes, $fechaFinMes);
-            $warnings[] = 'Limpieza previa AUTO: turnos=' . (int)($resumenLimpieza['turnos_auto_eliminados'] ?? 0)
-                . ', libres=' . (int)($resumenLimpieza['libres_auto_eliminados'] ?? 0) . '.';
 
             $ctx = $this->prefetchDisponibilidadMes($mes, $anio);
 
@@ -668,7 +674,17 @@ class AsignacionAutomatica {
             // ════════════════════════════════════════════════════════════════
 
             for ($dia = 1; $dia <= $diasMes; $dia++) {
-                $this->verificarCancelacion('turnos normales');
+                // Watchdog: cada 5 días revisamos el tiempo transcurrido. Si vamos
+                // a exceder el límite del script, abortamos para que PHP pueda
+                // liberar el lock y la transacción se confirme con lo ya hecho.
+                if (($dia % 5) === 1) {
+                    $this->verificarCancelacion('turnos normales');
+                    if (isset($inicioAsignacion) && (microtime(true) - $inicioAsignacion) > $WATCHDOG_SEGUNDOS) {
+                        throw new RuntimeException(
+                            'Tiempo agotado en bucle principal tras ' . round(microtime(true) - $inicioAsignacion, 1) . 's; se conservan asignaciones parciales.'
+                        );
+                    }
+                }
                 $fecha = sprintf('%04d-%02d-%02d', $anio, $mes, $dia);
 
                 // Ordenar puestos: primero los prioritarios de T1 y T2, luego el resto aleatorio
@@ -764,12 +780,11 @@ class AsignacionAutomatica {
                             $fecha,
                             $ctx
                         );
-                        $disponibles = $this->filtrarDisponiblesPorRestriccionesObligatorias(
-                            $disponibles,
-                            $puesto['id'],
-                            $turnoIdBase,
-                            $fecha
-                        );
+                        // validarAsignacion ya está cacheado dentro de TurnosAsignados
+                        // y se vuelve a llamar de forma centralizada en
+                        // seleccionarMejorCandidatoSemanal, así que aquí evitamos
+                        // una segunda pasada completa por candidato que duplicaba
+                        // las queries y disparaba lock waits.
                         $nivelUsado  = $resultado_busqueda['nivel'];
                         // ─────────────────────────────────────────────────
 
@@ -3151,7 +3166,7 @@ class AsignacionAutomatica {
 
         $cantidadInicial = count($huecosIniciales);
         $inicioOptimizacion = microtime(true);
-        $maxSegundos = 20.0;
+        $maxSegundos = 10.0;
 
         if ($cantidadInicial > 30) {
             $warnings[] = 'Optimización final omitida por exceso de huecos pendientes (' . $cantidadInicial . '), para evitar demoras excesivas.';
@@ -3171,11 +3186,12 @@ class AsignacionAutomatica {
 
         $maxIteraciones = 1;
         if ($cantidadInicial <= 4) {
-            $maxIteraciones = 3;
-        } elseif ($cantidadInicial <= 12) {
             $maxIteraciones = 2;
+        } elseif ($cantidadInicial <= 12) {
+            $maxIteraciones = 1;
         }
         $iteracion = 0;
+        $huecosVisitados = [];
 
         while ($iteracion < $maxIteraciones) {
             $this->verificarCancelacion('optimización final');
@@ -3220,6 +3236,12 @@ class AsignacionAutomatica {
             $mejorasIteracion = 0;
             foreach ($huecosPendientes as $hueco) {
                 $this->verificarCancelacion('optimización final hueco');
+                $huecoKey = (string)($hueco['fecha'] ?? '') . '|' . (int)($hueco['puesto_id'] ?? 0) . '|' . (int)($hueco['turno_numero'] ?? 0);
+                if (isset($huecosVisitados[$huecoKey])) {
+                    continue;
+                }
+                $huecosVisitados[$huecoKey] = true;
+
                 $detalleMovimiento = [];
                 $diagnostico = null;
                 $ok = $this->intentarReasignacionLocalHueco(

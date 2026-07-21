@@ -1218,6 +1218,8 @@ async function ejecutarAsignacionAutomatica(e) {
     // Avanzar la barra mientras espera la respuesta
     let pasoIdx = 1;
     let esperaLarga = 0;
+    const TIMEOUT_CLIENTE_MS = 110000;
+    const controller = new AbortController();
     const intervalo = setInterval(() => {
         if (pasoIdx < pasos.length) {
             mostrarProgreso('Generando ' + mesNombre + ' ' + anio, pasos[pasoIdx].msg, pasos[pasoIdx].pct);
@@ -1229,6 +1231,9 @@ async function ejecutarAsignacionAutomatica(e) {
                 ? 'Continuando... la operación puede tardar varios minutos.'
                 : 'Finalizando y guardando...';
             mostrarProgreso('Generando ' + mesNombre + ' ' + anio, mensaje, Math.min(99, ultimaPct));
+            if (esperaLarga >= TIMEOUT_CLIENTE_MS) {
+                controller.abort();
+            }
         }
     }, 900);
 
@@ -1236,7 +1241,8 @@ async function ejecutarAsignacionAutomatica(e) {
         const response = await fetch(API_BASE + 'asignacion_automatica.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mes, anio, opciones: {} })
+            body: JSON.stringify({ mes, anio, opciones: {} }),
+            signal: controller.signal
         });
 
         clearInterval(intervalo);
@@ -1354,7 +1360,11 @@ async function ejecutarAsignacionAutomatica(e) {
         clearInterval(intervalo);
         ocultarProgreso();
         console.error('Error completo:', error);
-        mostrarAlerta('Error en asignacion automatica: ' + error.message, 'danger');
+        if (error && (error.name === 'AbortError' || error.code === 20)) {
+            mostrarAlerta('La asignación excedió el tiempo máximo (110s). Se guardaron turnos parciales hasta donde alcanzó el proceso. Revisa el log de la terminal y, si necesitas, usa "Deshacer mes" para reiniciar.', 'warning');
+        } else {
+            mostrarAlerta('Error en asignacion automatica: ' + error.message, 'danger');
+        }
     }
 }
 

@@ -1,13 +1,15 @@
 <?php
 // Headers PRIMERO - antes de cualquier salida
 header('Content-Type: application/json; charset=utf-8');
+header('Connection: close');
 
 ini_set('display_errors', '0');
 error_reporting(0);
-@ini_set('max_execution_time', '0');
+// Tope duro de 110s para que PHP aborte el script y libere el lock si el cliente se cuelga.
+@ini_set('max_execution_time', '110');
 @ini_set('memory_limit', '512M');
-@ini_set('default_socket_timeout', '600');
-@set_time_limit(0);
+@ini_set('default_socket_timeout', '120');
+@set_time_limit(110);
 ignore_user_abort(false);
 
 // Setup de logging
