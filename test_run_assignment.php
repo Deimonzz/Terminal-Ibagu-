@@ -3,7 +3,7 @@
 
 @ini_set('display_errors', '1');
 error_reporting(E_ALL);
-set_time_limit(300);
+set_time_limit(0);
 
 require_once __DIR__ . '/config/database.php';
 require_once __DIR__ . '/backend/clases/Trabajadores.php';

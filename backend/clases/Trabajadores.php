@@ -746,16 +746,7 @@ class Trabajadores {
     }
     
     public function puedeHacerFuerza($trabajador_id, $fecha) {
-        $sql = "SELECT COUNT(*) as count FROM restricciones_trabajador 
-                WHERE trabajador_id = :id 
-                AND tipo_restriccion = 'no_fuerza_fisica'
-                AND activa = true
-                AND :fecha >= fecha_inicio
-                AND (:fecha2 <= fecha_fin OR fecha_fin IS NULL)";
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([':id' => $trabajador_id, ':fecha' => $fecha, ':fecha2' => $fecha]);
-        $result = $stmt->fetch();
-        return $result['count'] == 0;
+        return !$this->tieneRestriccionTipoFechaParaTrabajador($trabajador_id, $fecha, 'no_fuerza_fisica');
     }
     
     /**
@@ -1008,30 +999,28 @@ class Trabajadores {
                     WHERE t.activo = true
                     AND LOWER(COALESCE(t.cargo, '')) != 'supervisor'
                     AND t.id NOT IN (
-                        SELECT ta.trabajador_id FROM turnos_asignados ta
-                        WHERE ta.fecha = :fecha1
-                        AND ta.estado IN ('programado', 'activo')
-                    )
-                    AND t.id NOT IN (
                         SELECT trabajador_id FROM incapacidades
                         WHERE :fecha2 BETWEEN fecha_inicio AND fecha_fin AND estado = 'activa'
                     )
                     AND t.id NOT IN (
                         SELECT trabajador_id FROM dias_especiales
-                        WHERE tipo IN ('LC','L','L8','VAC','SUS','CAP')
+                        WHERE tipo IN ('LC','L','L8','VAC','SUS','CAP','ADM','ADMM','ADMT')
                         AND :fecha3 BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                         AND estado IN ('programado','activo')
                     )
                     ORDER BY t.nombre";
 
             $stmt = $this->db->prepare($sql);
-            $stmt->execute([':fecha1' => $fecha, ':fecha2' => $fecha, ':fecha3' => $fecha]);
+            $stmt->execute([':fecha2' => $fecha, ':fecha3' => $fecha]);
             $disponiblesBase = $stmt->fetchAll();
 
-            // Para L4, el filtro de restricciones de puesto/turno solo sirve como guía.
-            // La validación real en TurnosAsignados decidirá si el turno puede insertarse.
-            $puesto = !empty($puesto_id) ? $this->getPuesto($puesto_id) : null;
-            $turno  = !empty($turno_id) ? $this->getTurno($turno_id) : null;
+            // Para L4, filtramos candidatos que no pueden asumir el turno/puesto de acuerdo con restricciones obligatorias.
+            if (!empty($puesto_id) && !empty($turno_id)) {
+                $disponiblesBase = array_values(array_filter($disponiblesBase, function($t) use ($puesto_id, $turno_id, $fecha) {
+                    return $this->puedeAsignarTurno((int)$t['id'], $puesto_id, $turno_id, $fecha);
+                }));
+            }
+
             $this->disponiblesL4Cache[$cacheKey] = $disponiblesBase;
         }
 

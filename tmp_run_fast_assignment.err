@@ -1,0 +1,951 @@
+[PASO 1 L4] Iniciando fase L4. modo_rapido=true, tiempoLimitL4=18s, semanas=6, trabajadores=42
+[PASO 1 L4] Revisando semana 2026-07-27 con 42 trabajadores
+[PASO 1 L4] Trab=12 semana=2026-07-27 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=12, puesto=1, fecha=2026-08-01
+[PASO 1 L4] ✅ L4 Asignado: trab=12, puesto=D1, fecha=2026-08-01, turno=5
+[PASO 1 L4] Trab=13 semana=2026-07-27 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=13, puesto=1, fecha=2026-08-01
+[PASO 1 L4] ✅ L4 Asignado: trab=13, puesto=D1, fecha=2026-08-01, turno=5
+[PASO 1 L4] Trab=15 semana=2026-07-27 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=15, puesto=1, fecha=2026-08-02
+[PASO 1 L4] ✅ L4 Asignado: trab=15, puesto=D1, fecha=2026-08-02, turno=5
+[PASO 1 L4] Trab=16 semana=2026-07-27 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=16, puesto=1, fecha=2026-08-02
+[PASO 1 L4] ✅ L4 Asignado: trab=16, puesto=D1, fecha=2026-08-02, turno=5
+[PASO 1 L4] Trab=17 semana=2026-07-27 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=17, puesto=8, fecha=2026-08-01
+[PASO 1 L4] ✅ L4 Asignado: trab=17, puesto=F11, fecha=2026-08-01, turno=4
+[PASO 1 L4] Trab=59 semana=2026-07-27 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=59, puesto=8, fecha=2026-08-02
+[PASO 1 L4] ✅ L4 Asignado: trab=59, puesto=F11, fecha=2026-08-02, turno=4
+[PASO 1 L4] Trab=18 semana=2026-07-27 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=18, puesto=2, fecha=2026-08-02
+[PASO 1 L4] ✅ L4 Asignado: trab=18, puesto=D2, fecha=2026-08-02, turno=5
+[PASO 1 L4] Trab=19 semana=2026-07-27 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=19, puesto=2, fecha=2026-08-01
+[PASO 1 L4] ✅ L4 Asignado: trab=19, puesto=D2, fecha=2026-08-01, turno=5
+[PASO 1 L4] Trab=20 semana=2026-07-27 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=20, puesto=8, fecha=2026-08-02
+[PASO 1 L4] ✅ L4 Asignado: trab=20, puesto=F11, fecha=2026-08-02, turno=4
+[PASO 1 L4] Trab=21 semana=2026-07-27 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=21, puesto=8, fecha=2026-08-01
+[PASO 1 L4] ✅ L4 Asignado: trab=21, puesto=F11, fecha=2026-08-01, turno=4
+[PASO 1 L4] Trab=22 semana=2026-07-27 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=22, puesto=10, fecha=2026-08-02
+[PASO 1 L4] ✅ L4 Asignado: trab=22, puesto=F15, fecha=2026-08-02, turno=4
+[PASO 1 L4] Trab=60 semana=2026-07-27 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=60, puesto=10, fecha=2026-08-02
+[PASO 1 L4] ✅ L4 Asignado: trab=60, puesto=F15, fecha=2026-08-02, turno=4
+[PASO 1 L4] Trab=24 semana=2026-07-27 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=24, puesto=6, fecha=2026-08-02
+[PASO 1 L4] ✅ L4 Asignado: trab=24, puesto=F5, fecha=2026-08-02, turno=4
+[PASO 1 L4] Trab=25 semana=2026-07-27 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=25, puesto=2, fecha=2026-08-02
+[PASO 1 L4] ✅ L4 Asignado: trab=25, puesto=D2, fecha=2026-08-02, turno=5
+[PASO 1 L4] Trab=26 semana=2026-07-27 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=26, puesto=10, fecha=2026-08-01
+[PASO 1 L4] ✅ L4 Asignado: trab=26, puesto=F15, fecha=2026-08-01, turno=4
+[PASO 1 L4] Trab=27 semana=2026-07-27 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=27, puesto=10, fecha=2026-08-01
+[PASO 1 L4] ✅ L4 Asignado: trab=27, puesto=F15, fecha=2026-08-01, turno=4
+[PASO 1 L4] Trab=28 semana=2026-07-27 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=28, puesto=6, fecha=2026-08-02
+[PASO 1 L4] ✅ L4 Asignado: trab=28, puesto=F5, fecha=2026-08-02, turno=4
+[PASO 1 L4] Trab=29 semana=2026-07-27 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=29, puesto=6, fecha=2026-08-01
+[PASO 1 L4] ✅ L4 Asignado: trab=29, puesto=F5, fecha=2026-08-01, turno=4
+[PASO 1 L4] Trab=30 semana=2026-07-27 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=30, puesto=6, fecha=2026-08-01
+[PASO 1 L4] ✅ L4 Asignado: trab=30, puesto=F5, fecha=2026-08-01, turno=4
+[PASO 1 L4] Trab=31 semana=2026-07-27 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=31, puesto=2, fecha=2026-08-01
+[PASO 1 L4] ✅ L4 Asignado: trab=31, puesto=D2, fecha=2026-08-01, turno=5
+[PASO 1 L4] Trab=61 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Trab=32 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Trab=34 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Trab=36 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Trab=37 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Trab=62 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Trab=38 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Trab=63 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Trab=40 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Trab=41 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Trab=42 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Trab=46 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Trab=43 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Trab=44 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Trab=48 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Trab=64 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Trab=49 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Trab=50 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Trab=51 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Trab=52 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Trab=56 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Trab=65 semana=2026-07-27 horas=0 tieneL4=0
+[PASO 1 L4] Revisando semana 2026-08-03 con 42 trabajadores
+[PASO 1 L4] Trab=12 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=12, puesto=8, fecha=2026-08-08
+[PASO 1 L4] ✅ L4 Asignado: trab=12, puesto=F11, fecha=2026-08-08, turno=4
+[PASO 1 L4] Trab=13 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=13, puesto=1, fecha=2026-08-04
+[PASO 1 L4] ✅ L4 Asignado: trab=13, puesto=D1, fecha=2026-08-04, turno=5
+[PASO 1 L4] Trab=15 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=15, puesto=1, fecha=2026-08-07
+[PASO 1 L4] ✅ L4 Asignado: trab=15, puesto=D1, fecha=2026-08-07, turno=5
+[PASO 1 L4] Trab=16 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=16, puesto=8, fecha=2026-08-07
+[PASO 1 L4] ✅ L4 Asignado: trab=16, puesto=F11, fecha=2026-08-07, turno=4
+[PASO 1 L4] Trab=17 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=17, puesto=1, fecha=2026-08-03
+[PASO 1 L4] ✅ L4 Asignado: trab=17, puesto=D1, fecha=2026-08-03, turno=5
+[PASO 1 L4] Trab=59 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=59, puesto=1, fecha=2026-08-09
+[PASO 1 L4] ✅ L4 Asignado: trab=59, puesto=D1, fecha=2026-08-09, turno=5
+[PASO 1 L4] Trab=18 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=18, puesto=1, fecha=2026-08-06
+[PASO 1 L4] ✅ L4 Asignado: trab=18, puesto=D1, fecha=2026-08-06, turno=5
+[PASO 1 L4] Trab=19 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=19, puesto=1, fecha=2026-08-08
+[PASO 1 L4] ✅ L4 Asignado: trab=19, puesto=D1, fecha=2026-08-08, turno=5
+[PASO 1 L4] Trab=20 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=20, puesto=8, fecha=2026-08-07
+[PASO 1 L4] ✅ L4 Asignado: trab=20, puesto=F11, fecha=2026-08-07, turno=4
+[PASO 1 L4] Trab=21 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=21, puesto=1, fecha=2026-08-05
+[PASO 1 L4] ✅ L4 Asignado: trab=21, puesto=D1, fecha=2026-08-05, turno=5
+[PASO 1 L4] Trab=22 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=22, puesto=1, fecha=2026-08-04
+[PASO 1 L4] ✅ L4 Asignado: trab=22, puesto=D1, fecha=2026-08-04, turno=5
+[PASO 1 L4] Trab=60 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=60, puesto=8, fecha=2026-08-03
+[PASO 1 L4] ✅ L4 Asignado: trab=60, puesto=F11, fecha=2026-08-03, turno=4
+[PASO 1 L4] Trab=24 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=24, puesto=8, fecha=2026-08-08
+[PASO 1 L4] ✅ L4 Asignado: trab=24, puesto=F11, fecha=2026-08-08, turno=4
+[PASO 1 L4] Trab=25 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=25, puesto=1, fecha=2026-08-08
+[PASO 1 L4] ✅ L4 Asignado: trab=25, puesto=D1, fecha=2026-08-08, turno=5
+[PASO 1 L4] Trab=26 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=26, puesto=1, fecha=2026-08-05
+[PASO 1 L4] ✅ L4 Asignado: trab=26, puesto=D1, fecha=2026-08-05, turno=5
+[PASO 1 L4] Trab=27 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=27, puesto=1, fecha=2026-08-09
+[PASO 1 L4] ✅ L4 Asignado: trab=27, puesto=D1, fecha=2026-08-09, turno=5
+[PASO 1 L4] Trab=28 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=28, puesto=8, fecha=2026-08-09
+[PASO 1 L4] ✅ L4 Asignado: trab=28, puesto=F11, fecha=2026-08-09, turno=4
+[PASO 1 L4] Trab=29 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=29, puesto=10, fecha=2026-08-08
+[PASO 1 L4] ✅ L4 Asignado: trab=29, puesto=F15, fecha=2026-08-08, turno=4
+[PASO 1 L4] Trab=30 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=30, puesto=8, fecha=2026-08-09
+[PASO 1 L4] ✅ L4 Asignado: trab=30, puesto=F11, fecha=2026-08-09, turno=4
+[PASO 1 L4] Trab=31 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=31, puesto=1, fecha=2026-08-06
+[PASO 1 L4] ✅ L4 Asignado: trab=31, puesto=D1, fecha=2026-08-06, turno=5
+[PASO 1 L4] Trab=61 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=61, puesto=8, fecha=2026-08-06
+[PASO 1 L4] ✅ L4 Asignado: trab=61, puesto=F11, fecha=2026-08-06, turno=4
+[PASO 1 L4] Trab=32 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=32, puesto=2, fecha=2026-08-06
+[PASO 1 L4] ✅ L4 Asignado: trab=32, puesto=D2, fecha=2026-08-06, turno=5
+[PASO 1 L4] Trab=34 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=34, puesto=1, fecha=2026-08-03
+[PASO 1 L4] ✅ L4 Asignado: trab=34, puesto=D1, fecha=2026-08-03, turno=5
+[PASO 1 L4] Trab=36 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=36, puesto=8, fecha=2026-08-06
+[PASO 1 L4] ✅ L4 Asignado: trab=36, puesto=F11, fecha=2026-08-06, turno=4
+[PASO 1 L4] Trab=37 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=37, puesto=1, fecha=2026-08-07
+[PASO 1 L4] ✅ L4 Asignado: trab=37, puesto=D1, fecha=2026-08-07, turno=5
+[PASO 1 L4] Trab=62 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=62, puesto=8, fecha=2026-08-04
+[PASO 1 L4] ✅ L4 Asignado: trab=62, puesto=F11, fecha=2026-08-04, turno=4
+[PASO 1 L4] Trab=38 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=38, puesto=8, fecha=2026-08-04
+[PASO 1 L4] ✅ L4 Asignado: trab=38, puesto=F11, fecha=2026-08-04, turno=4
+[PASO 1 L4] Trab=63 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=63, puesto=10, fecha=2026-08-07
+[PASO 1 L4] ✅ L4 Asignado: trab=63, puesto=F15, fecha=2026-08-07, turno=4
+[PASO 1 L4] Trab=40 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=40, puesto=10, fecha=2026-08-08
+[PASO 1 L4] ✅ L4 Asignado: trab=40, puesto=F15, fecha=2026-08-08, turno=4
+[PASO 1 L4] Trab=41 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=41, puesto=10, fecha=2026-08-06
+[PASO 1 L4] ✅ L4 Asignado: trab=41, puesto=F15, fecha=2026-08-06, turno=4
+[PASO 1 L4] Trab=42 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=42, puesto=10, fecha=2026-08-04
+[PASO 1 L4] ✅ L4 Asignado: trab=42, puesto=F15, fecha=2026-08-04, turno=4
+[PASO 1 L4] Trab=46 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=46, puesto=10, fecha=2026-08-09
+[PASO 1 L4] ✅ L4 Asignado: trab=46, puesto=F15, fecha=2026-08-09, turno=4
+[PASO 1 L4] Trab=43 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=43, puesto=6, fecha=2026-08-08
+[PASO 1 L4] ✅ L4 Asignado: trab=43, puesto=F5, fecha=2026-08-08, turno=4
+[PASO 1 L4] Trab=44 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=44, puesto=10, fecha=2026-08-09
+[PASO 1 L4] ✅ L4 Asignado: trab=44, puesto=F15, fecha=2026-08-09, turno=4
+[PASO 1 L4] Trab=48 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=48, puesto=10, fecha=2026-08-04
+[PASO 1 L4] ✅ L4 Asignado: trab=48, puesto=F15, fecha=2026-08-04, turno=4
+[PASO 1 L4] Trab=64 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=64, puesto=8, fecha=2026-08-05
+[PASO 1 L4] ✅ L4 Asignado: trab=64, puesto=F11, fecha=2026-08-05, turno=4
+[PASO 1 L4] Trab=49 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=49, puesto=6, fecha=2026-08-04
+[PASO 1 L4] ✅ L4 Asignado: trab=49, puesto=F5, fecha=2026-08-04, turno=4
+[PASO 1 L4] Trab=50 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=50, puesto=2, fecha=2026-08-08
+[PASO 1 L4] ✅ L4 Asignado: trab=50, puesto=D2, fecha=2026-08-08, turno=5
+[PASO 1 L4] Trab=51 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=51, puesto=6, fecha=2026-08-08
+[PASO 1 L4] ✅ L4 Asignado: trab=51, puesto=F5, fecha=2026-08-08, turno=4
+[PASO 1 L4] Trab=52 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=52, puesto=2, fecha=2026-08-07
+[PASO 1 L4] ✅ L4 Asignado: trab=52, puesto=D2, fecha=2026-08-07, turno=5
+[PASO 1 L4] Trab=56 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=56, puesto=2, fecha=2026-08-08
+[PASO 1 L4] ✅ L4 Asignado: trab=56, puesto=D2, fecha=2026-08-08, turno=5
+[PASO 1 L4] Trab=65 semana=2026-08-03 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=65, puesto=6, fecha=2026-08-04
+[PASO 1 L4] ✅ L4 Asignado: trab=65, puesto=F5, fecha=2026-08-04, turno=4
+[PASO 1 L4] Revisando semana 2026-08-10 con 42 trabajadores
+[PASO 1 L4] Trab=12 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=12, puesto=1, fecha=2026-08-16
+[PASO 1 L4] ✅ L4 Asignado: trab=12, puesto=D1, fecha=2026-08-16, turno=5
+[PASO 1 L4] Trab=13 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=13, puesto=1, fecha=2026-08-12
+[PASO 1 L4] ✅ L4 Asignado: trab=13, puesto=D1, fecha=2026-08-12, turno=5
+[PASO 1 L4] Trab=15 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=15, puesto=8, fecha=2026-08-15
+[PASO 1 L4] ✅ L4 Asignado: trab=15, puesto=F11, fecha=2026-08-15, turno=4
+[PASO 1 L4] Trab=16 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=16, puesto=1, fecha=2026-08-16
+[PASO 1 L4] ✅ L4 Asignado: trab=16, puesto=D1, fecha=2026-08-16, turno=5
+[PASO 1 L4] Trab=17 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=17, puesto=1, fecha=2026-08-13
+[PASO 1 L4] ✅ L4 Asignado: trab=17, puesto=D1, fecha=2026-08-13, turno=5
+[PASO 1 L4] Trab=59 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=59, puesto=8, fecha=2026-08-10
+[PASO 1 L4] ✅ L4 Asignado: trab=59, puesto=F11, fecha=2026-08-10, turno=4
+[PASO 1 L4] Trab=18 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=18, puesto=1, fecha=2026-08-11
+[PASO 1 L4] ✅ L4 Asignado: trab=18, puesto=D1, fecha=2026-08-11, turno=5
+[PASO 1 L4] Trab=19 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=19, puesto=1, fecha=2026-08-15
+[PASO 1 L4] ✅ L4 Asignado: trab=19, puesto=D1, fecha=2026-08-15, turno=5
+[PASO 1 L4] Trab=20 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=20, puesto=1, fecha=2026-08-15
+[PASO 1 L4] ✅ L4 Asignado: trab=20, puesto=D1, fecha=2026-08-15, turno=5
+[PASO 1 L4] Trab=21 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=21, puesto=8, fecha=2026-08-15
+[PASO 1 L4] ✅ L4 Asignado: trab=21, puesto=F11, fecha=2026-08-15, turno=4
+[PASO 1 L4] Trab=22 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=22, puesto=1, fecha=2026-08-13
+[PASO 1 L4] ✅ L4 Asignado: trab=22, puesto=D1, fecha=2026-08-13, turno=5
+[PASO 1 L4] Trab=60 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=60, puesto=1, fecha=2026-08-12
+[PASO 1 L4] ✅ L4 Asignado: trab=60, puesto=D1, fecha=2026-08-12, turno=5
+[PASO 1 L4] Trab=24 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=24, puesto=1, fecha=2026-08-11
+[PASO 1 L4] ✅ L4 Asignado: trab=24, puesto=D1, fecha=2026-08-11, turno=5
+[PASO 1 L4] Trab=25 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=25, puesto=1, fecha=2026-08-10
+[PASO 1 L4] ✅ L4 Asignado: trab=25, puesto=D1, fecha=2026-08-10, turno=5
+[PASO 1 L4] Trab=26 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=26, puesto=8, fecha=2026-08-12
+[PASO 1 L4] ✅ L4 Asignado: trab=26, puesto=F11, fecha=2026-08-12, turno=4
+[PASO 1 L4] Trab=27 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=27, puesto=8, fecha=2026-08-12
+[PASO 1 L4] ✅ L4 Asignado: trab=27, puesto=F11, fecha=2026-08-12, turno=4
+[PASO 1 L4] Trab=28 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=28, puesto=1, fecha=2026-08-14
+[PASO 1 L4] ✅ L4 Asignado: trab=28, puesto=D1, fecha=2026-08-14, turno=5
+[PASO 1 L4] Trab=29 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=29, puesto=10, fecha=2026-08-15
+[PASO 1 L4] ✅ L4 Asignado: trab=29, puesto=F15, fecha=2026-08-15, turno=4
+[PASO 1 L4] Trab=30 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=30, puesto=10, fecha=2026-08-15
+[PASO 1 L4] ✅ L4 Asignado: trab=30, puesto=F15, fecha=2026-08-15, turno=4
+[PASO 1 L4] Trab=31 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=31, puesto=8, fecha=2026-08-13
+[PASO 1 L4] ✅ L4 Asignado: trab=31, puesto=F11, fecha=2026-08-13, turno=4
+[PASO 1 L4] Trab=61 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=61, puesto=6, fecha=2026-08-15
+[PASO 1 L4] ✅ L4 Asignado: trab=61, puesto=F5, fecha=2026-08-15, turno=4
+[PASO 1 L4] Trab=32 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=32, puesto=2, fecha=2026-08-15
+[PASO 1 L4] ✅ L4 Asignado: trab=32, puesto=D2, fecha=2026-08-15, turno=5
+[PASO 1 L4] Trab=34 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=34, puesto=1, fecha=2026-08-10
+[PASO 1 L4] ✅ L4 Asignado: trab=34, puesto=D1, fecha=2026-08-10, turno=5
+[PASO 1 L4] Trab=36 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=36, puesto=8, fecha=2026-08-16
+[PASO 1 L4] ✅ L4 Asignado: trab=36, puesto=F11, fecha=2026-08-16, turno=4
+[PASO 1 L4] Trab=37 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=37, puesto=8, fecha=2026-08-11
+[PASO 1 L4] ✅ L4 Asignado: trab=37, puesto=F11, fecha=2026-08-11, turno=4
+[PASO 1 L4] Trab=62 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=62, puesto=6, fecha=2026-08-15
+[PASO 1 L4] ✅ L4 Asignado: trab=62, puesto=F5, fecha=2026-08-15, turno=4
+[PASO 1 L4] Trab=38 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=38, puesto=8, fecha=2026-08-13
+[PASO 1 L4] ✅ L4 Asignado: trab=38, puesto=F11, fecha=2026-08-13, turno=4
+[PASO 1 L4] Trab=63 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=63, puesto=10, fecha=2026-08-13
+[PASO 1 L4] ✅ L4 Asignado: trab=63, puesto=F15, fecha=2026-08-13, turno=4
+[PASO 1 L4] Trab=40 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=40, puesto=1, fecha=2026-08-14
+[PASO 1 L4] ✅ L4 Asignado: trab=40, puesto=D1, fecha=2026-08-14, turno=5
+[PASO 1 L4] Trab=41 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=41, puesto=8, fecha=2026-08-16
+[PASO 1 L4] ✅ L4 Asignado: trab=41, puesto=F11, fecha=2026-08-16, turno=4
+[PASO 1 L4] Trab=42 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=42, puesto=10, fecha=2026-08-12
+[PASO 1 L4] ✅ L4 Asignado: trab=42, puesto=F15, fecha=2026-08-12, turno=4
+[PASO 1 L4] Trab=46 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=46, puesto=8, fecha=2026-08-14
+[PASO 1 L4] ✅ L4 Asignado: trab=46, puesto=F11, fecha=2026-08-14, turno=4
+[PASO 1 L4] Trab=43 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=43, puesto=10, fecha=2026-08-13
+[PASO 1 L4] ✅ L4 Asignado: trab=43, puesto=F15, fecha=2026-08-13, turno=4
+[PASO 1 L4] Trab=44 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=44, puesto=8, fecha=2026-08-11
+[PASO 1 L4] ✅ L4 Asignado: trab=44, puesto=F11, fecha=2026-08-11, turno=4
+[PASO 1 L4] Trab=48 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=48, puesto=10, fecha=2026-08-16
+[PASO 1 L4] ✅ L4 Asignado: trab=48, puesto=F15, fecha=2026-08-16, turno=4
+[PASO 1 L4] Trab=64 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=64, puesto=8, fecha=2026-08-10
+[PASO 1 L4] ✅ L4 Asignado: trab=64, puesto=F11, fecha=2026-08-10, turno=4
+[PASO 1 L4] Trab=49 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=49, puesto=8, fecha=2026-08-14
+[PASO 1 L4] ✅ L4 Asignado: trab=49, puesto=F11, fecha=2026-08-14, turno=4
+[PASO 1 L4] Trab=50 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=50, puesto=2, fecha=2026-08-13
+[PASO 1 L4] ✅ L4 Asignado: trab=50, puesto=D2, fecha=2026-08-13, turno=5
+[PASO 1 L4] Trab=51 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=51, puesto=10, fecha=2026-08-11
+[PASO 1 L4] ✅ L4 Asignado: trab=51, puesto=F15, fecha=2026-08-11, turno=4
+[PASO 1 L4] Trab=52 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=52, puesto=2, fecha=2026-08-15
+[PASO 1 L4] ✅ L4 Asignado: trab=52, puesto=D2, fecha=2026-08-15, turno=5
+[PASO 1 L4] Trab=56 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=56, puesto=10, fecha=2026-08-12
+[PASO 1 L4] ✅ L4 Asignado: trab=56, puesto=F15, fecha=2026-08-12, turno=4
+[PASO 1 L4] Trab=65 semana=2026-08-10 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=65, puesto=10, fecha=2026-08-14
+[PASO 1 L4] ✅ L4 Asignado: trab=65, puesto=F15, fecha=2026-08-14, turno=4
+[PASO 1 L4] Revisando semana 2026-08-17 con 42 trabajadores
+[PASO 1 L4] Trab=12 semana=2026-08-17 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=12, puesto=1, fecha=2026-08-23
+[PASO 1 L4] ✅ L4 Asignado: trab=12, puesto=D1, fecha=2026-08-23, turno=5
+[PASO 1 L4] Trab=13 semana=2026-08-17 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=13, puesto=1, fecha=2026-08-18
+[PASO 1 L4] ✅ L4 Asignado: trab=13, puesto=D1, fecha=2026-08-18, turno=5
+[PASO 1 L4] Trab=15 semana=2026-08-17 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=15, puesto=1, fecha=2026-08-20
+[PASO 1 L4] ✅ L4 Asignado: trab=15, puesto=D1, fecha=2026-08-20, turno=5
+[PASO 1 L4] Trab=16 semana=2026-08-17 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=16, puesto=1, fecha=2026-08-21
+[PASO 1 L4] ✅ L4 Asignado: trab=16, puesto=D1, fecha=2026-08-21, turno=5
+[PASO 1 L4] Trab=17 semana=2026-08-17 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=17, puesto=1, fecha=2026-08-23
+[PASO 1 L4] ✅ L4 Asignado: trab=17, puesto=D1, fecha=2026-08-23, turno=5
+[PASO 1 L4] Trab=59 semana=2026-08-17 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=59, puesto=1, fecha=2026-08-17
+[PASO 1 L4] ✅ L4 Asignado: trab=59, puesto=D1, fecha=2026-08-17, turno=5
+[PASO 1 L4] Trab=18 semana=2026-08-17 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=18, puesto=1, fecha=2026-08-19
+[PASO 1 L4] ✅ L4 Asignado: trab=18, puesto=D1, fecha=2026-08-19, turno=5
+[PASO 1 L4] Trab=19 semana=2026-08-17 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=19, puesto=1, fecha=2026-08-18
+[PASO 1 L4] ✅ L4 Asignado: trab=19, puesto=D1, fecha=2026-08-18, turno=5
+[PASO 1 L4] Trab=20 semana=2026-08-17 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=20, puesto=1, fecha=2026-08-19
+[PASO 1 L4] ✅ L4 Asignado: trab=20, puesto=D1, fecha=2026-08-19, turno=5
+[PASO 1 L4] Trab=21 semana=2026-08-17 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=21, puesto=1, fecha=2026-08-22
+[PASO 1 L4] ✅ L4 Asignado: trab=21, puesto=D1, fecha=2026-08-22, turno=5
+[PASO 1 L4] Trab=22 semana=2026-08-17 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=22, puesto=8, fecha=2026-08-23
+[PASO 1 L4] ✅ L4 Asignado: trab=22, puesto=F11, fecha=2026-08-23, turno=4
+[PASO 1 L4] Trab=60 semana=2026-08-17 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=60, puesto=8, fecha=2026-08-18
+[PASO 1 L4] ✅ L4 Asignado: trab=60, puesto=F11, fecha=2026-08-18, turno=4
+[PASO 1 L4] Trab=24 semana=2026-08-17 horas=0 tieneL4=0
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=24, puesto=1, fecha=2026-08-21
+[PASO 1 L4] ✅ L4 Asignado: trab=24, puesto=D1, fecha=2026-08-21, turno=5
+[PASO 1 L4] ✓ Fase L4 completada. Intentadas=117, Exitosas=117, tiempo=18.01s
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=52, puesto=3, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=61, puesto=7, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=50, puesto=11, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=38, puesto=12, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=42, puesto=14, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=62, puesto=9, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=63, puesto=16, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=40, puesto=5, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=25, puesto=3, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=34, puesto=7, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=36, puesto=11, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=37, puesto=12, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=48, puesto=14, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=41, puesto=9, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=46, puesto=16, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=43, puesto=8, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=44, puesto=5, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=32, puesto=3, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=64, puesto=7, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=51, puesto=11, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=56, puesto=12, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=49, puesto=14, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=65, puesto=8, fecha=2026-08-01
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=52, puesto=3, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=29, puesto=7, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=50, puesto=11, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=30, puesto=12, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=27, puesto=14, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=34, puesto=9, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=36, puesto=16, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=37, puesto=5, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=13, puesto=3, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=61, puesto=7, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=38, puesto=11, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=62, puesto=12, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=26, puesto=14, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=63, puesto=9, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=40, puesto=16, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=41, puesto=8, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=46, puesto=5, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=43, puesto=3, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=44, puesto=7, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=12, puesto=11, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=21, puesto=12, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=31, puesto=14, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=42, puesto=8, fecha=2026-08-02
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=18, puesto=3, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=29, puesto=7, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=50, puesto=11, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=30, puesto=12, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=27, puesto=14, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=36, puesto=9, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=37, puesto=16, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=28, puesto=5, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=19, puesto=3, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=64, puesto=7, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=51, puesto=11, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=56, puesto=12, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=48, puesto=14, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=65, puesto=9, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=15, puesto=16, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=59, puesto=8, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=20, puesto=5, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=22, puesto=3, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=24, puesto=7, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=61, puesto=11, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=38, puesto=12, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=16, puesto=14, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=62, puesto=8, fecha=2026-08-03
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=25, puesto=3, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=34, puesto=7, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=50, puesto=11, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=29, puesto=12, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=27, puesto=14, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=30, puesto=9, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=36, puesto=16, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=37, puesto=5, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=52, puesto=3, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=28, puesto=7, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=63, puesto=11, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=40, puesto=12, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=17, puesto=14, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=41, puesto=9, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=46, puesto=16, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=43, puesto=8, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=44, puesto=5, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=15, puesto=3, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=59, puesto=7, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=20, puesto=11, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=60, puesto=12, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=26, puesto=14, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=64, puesto=8, fecha=2026-08-04
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=13, puesto=3, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=34, puesto=7, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=50, puesto=11, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=29, puesto=12, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=27, puesto=14, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=30, puesto=9, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=36, puesto=16, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=37, puesto=5, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=18, puesto=3, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=51, puesto=7, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=56, puesto=11, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=65, puesto=12, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=49, puesto=14, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=12, puesto=9, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=22, puesto=16, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=24, puesto=8, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=28, puesto=5, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=63, puesto=3, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=40, puesto=7, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=41, puesto=11, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=46, puesto=12, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=48, puesto=14, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=17, puesto=8, fecha=2026-08-05
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=19, puesto=3, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=34, puesto=7, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=50, puesto=11, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=29, puesto=12, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=27, puesto=14, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=30, puesto=9, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=37, puesto=16, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=21, puesto=5, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=25, puesto=3, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=38, puesto=7, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=62, puesto=11, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=43, puesto=12, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=42, puesto=14, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=44, puesto=9, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=64, puesto=16, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=51, puesto=8, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=56, puesto=5, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=28, puesto=3, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=65, puesto=7, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=12, puesto=11, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=15, puesto=12, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=49, puesto=14, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=59, puesto=8, fecha=2026-08-06
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=13, puesto=3, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=34, puesto=7, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=36, puesto=11, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=61, puesto=12, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=31, puesto=14, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=21, puesto=9, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=22, puesto=16, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=24, puesto=5, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=18, puesto=3, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=38, puesto=7, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=62, puesto=11, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=40, puesto=12, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=60, puesto=14, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=41, puesto=9, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=46, puesto=16, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=43, puesto=8, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=44, puesto=5, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=32, puesto=3, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=51, puesto=7, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=56, puesto=11, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=26, puesto=12, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=42, puesto=14, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=48, puesto=8, fecha=2026-08-07
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=52, puesto=3, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=20, puesto=7, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=61, puesto=11, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=63, puesto=12, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=16, puesto=14, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=64, puesto=9, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=65, puesto=16, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=15, puesto=5, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=13, puesto=3, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=59, puesto=7, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=21, puesto=11, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=22, puesto=12, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=31, puesto=14, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=38, puesto=9, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=62, puesto=16, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=41, puesto=8, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=46, puesto=5, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=44, puesto=3, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=17, puesto=7, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=60, puesto=11, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=49, puesto=12, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=26, puesto=14, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=42, puesto=8, fecha=2026-08-08
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=19, puesto=3, fecha=2026-08-09
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=12, puesto=7, fecha=2026-08-09
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=20, puesto=11, fecha=2026-08-09
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=24, puesto=12, fecha=2026-08-09
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=16, puesto=14, fecha=2026-08-09
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=61, puesto=9, fecha=2026-08-09
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=63, puesto=16, fecha=2026-08-09
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=40, puesto=5, fecha=2026-08-09
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=25, puesto=3, fecha=2026-08-09
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=43, puesto=7, fecha=2026-08-09
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=21, puesto=11, fecha=2026-08-09
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=31, puesto=12, fecha=2026-08-09
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=48, puesto=14, fecha=2026-08-09
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=49, puesto=9, fecha=2026-08-09
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=17, puesto=16, fecha=2026-08-09
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=60, puesto=8, fecha=2026-08-09
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=26, puesto=5, fecha=2026-08-09
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=32, puesto=3, fecha=2026-08-09
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=42, puesto=7, fecha=2026-08-09
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=52, puesto=3, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=29, puesto=7, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=50, puesto=11, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=30, puesto=12, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=27, puesto=14, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=36, puesto=9, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=37, puesto=16, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=28, puesto=5, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=18, puesto=3, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=51, puesto=7, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=56, puesto=11, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=65, puesto=12, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=16, puesto=14, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=12, puesto=9, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=15, puesto=16, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=20, puesto=8, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=22, puesto=5, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=24, puesto=3, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=61, puesto=7, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=38, puesto=11, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=62, puesto=12, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=31, puesto=14, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=63, puesto=8, fecha=2026-08-10
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=19, puesto=3, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=34, puesto=7, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=50, puesto=11, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=29, puesto=12, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=27, puesto=14, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=30, puesto=9, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=36, puesto=16, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=64, puesto=5, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=25, puesto=3, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=59, puesto=7, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=28, puesto=11, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=40, puesto=12, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=48, puesto=14, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=41, puesto=9, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=46, puesto=16, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=43, puesto=8, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=56, puesto=5, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=20, puesto=3, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=21, puesto=7, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=22, puesto=11, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=16, puesto=12, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=17, puesto=14, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=65, puesto=8, fecha=2026-08-11
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=52, puesto=3, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=34, puesto=7, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=50, puesto=11, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=37, puesto=12, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=49, puesto=14, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=29, puesto=9, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=30, puesto=16, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=36, puesto=5, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=18, puesto=3, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=44, puesto=7, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=64, puesto=11, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=51, puesto=12, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=31, puesto=14, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=12, puesto=9, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=15, puesto=16, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=59, puesto=8, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=24, puesto=5, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=28, puesto=3, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=40, puesto=7, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=41, puesto=11, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=46, puesto=12, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=48, puesto=14, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=43, puesto=8, fecha=2026-08-12
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=13, puesto=3, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=34, puesto=7, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=37, puesto=11, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=29, puesto=12, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=27, puesto=14, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=30, puesto=9, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=36, puesto=16, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=61, puesto=5, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=19, puesto=3, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=62, puesto=7, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=44, puesto=11, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=64, puesto=12, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=60, puesto=14, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=51, puesto=9, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=56, puesto=16, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=65, puesto=8, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=12, puesto=5, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=15, puesto=3, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=59, puesto=7, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=20, puesto=11, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=21, puesto=12, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=16, puesto=14, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=24, puesto=8, fecha=2026-08-13
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=25, puesto=3, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=34, puesto=7, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=50, puesto=11, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=37, puesto=12, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=27, puesto=14, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=38, puesto=9, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=63, puesto=16, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=22, puesto=5, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=52, puesto=3, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=61, puesto=7, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=62, puesto=11, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=41, puesto=12, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=26, puesto=14, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=43, puesto=9, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=44, puesto=16, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=64, puesto=8, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=51, puesto=5, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=56, puesto=3, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=12, puesto=7, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=60, puesto=11, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=31, puesto=12, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=17, puesto=14, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=15, puesto=8, fecha=2026-08-14
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=13, puesto=3, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=28, puesto=7, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=38, puesto=11, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=63, puesto=12, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=42, puesto=14, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=40, puesto=9, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=46, puesto=16, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=65, puesto=5, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=18, puesto=3, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=59, puesto=7, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=22, puesto=11, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=24, puesto=12, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=49, puesto=14, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=41, puesto=9, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=43, puesto=16, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=44, puesto=8, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=26, puesto=5, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=48, puesto=3, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=16, puesto=7, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=60, puesto=11, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=31, puesto=12, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=17, puesto=14, fecha=2026-08-15
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=19, puesto=3, fecha=2026-08-16
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=20, puesto=7, fecha=2026-08-16
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=21, puesto=11, fecha=2026-08-16
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=61, puesto=12, fecha=2026-08-16
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=42, puesto=14, fecha=2026-08-16
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=38, puesto=9, fecha=2026-08-16
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=62, puesto=16, fecha=2026-08-16
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=63, puesto=5, fecha=2026-08-16
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=25, puesto=3, fecha=2026-08-16
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=40, puesto=7, fecha=2026-08-16
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=46, puesto=11, fecha=2026-08-16
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=49, puesto=12, fecha=2026-08-16
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=26, puesto=14, fecha=2026-08-16
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=17, puesto=9, fecha=2026-08-16
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=60, puesto=16, fecha=2026-08-16
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=32, puesto=3, fecha=2026-08-16
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=52, puesto=3, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=29, puesto=7, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=50, puesto=11, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=30, puesto=12, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=27, puesto=14, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=34, puesto=9, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=36, puesto=16, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=37, puesto=8, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=28, puesto=5, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=13, puesto=3, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=64, puesto=7, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=51, puesto=11, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=56, puesto=12, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=42, puesto=14, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=65, puesto=9, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=12, puesto=16, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=15, puesto=8, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=20, puesto=5, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=22, puesto=3, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=61, puesto=7, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=38, puesto=11, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=62, puesto=12, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=49, puesto=14, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=63, puesto=8, fecha=2026-08-17
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=18, puesto=3, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=29, puesto=7, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=50, puesto=11, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=30, puesto=12, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=27, puesto=14, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=34, puesto=9, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=36, puesto=16, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=37, puesto=5, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=25, puesto=3, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=59, puesto=7, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=21, puesto=11, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=24, puesto=12, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=48, puesto=14, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=28, puesto=9, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=40, puesto=16, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=41, puesto=8, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=46, puesto=5, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=43, puesto=3, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=44, puesto=7, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=64, puesto=11, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=51, puesto=12, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=26, puesto=14, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=56, puesto=8, fecha=2026-08-18
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=19, puesto=3, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=29, puesto=7, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=50, puesto=11, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=30, puesto=12, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=27, puesto=14, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=34, puesto=9, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=36, puesto=16, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=37, puesto=8, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=65, puesto=5, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=52, puesto=3, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=12, puesto=7, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=15, puesto=11, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=59, puesto=12, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=16, puesto=14, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=21, puesto=9, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=22, puesto=16, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=24, puesto=8, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=28, puesto=5, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=40, puesto=3, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=41, puesto=7, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=46, puesto=11, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=61, puesto=12, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=31, puesto=14, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=38, puesto=8, fecha=2026-08-19
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=13, puesto=3, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=29, puesto=7, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=50, puesto=11, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=30, puesto=12, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=27, puesto=14, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=34, puesto=9, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=36, puesto=16, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=37, puesto=8, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=20, puesto=5, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=18, puesto=3, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=62, puesto=7, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=63, puesto=11, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=43, puesto=12, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=42, puesto=14, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=44, puesto=9, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=64, puesto=16, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=51, puesto=8, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=56, puesto=5, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=28, puesto=3, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=65, puesto=7, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=12, puesto=11, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=59, puesto=12, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=48, puesto=14, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=21, puesto=8, fecha=2026-08-20
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=19, puesto=3, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=29, puesto=7, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=50, puesto=11, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=30, puesto=12, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=27, puesto=14, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=34, puesto=9, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=36, puesto=16, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=37, puesto=8, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=15, puesto=5, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=25, puesto=3, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=20, puesto=7, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=22, puesto=11, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=61, puesto=12, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=49, puesto=14, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=38, puesto=9, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=62, puesto=16, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=63, puesto=8, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=40, puesto=5, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=41, puesto=3, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=46, puesto=7, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=43, puesto=11, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=44, puesto=12, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=60, puesto=14, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=64, puesto=8, fecha=2026-08-21
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=52, puesto=3, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=24, puesto=7, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=51, puesto=11, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=56, puesto=12, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=16, puesto=14, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=65, puesto=9, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=12, puesto=16, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=15, puesto=8, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=59, puesto=5, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=13, puesto=3, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=20, puesto=7, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=22, puesto=11, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=28, puesto=12, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=17, puesto=14, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=61, puesto=9, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=38, puesto=16, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=62, puesto=8, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=63, puesto=5, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=40, puesto=3, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=41, puesto=7, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=46, puesto=11, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=43, puesto=12, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=26, puesto=14, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=44, puesto=8, fecha=2026-08-22
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=18, puesto=3, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=21, puesto=7, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=24, puesto=11, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=64, puesto=12, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=31, puesto=14, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=51, puesto=9, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=56, puesto=16, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=65, puesto=5, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=19, puesto=3, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=61, puesto=7, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=38, puesto=11, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=62, puesto=12, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=42, puesto=14, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=63, puesto=9, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=40, puesto=16, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=41, puesto=8, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=46, puesto=5, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=32, puesto=3, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=49, puesto=7, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=16, puesto=11, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=43, puesto=12, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=48, puesto=14, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=44, puesto=8, fecha=2026-08-23
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=25, puesto=3, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=29, puesto=7, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=50, puesto=11, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=30, puesto=12, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=27, puesto=14, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=34, puesto=9, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=36, puesto=16, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=37, puesto=8, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=12, puesto=5, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=52, puesto=3, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=15, puesto=7, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=59, puesto=11, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=20, puesto=12, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=17, puesto=14, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=21, puesto=9, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=22, puesto=16, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=24, puesto=8, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=28, puesto=5, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=51, puesto=3, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=62, puesto=7, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=63, puesto=11, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=64, puesto=12, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=42, puesto=14, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=56, puesto=8, fecha=2026-08-24
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=13, puesto=3, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=29, puesto=7, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=50, puesto=11, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=30, puesto=12, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=27, puesto=14, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=34, puesto=9, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=36, puesto=16, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=37, puesto=8, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=65, puesto=5, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=18, puesto=3, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=12, puesto=7, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=15, puesto=11, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=59, puesto=12, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=60, puesto=14, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=20, puesto=9, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=21, puesto=16, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=22, puesto=8, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=24, puesto=5, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=28, puesto=3, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=61, puesto=7, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=38, puesto=11, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=40, puesto=12, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=26, puesto=14, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=51, puesto=8, fecha=2026-08-25
+[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=19, puesto=3, fecha=2026-08-26
+PHP Fatal error:  Maximum execution time of 600 seconds exceeded in C:\xampp\htdocs\Terminal-Ibagu-\backend\clases\TurnosAsignados.php on line 470

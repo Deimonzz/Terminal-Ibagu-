@@ -3,7 +3,7 @@
 
 // Detectar automáticamente el entorno
 // Usa la variable de entorno APP_ENV. Por defecto usa LOCAL
-$appEnv = getenv('APP_ENV') ?: 'PRODUCTION';
+$appEnv = getenv('APP_ENV') ?: 'ENV';
 $isProduction = strtoupper($appEnv) === 'PRODUCTION';
 
 if ($isProduction) {
@@ -150,7 +150,7 @@ if (!headers_sent()) {
     header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS');
     header('Access-Control-Allow-Headers: Content-Type, Authorization');
 
-    if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
+    if (isset($_SERVER['REQUEST_METHOD']) && $_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
         http_response_code(200);
         exit();
     }

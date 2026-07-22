@@ -343,7 +343,19 @@ try {
             
             try {
                 registerAssignmentCleanup($lockHandle, $lockPath, $statePath);
-                $resultado = $asignacion->asignarMesCompleto($mes, $anio, $datos['opciones'] ?? []);
+                $opciones = is_array($datos['opciones'] ?? null) ? $datos['opciones'] : [];
+            if (!array_key_exists('modo_rapido', $opciones)) {
+                $opciones['modo_rapido'] = true;
+            }
+            if (!array_key_exists('forzar_llenado', $opciones)) {
+                $opciones['forzar_llenado'] = true;
+            }
+            if (!array_key_exists('watchdog_segundos', $opciones)) {
+                // In API mode the script can run in the background with unlimited execution
+                // time, so avoid aborting the assignment prematurely.
+                $opciones['watchdog_segundos'] = 0;
+            }
+            $resultado = $asignacion->asignarMesCompleto($mes, $anio, $opciones);
                 releaseMonthLock($lockHandle, $lockPath, $statePath);
                 ob_end_clean();
                 http_response_code(200);

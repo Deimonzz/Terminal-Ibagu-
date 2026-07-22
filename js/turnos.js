@@ -1241,7 +1241,7 @@ async function ejecutarAsignacionAutomatica(e) {
         const response = await fetch(API_BASE + 'asignacion_automatica.php', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ mes, anio, opciones: {} }),
+            body: JSON.stringify({ mes, anio, opciones: { modo_rapido: true, forzar_llenado: true } }),
             signal: controller.signal
         });
 

@@ -183,14 +183,20 @@ class AsignacionAutomatica {
     }
 
     private function getDisponiblesL4($puestoId, $turnoIdOrFecha, $fecha = null, &$ctx = []) {
-        // Soporta dos firmas:
-        // getDisponiblesL4(null, null, $fecha, $ctx)  → verificación general para ADMM/ADMT
-        // getDisponiblesL4($puestoId, $fecha, $ctx)   → con puesto específico (L4)
-        if ($puestoId === null) {
-            return $this->trabajadores->obtenerDisponiblesL4(null, null, $fecha);
+        // Soporta tres formas de invocación:
+        // getDisponiblesL4(null, null, $fecha, $ctx)      → verificación general para ADMM/ADMT
+        // getDisponiblesL4($puestoId, $fecha, $ctx)      → con puesto específico y contexto en el tercer parámetro
+        // getDisponiblesL4($puestoId, $fecha, $fechaReal, $ctx) → firma expandida si se pasa fecha explícita
+        if (is_array($fecha) && empty($ctx)) {
+            $ctx = $fecha;
+            $fecha = null;
         }
-        // Firma original: getDisponiblesL4($puestoId, $fecha, &$ctx)
-        $fechaReal = $turnoIdOrFecha; // segundo param es la fecha en firma original
+
+        if ($puestoId === null) {
+            return $this->trabajadores->obtenerDisponiblesL4(null, null, $fecha ?? $turnoIdOrFecha);
+        }
+
+        $fechaReal = $fecha ?? $turnoIdOrFecha;
         $turnoIds  = $ctx['puestosL4TurnoIds'][$puestoId] ?? [];
         if (empty($turnoIds)) {
             $turnoIds = [($ctx['puestosL4TurnoId'][$puestoId] ?? null)];
@@ -226,12 +232,22 @@ class AsignacionAutomatica {
             return ['lista' => $disponibles, 'nivel' => 1];
         }
 
-        if (($ctx['modoRapido'] ?? false) || $numeroTurno !== 3) {
-            $disponibles = $this->getDisponiblesRawConFallback($puestoId, $turnoId, $numeroTurno, $fecha, $ctx, $conteoTurnos, 'minimo');
-            if (!empty($disponibles)) {
-                $this->ordenarDisponiblesPreliminar($disponibles, $numeroTurno, $ctx, $conteoTurnos);
-                return ['lista' => $disponibles, 'nivel' => 4];
-            }
+        $disponibles = $this->getDisponiblesRawConFallback($puestoId, $turnoId, $numeroTurno, $fecha, $ctx, $conteoTurnos, 'ignorar_limite_noches');
+        if (!empty($disponibles)) {
+            $this->ordenarDisponiblesPreliminar($disponibles, $numeroTurno, $ctx, $conteoTurnos);
+            return ['lista' => $disponibles, 'nivel' => 2];
+        }
+
+        $disponibles = $this->getDisponiblesRawConFallback($puestoId, $turnoId, $numeroTurno, $fecha, $ctx, $conteoTurnos, 'ignorar_consecutivo');
+        if (!empty($disponibles)) {
+            $this->ordenarDisponiblesPreliminar($disponibles, $numeroTurno, $ctx, $conteoTurnos);
+            return ['lista' => $disponibles, 'nivel' => 3];
+        }
+
+        $disponibles = $this->getDisponiblesRawConFallback($puestoId, $turnoId, $numeroTurno, $fecha, $ctx, $conteoTurnos, 'minimo');
+        if (!empty($disponibles)) {
+            $this->ordenarDisponiblesPreliminar($disponibles, $numeroTurno, $ctx, $conteoTurnos);
+            return ['lista' => $disponibles, 'nivel' => 4];
         }
 
         return ['lista' => [], 'nivel' => 0];
@@ -403,6 +419,10 @@ class AsignacionAutomatica {
     // MÉTODO PRINCIPAL
     // ─────────────────────────────────────────────────────────────────────────
     public function asignarMesCompleto($mes, $anio, $opciones = []) {
+        if (PHP_SAPI === 'cli') {
+            @set_time_limit(0);
+        }
+
         $this->mesProceso = (int)$mes;
         $this->anioProceso = (int)$anio;
         $this->verificarCancelacion('inicio');
@@ -429,10 +449,13 @@ class AsignacionAutomatica {
             . ', libres=' . (int)($resumenLimpieza['libres_auto_eliminados'] ?? 0) . '.';
 
         $inicioAsignacion = microtime(true);
-        // Para priorizar velocidad, el modo normal de generación debe terminar
-        // antes de que el proceso se vuelva muy costoso. El watchdog se deja
-        // bastante más corto que antes para no arrastrar la ejecución.
-        $WATCHDOG_SEGUNDOS = 180.0;
+        $WATCHDOG_SEGUNDOS = (PHP_SAPI === 'cli') ? INF : 180.0;
+        if (isset($opciones['watchdog_segundos'])) {
+            $WATCHDOG_SEGUNDOS = (float)$opciones['watchdog_segundos'];
+            if ($WATCHDOG_SEGUNDOS <= 0.0) {
+                $WATCHDOG_SEGUNDOS = INF;
+            }
+        }
 
         try {
             if ($manejaTransaccion) {
@@ -440,10 +463,12 @@ class AsignacionAutomatica {
             }
 
             $ctx = $this->prefetchDisponibilidadMes($mes, $anio);
-            $modoRapido = (bool)($opciones['modo_rapido'] ?? false);
-            $ctx['modoRapido'] = $modoRapido;
-            if ($modoRapido) {
-                $warnings[] = 'Modo rápido activado: se omiten L4 y optimización final para priorizar velocidad; los días libres siguen asignándose con límite de tiempo.';
+            $modoRapido = (bool)($opciones['modo_rapido'] ?? true);
+            $forzarLlenado = (bool)($opciones['forzar_llenado'] ?? $modoRapido);
+            $ctx['modoRapido'] = $modoRapido || $forzarLlenado;
+            $ctx['forzarLlenado'] = $forzarLlenado;
+            if ($ctx['modoRapido']) {
+                $warnings[] = 'Modo rápido/llenado activado: se prioriza completar puestos y L4 con menos reordenamientos y sin optimización final; los días libres siguen con límite de tiempo.';
             }
 
             $stmtConteo = $this->db->prepare(
@@ -646,7 +671,7 @@ class AsignacionAutomatica {
             $perfilSemanal             = $turnosAsignadosPrefetch['perfilSemanal'];
 
             $tiempoInicioL4 = microtime(true);
-            $tiempoLimiteL4 = 25.0;
+            $tiempoLimiteL4 = $ctx['modoRapido'] ? 18.0 : 25.0;
             $L4AsignacionesIntentadas = 0;
             $L4AsignacionesExitosas = 0;
             error_log('[PASO 1 L4] Iniciando fase L4. modo_rapido=' . ($opciones['modo_rapido'] ? 'true' : 'false') . ', tiempoLimitL4=' . $tiempoLimiteL4 . 's, semanas=' . count($semanasShuffled) . ', trabajadores=' . count($trabajadoresShuffled));
@@ -672,6 +697,9 @@ class AsignacionAutomatica {
                     }
 
                     $tieneL4 = $this->tieneTurnoL4EnSemana($trab['id'], $semana['lunes'], $semana['domingo'], $turnosPorTrabajadorSemana);
+                    if ($tieneL4 && (float)($perfilSemana['total_horas'] ?? 0.0) >= 36.0) {
+                        continue;
+                    }
                     if ($tieneL4) continue;
 
                     $diasSemana = [];
@@ -711,15 +739,12 @@ class AsignacionAutomatica {
                             $codigoL4Puesto = strtoupper((string)($puesto['codigo'] ?? ''));
                             $baseTurnoL4 = (int)($puestosL4Turno[$codigoL4Puesto] ?? 0);
 
-                            if ($baseTurnoL4 > 0 && $this->estaPuestoOcupado($puesto['id'], $baseTurnoL4, $fechaL4, $turnosPorPuestoFecha)) {
-                                continue;
-                            }
                             if ($baseTurnoL4 > 0 && $this->cantidadTurnosL4EnFechaYBase($puesto['id'], $fechaL4, $baseTurnoL4, $turnosPorPuestoFecha) >= 2) {
                                 continue;
                             }
 
                             $disponiblesL4 = $this->getDisponiblesL4($puesto['id'], $fechaL4, $ctx);
-                            $disponible    = array_filter($disponiblesL4, function($t) use ($trab) { return $t['id'] == $trab['id']; });
+                            $disponible    = array_filter($disponiblesL4, function($t) use ($trab) { return (int)($t['id'] ?? 0) === (int)$trab['id']; });
                             if (empty($disponible)) continue;
 
                             foreach ($turnoIdsL4 as $turnoIdL4) {
@@ -727,6 +752,18 @@ class AsignacionAutomatica {
                                 if ($turnoIdL4 <= 0) continue;
                                 $numeroTurnoL4 = $numeroPorTurnoId[$turnoIdL4] ?? 4;
                                 $L4AsignacionesIntentadas++;
+
+                                $validacionL4 = $this->turnosAsignados->validarAsignacion(
+                                    $trab['id'],
+                                    $puesto['id'],
+                                    $turnoIdL4,
+                                    $fechaL4
+                                );
+
+                                if (empty($validacionL4['valido'])) {
+                                    error_log('[PASO 1 L4] ❌ Candidato inválido: trab=' . $trab['id'] . ', puesto=' . $puesto['codigo'] . ', fecha=' . $fechaL4 . ', turno=' . $numeroTurnoL4 . ', razones=' . implode('; ', $validacionL4['errores']));
+                                    continue;
+                                }
 
                                 $resultado = $this->turnosAsignados->asignarDirecto([
                                     'trabajador_id'     => $trab['id'],
@@ -777,9 +814,14 @@ class AsignacionAutomatica {
                 if (($dia % 5) === 1) {
                     $this->verificarCancelacion('turnos normales');
                     if (isset($inicioAsignacion) && (microtime(true) - $inicioAsignacion) > $WATCHDOG_SEGUNDOS) {
-                        throw new RuntimeException(
-                            'Tiempo agotado en bucle principal tras ' . round(microtime(true) - $inicioAsignacion, 1) . 's; se conservan asignaciones parciales.'
-                        );
+                        $mensaje = 'Tiempo agotado en bucle principal tras ' . round(microtime(true) - $inicioAsignacion, 1) . 's';
+                        if ($manejaTransaccion && $this->db->inTransaction()) {
+                            $this->db->commit();
+                            $mensaje .= '; se confirmaron las asignaciones parciales.';
+                        } else {
+                            $mensaje .= '; no se confirmaron las asignaciones parciales.';
+                        }
+                        throw new RuntimeException($mensaje);
                     }
                 }
                 $fecha = sprintf('%04d-%02d-%02d', $anio, $mes, $dia);
@@ -864,6 +906,13 @@ class AsignacionAutomatica {
                             $puesto['id'],
                             $fecha,
                             $ctx
+                        );
+                        $disponibles = $this->filtrarDisponiblesPorRestriccionesObligatorias(
+                            $disponibles,
+                            $puesto['id'],
+                            $turnoIdBase,
+                            $fecha,
+                            null
                         );
                         // validarAsignacion ya está cacheado dentro de TurnosAsignados
                         // y se vuelve a llamar de forma centralizada en
@@ -1023,7 +1072,7 @@ class AsignacionAutomatica {
             );
 
             $tiempoInicioDiasLibres = microtime(true);
-            $tiempoLimiteDiasLibres = 20.0;
+            $tiempoLimiteDiasLibres = $ctx['modoRapido'] ? 12.0 : 20.0;
             foreach ($semanasShuffled as $semana) {
                 $this->verificarCancelacion('días libres');
                 if ((microtime(true) - $tiempoInicioDiasLibres) > $tiempoLimiteDiasLibres) {
@@ -2815,6 +2864,13 @@ class AsignacionAutomatica {
             return $ops4[0];
         }
 
+        // Si no hay opciones de bloque pero aún no se alcanza el máximo semanal,
+        // permitir cualquier turno disponible para mejorar la cobertura.
+        if ($perfilTotal < $maxHorasSemanal && !empty($filtradas)) {
+            $ordenarPorId($filtradas);
+            return $filtradas[0];
+        }
+
         return null;
     }
 
@@ -2840,6 +2896,37 @@ class AsignacionAutomatica {
         if (empty($disponibles)) return null;
 
         $semanaKey = $this->getSemanaKey($fecha);
+        $modoRapido = !empty($ctx['modoRapido']) || !empty($ctx['forzarLlenado']);
+
+        if ($modoRapido) {
+            foreach ($disponibles as $trab) {
+                $id = (int)($trab['id'] ?? 0);
+                if ($id <= 0) continue;
+                if (!empty($ctx['asignadosPorDia'][$fecha][$id])) continue;
+
+                $perfil = $perfilSemanal[$id][$semanaKey] ?? ['total_horas' => 0.0, 'h8' => 0, 'h7' => 0, 'h4' => 0, 'otro' => 0];
+                $opcionTurno = $this->elegirOpcionTurnoParaPerfil(
+                    $turnoOpcionesPorNumero[$turnoNumero] ?? [],
+                    $perfil,
+                    $perfilObjetivo,
+                    $bloqueObjetivoPuesto
+                );
+                if (!$opcionTurno) continue;
+
+                $turnoHoras = (float)($opcionTurno['horas'] ?? 0);
+                $totalActual = (float)$perfil['total_horas'];
+                $totalProy = $totalActual + $turnoHoras;
+                if ($totalProy > 42.001) continue;
+
+                return [
+                    'trabajador' => $trab,
+                    'turno_id'   => (int)$opcionTurno['id'],
+                    'turno_horas'=> $turnoHoras,
+                ];
+            }
+            return null;
+        }
+
         $elegibles = [];
 
         foreach ($disponibles as $trab) {
