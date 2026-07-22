@@ -8,6 +8,7 @@ class Trabajadores {
     private $turnoCache = [];
     private $disponiblesTurnoCache = [];
     private $disponiblesL4Cache = [];
+    private $disponiblesRelajadoCache = [];
     private $restriccionPuestoEspecificoCache = [];
     private $restriccionTipoCache = [];
     private $restriccionTipoPorTrabajadorCache = [];
@@ -645,7 +646,7 @@ class Trabajadores {
         return ['success' => true, 'message' => 'Restricción desactivada'];
     }
     
-    private function tieneRestriccionTipoFechaParaTrabajador($trabajador_id, $fecha, $tipo) {
+    public function tieneRestriccionTipoFechaParaTrabajador($trabajador_id, $fecha, $tipo) {
         $cacheKey = (int)$trabajador_id . '|' . (string)$fecha . '|' . (string)$tipo;
         if (array_key_exists($cacheKey, $this->restriccionTipoPorTrabajadorCache)) {
             return $this->restriccionTipoPorTrabajadorCache[$cacheKey];
@@ -760,6 +761,13 @@ class Trabajadores {
                 unset($this->disponiblesTurnoCache[$key]);
             }
         }
+
+        foreach (array_keys($this->disponiblesRelajadoCache) as $key) {
+            if (strpos($key, '|' . $fecha) !== false) {
+                unset($this->disponiblesRelajadoCache[$key]);
+            }
+        }
+
         unset($this->disponiblesL4Cache[$fecha]);
     }
 
@@ -771,19 +779,12 @@ class Trabajadores {
         if ($this->esPuestoFijo8h($puesto) && (float)($turno['horas_laborales'] ?? 0) < 7.5) {
             return [];
         }
-
-        $disponibles = $this->obtenerDisponiblesTurno($turno_id, $fecha);
-        $filtrados = [];
-        foreach ($disponibles as $trabajador) {
-            $trabajadorId = (int)($trabajador['id'] ?? 0);
-            if ($trabajadorId <= 0) {
-                continue;
-            }
-            if ($this->puedeAsignarTurno($trabajadorId, $puesto_id, $turno_id, $fecha)) {
-                $filtrados[] = $trabajador;
-            }
-        }
-        return $filtrados;
+        // Para mejorar rendimiento, evitamos realizar chequeos por candidato
+        // aquí (que ejecutan múltiples queries). Devolvemos la lista base por
+        // turno y dejamos las validaciones obligatorias al motor central
+        // (AsignacionAutomatica::filtrarDisponiblesPorRestriccionesObligatorias)
+        // que usa cache de validaciones.
+        return $this->obtenerDisponiblesTurno($turno_id, $fecha);
     }
 
     /**
@@ -808,6 +809,11 @@ class Trabajadores {
             return [];
         }
 
+        $cacheKey = ($puesto_id ?? '') . '|' . ($turno_id ?? '') . '|' . $fecha . '|' . $modo;
+        if (isset($this->disponiblesRelajadoCache[$cacheKey])) {
+            return $this->disponiblesRelajadoCache[$cacheKey];
+        }
+
         // Usar parámetros con nombre para evitar mezcla posicional/nombre
         $sql = "SELECT DISTINCT t.id, t.nombre
                 FROM trabajadores t
@@ -815,47 +821,51 @@ class Trabajadores {
                 AND LOWER(COALESCE(t.cargo, '')) != 'supervisor'
                 AND t.id NOT IN (
                     SELECT trabajador_id FROM turnos_asignados
-                    WHERE fecha = :fecha
+                    WHERE fecha = :fecha1
                     AND estado IN ('programado','activo')
                 )
                 AND t.id NOT IN (
                     SELECT trabajador_id FROM incapacidades
-                    WHERE :fecha BETWEEN fecha_inicio AND fecha_fin
+                    WHERE :fecha2 BETWEEN fecha_inicio AND fecha_fin
                     AND estado = 'activa'
                 )
                 AND t.id NOT IN (
                     SELECT trabajador_id FROM dias_especiales
                     WHERE tipo IN ('LC','L','L8','VAC','SUS','CAP')
-                    AND :fecha BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
+                    AND :fecha3 BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                     AND estado IN ('programado','activo')
                 )";
 
-        $params = [':fecha' => $fecha];
+        $params = [':fecha1' => $fecha, ':fecha2' => $fecha, ':fecha3' => $fecha];
+
+        $admmMatch = in_array($numeroTurno, [2, 3], true) ? '1=1' : '1=0';
+        $admtMatch = in_array($numeroTurno, [1, 3], true) ? '1=1' : '1=0';
 
         $sql .= "
             AND t.id NOT IN (
                 SELECT trabajador_id FROM dias_especiales
                 WHERE tipo IN ('ADM', 'ADMM', 'ADMT')
-                AND :fecha BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
+                AND :fecha4 BETWEEN fecha_inicio AND COALESCE(fecha_fin, fecha_inicio)
                 AND estado IN ('programado','activo')
                 AND (
                     tipo = 'ADM'
-                    OR (tipo = 'ADMM' AND :numeroTurno IN (2, 3))
-                    OR (tipo = 'ADMT' AND :numeroTurno IN (1, 3))
+                    OR (tipo = 'ADMM' AND $admmMatch)
+                    OR (tipo = 'ADMT' AND $admtMatch)
                 )
             )";
-        $params[':numeroTurno'] = $numeroTurno;
+        $params[':fecha4'] = $fecha;
 
-        // Restricción no_turno_noche: es obligatoria en todos los modos.
         if ($esNocturno) {
             $sql .= "
                 AND t.id NOT IN (
                     SELECT trabajador_id FROM restricciones_trabajador
                     WHERE tipo_restriccion = 'no_turno_noche'
                     AND activa = true
-                    AND :fecha >= fecha_inicio
-                    AND (:fecha <= fecha_fin OR fecha_fin IS NULL)
+                    AND :fecha5a >= fecha_inicio
+                    AND (:fecha5b <= fecha_fin OR fecha_fin IS NULL)
                 )";
+            $params[':fecha5a'] = $fecha;
+            $params[':fecha5b'] = $fecha;
         }
 
         // Límite 7 noches: se mantiene en modo normal y en ignorar_consecutivo.
@@ -903,21 +913,24 @@ class Trabajadores {
         $sql .= " ORDER BY t.nombre ASC";
 
         $stmt = $this->db->prepare($sql);
-        $stmt->execute($params);
+        foreach ($params as $name => $value) {
+            $stmt->bindValue($name, $value);
+        }
+        try {
+            $stmt->execute();
+        } catch (Throwable $e) {
+            error_log('obtenerDisponiblesRelajado SQL: ' . $sql);
+            error_log('obtenerDisponiblesRelajado params: ' . json_encode($params));
+            throw $e;
+        }
         $disponibles = $stmt->fetchAll();
 
-        $filtrados = [];
-        foreach ($disponibles as $trabajador) {
-            $trabajadorId = (int)($trabajador['id'] ?? 0);
-            if ($trabajadorId <= 0) {
-                continue;
-            }
-            if ($this->puedeAsignarTurno($trabajadorId, $puesto_id, $turno_id, $fecha)) {
-                $filtrados[] = $trabajador;
-            }
-        }
-
-        return $filtrados;
+        // NOTA: evitar filtrar aquí con ->puedeAsignarTurno() para no ejecutar
+        // consultas adicionales por candidato en la fase de fallback. La
+        // validación obligatoria se realiza posteriormente en el motor de
+        // asignación (ver AsignacionAutomatica::filtrarDisponiblesPorRestriccionesObligatorias).
+        $this->disponiblesRelajadoCache[$cacheKey] = $disponibles;
+        return $disponibles;
     }
 
     public function contarTurnosNocheEnMes($trabajador_id, $mes, $anio, $excludeTurnoAsignadoId = null) {

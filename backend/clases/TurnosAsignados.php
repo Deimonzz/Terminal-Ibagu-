@@ -120,8 +120,31 @@ class TurnosAsignados {
     
      // Validar asignación de turno
      
-    private function invalidarCacheValidaciones() {
-        $this->validacionCache = [];
+    private function invalidarCacheValidaciones($trabajador_id = null, $fecha = null) {
+        if ($trabajador_id === null) {
+            $this->validacionCache = [];
+            return;
+        }
+
+        $trabajador_id = (int)$trabajador_id;
+        $fecha = $fecha !== null ? (string)$fecha : null;
+        $prefix = 'v|' . $trabajador_id . '|';
+
+        foreach (array_keys($this->validacionCache) as $cacheKey) {
+            if (strpos($cacheKey, $prefix) !== 0) {
+                continue;
+            }
+
+            if ($fecha === null) {
+                unset($this->validacionCache[$cacheKey]);
+                continue;
+            }
+
+            $parts = explode('|', $cacheKey);
+            if (isset($parts[4]) && $parts[4] === $fecha) {
+                unset($this->validacionCache[$cacheKey]);
+            }
+        }
     }
 
     public function validarAsignacion($trabajador_id, $puesto_id, $turno_id, $fecha, $exclude_id = null) {
@@ -207,40 +230,28 @@ class TurnosAsignados {
             $errores[] = 'El trabajador tiene día especial: ' . $result['tipos'];
         }
 
-        // 3.1 Verificar que el trabajador no tenga ya otro turno operativo ese día.
-        // Para L4 se permite complementar un turno base del mismo día, porque el modelo
-        // operativo de este sistema usa L4 como turno adicional de 4h en la misma franja.
-        $esL4 = false;
-        if ($turno_id) {
-            $sqlTurno = "SELECT numero_turno, horas_laborales FROM configuracion_turnos WHERE id = :turno_id";
-            $stmtTurno = $this->db->prepare($sqlTurno);
-            $stmtTurno->execute([':turno_id' => $turno_id]);
-            $turnoMeta = $stmtTurno->fetch();
-            $esL4 = $turnoMeta && in_array((int)($turnoMeta['numero_turno'] ?? 0), [4, 5], true)
-                && (float)($turnoMeta['horas_laborales'] ?? 0) >= 3.5
-                && (float)($turnoMeta['horas_laborales'] ?? 0) <= 4.5;
+        // 3.1 Verificar que el trabajador no tenga ya otro turno el mismo día.
+        // El índice unique_asignacion en la base de datos impide más de una asignación
+        // activa por trabajador/fecha, por lo que cualquier turno adicional ese día
+        // debe rechazarse aquí también.
+        $sql = "SELECT COUNT(*) as count
+                FROM turnos_asignados
+                WHERE trabajador_id = :trabajador_id
+                AND fecha = :fecha
+                AND estado IN ('programado', 'activo')";
+        $params = [
+            ':trabajador_id' => $trabajador_id,
+            ':fecha' => $fecha
+        ];
+        if ($exclude_id !== null) {
+            $sql .= " AND id != :exclude_id";
+            $params[':exclude_id'] = $exclude_id;
         }
-
-        if (!$esL4) {
-            $sql = "SELECT COUNT(*) as count
-                    FROM turnos_asignados
-                    WHERE trabajador_id = :trabajador_id
-                    AND fecha = :fecha
-                    AND estado IN ('programado', 'activo')";
-            $params = [
-                ':trabajador_id' => $trabajador_id,
-                ':fecha' => $fecha
-            ];
-            if ($exclude_id !== null) {
-                $sql .= " AND id != :exclude_id";
-                $params[':exclude_id'] = $exclude_id;
-            }
-            $stmt = $this->db->prepare($sql);
-            $stmt->execute($params);
-            $result = $stmt->fetch();
-            if ((int)($result['count'] ?? 0) > 0) {
-                $errores[] = 'El trabajador ya tiene otro turno asignado ese día';
-            }
+        $stmt = $this->db->prepare($sql);
+        $stmt->execute($params);
+        $result = $stmt->fetch();
+        if ((int)($result['count'] ?? 0) > 0) {
+            $errores[] = 'El trabajador ya tiene otro turno asignado ese día';
         }
         
         // 4. Verificar restricciones obligatorias de forma general para cualquier turno
@@ -491,7 +502,7 @@ class TurnosAsignados {
                                      $datos['turno_id'], $datos['fecha'], 'creado', $datos['created_by'] ?? null);
             
             $this->db->commit();
-            $this->invalidarCacheValidaciones();
+            $this->invalidarCacheValidaciones($datos['trabajador_id'], $datos['fecha']);
             
             return [
                 'success' => true,
@@ -509,23 +520,23 @@ class TurnosAsignados {
     }
 
     public function asignarDirecto($datos, $skipValidacion = false) {
-        if (!$skipValidacion) {
-            // VALIDACIÓN CRÍTICA: Verificar restricciones ANTES de asignar
-            $validacion = $this->validarAsignacion(
-                $datos['trabajador_id'],
-                $datos['puesto_trabajo_id'] ?? null,
-                $datos['turno_id'] ?? null,
-                $datos['fecha'] ?? null
-            );
-            
-            if (!$validacion['valido']) {
-                error_log("[TurnosAsignados::asignarDirecto] VALIDACIÓN FALLIDA: " . json_encode($validacion['errores']));
-                return [
-                    'success' => false,
-                    'message' => 'No se puede asignar el turno: ' . implode(', ', $validacion['errores']),
-                    'errores' => $validacion['errores']
-                ];
-            }
+        // Aunque se salte la validación para acelerar ciertas fases, siempre
+        // hacemos una comprobación mínima de integridad para evitar inserciones
+        // duplicadas en la base de datos y garantizar la consistencia.
+        $validacion = $this->validarAsignacion(
+            $datos['trabajador_id'],
+            $datos['puesto_trabajo_id'] ?? null,
+            $datos['turno_id'] ?? null,
+            $datos['fecha'] ?? null
+        );
+        
+        if (!$validacion['valido']) {
+            error_log("[TurnosAsignados::asignarDirecto] VALIDACIÓN FALLIDA: " . json_encode($validacion['errores']));
+            return [
+                'success' => false,
+                'message' => 'No se puede asignar el turno: ' . implode(', ', $validacion['errores']),
+                'errores' => $validacion['errores']
+            ];
         }
         
         try {
@@ -575,7 +586,7 @@ class TurnosAsignados {
             if ($manejaTransaccion) {
                 $this->db->commit();
             }
-            $this->invalidarCacheValidaciones();
+            $this->invalidarCacheValidaciones($datos['trabajador_id'], $datos['fecha']);
             
             error_log("[TurnosAsignados::asignarDirecto] ✅ Turno asignado exitosamente: trabajador=" . $datos['trabajador_id'] . 
                      ", puesto=" . ($datos['puesto_trabajo_id'] ?? 'NULL') . ", fecha=" . $datos['fecha']);
